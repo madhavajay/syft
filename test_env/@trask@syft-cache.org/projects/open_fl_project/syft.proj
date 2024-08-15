@@ -1,0 +1,4 @@
+- permissions:
+	- write-permissions: trask@syft-cache.org
+	- read-permissions: EVERYONE
+	- read-permissions: [@madahava@syft-cache.org, @falcon@syft-cache.org]
