@@ -15,9 +15,15 @@ if SYFT_HOME is None:
 SYFT_HOME = Path(SYFT_HOME)
 print(f"Using: {SYFT_HOME}")
 
-WATCH_FOLDER = os.path.expanduser("~/Dropbox/syft_network/")
+WATCH_FOLDER = os.path.abspath(os.path.expanduser("~/Dropbox/syft_network/"))
 WATCH_FOLDER = Path(WATCH_FOLDER)
 
+madhava = "@madhava@syft-cache.org"
+andrew = "@trask@syft-cache.org"
+
+author_user = {
+    "me@madhavajay.com":madhava
+}
 
 def git_repo_path_for_user(user, syft_home=SYFT_HOME):
     return syft_home / user
@@ -130,9 +136,10 @@ def syt_commit(repo_user, as_user, message):
 
 
 def get_patch_path(commit_hash) -> str:
-    patch_dirs = [d for d in os.listdir("./") if "patch_" in d]
+    patch_dirs = [d for d in os.listdir(WATCH_FOLDER) if "patch_" in d]
     for patch_dir in patch_dirs:
-        patches_dir = Path(patch_dir)
+        patches_dir = WATCH_FOLDER / Path(patch_dir)
+        print("patches_dir",str(patches_dir))
         existing_files = [f for f in os.listdir(patches_dir) if commit_hash in f]
         if existing_files:
             return patches_dir / existing_files[0]
@@ -160,7 +167,7 @@ def extract_email(commit_path) -> str:
 def get_all_patch_files(commit_path) -> list[str]:
     from unidiff import PatchSet
 
-    with open(patch_file, "r") as f:
+    with open(commit_path, "r") as f:
         lines = f.readlines()
         patch = PatchSet(lines)
     return [patch_file.path for patch_file in patch]
