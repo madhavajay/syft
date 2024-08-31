@@ -31,12 +31,12 @@ import logging
 import os
 import sys
 import threading
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
-from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
-from .shared_state import shared_state, SharedState
+from .shared_state import SharedState
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,8 +49,9 @@ Toy analogy: This is like a special track where each toy can run and play.
 Reality: We create a separate thread for each plugin to run independently.
 This allows multiple plugins to operate concurrently without interfering with each other.
 """
+
+
 class PluginThread(threading.Thread):
-    
     def __init__(self, plugin: Any, data: Dict[str, Any], shared_state: SharedState):
         """
         Step 1a: Setting Up the Track
@@ -78,10 +79,12 @@ class PluginThread(threading.Thread):
         try:
             # Let the toy (plugin) play with its accessories (data) following the playground rules (shared state)
             self.plugin.execute(self.data, self.shared_state)
-        
-        except Exception as e: # pragma: no cover
+
+        except Exception as e:  # pragma: no cover
             # If the toy breaks (an error occurs), we log what happened
-            logger.error(f"Uh oh! Plugin {self.plugin.__name__} had a problem: {e}") # pragma: no cover
+            logger.error(
+                f"Uh oh! Plugin {self.plugin.__name__} had a problem: {e}"
+            )  # pragma: no cover
 
     def stop(self) -> None:
         """
@@ -94,6 +97,7 @@ class PluginThread(threading.Thread):
         # Ring the bell to signal that playtime is over
         self.stop_event.set()
 
+
 """
 Step 2: The Toy Box Manager 📦 (Plugin Management)
 
@@ -102,13 +106,14 @@ Toy analogy: This is like a friendly robot that helps you manage all your toys.
 Reality: The PluginManager class is responsible for loading, starting, stopping,
 and reloading plugins. It keeps track of all active plugins and their threads.
 """
-class PluginManager:
 
+
+class PluginManager:
     def __init__(self, plugin_dir: str):
         """
         Step 2a: Setting Up the Toy Box
 
-        Toy analogy: Setting up our toy box. 
+        Toy analogy: Setting up our toy box.
 
         Reality: We're initializing the PluginManager with the directory where plugins are stored.
         """
@@ -144,23 +149,27 @@ class PluginManager:
         It imports the plugin module and wraps its execute function in a PluginWrapper.
         """
         try:
-            plugin_name = os.path.basename(plugin_path).replace('.py', '')
+            plugin_name = os.path.basename(plugin_path).replace(".py", "")
             print(f"Attempting to load plugin: {plugin_name}")  # Debug print
             print(f"Plugin path: {plugin_path}")  # Debug print
-            
+
             if not os.path.exists(plugin_path):
                 print(f"Plugin file not found: {plugin_path}")  # Debug print
                 return
 
-            spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)
+            spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)  # type: ignore
             if spec is None:
-                print(f"Failed to create spec for plugin: {plugin_name}")  # Debug print # pragma: no cover
-                return # pragma: no cover
+                print(
+                    f"Failed to create spec for plugin: {plugin_name}"
+                )  # Debug print # pragma: no cover
+                return  # pragma: no cover
 
-            module = importlib.util.module_from_spec(spec)
-            if module is None: 
-                print(f"Failed to create module for plugin: {plugin_name}")  # Debug print # pragma: no cover
-                return# pragma: no cover
+            module = importlib.util.module_from_spec(spec)  # type: ignore
+            if module is None:
+                print(
+                    f"Failed to create module for plugin: {plugin_name}"
+                )  # Debug print # pragma: no cover
+                return  # pragma: no cover
 
             spec.loader.exec_module(module)
 
@@ -170,15 +179,19 @@ class PluginManager:
                     self.execute = execute_func
 
             # Check if the module has an execute function
-            if hasattr(module, 'execute') and callable(module.execute):
+            if hasattr(module, "execute") and callable(module.execute):
                 self.plugins[plugin_name] = PluginWrapper(module.execute)
             else:
-                raise AttributeError(f"Plugin {plugin_name} does not have an 'execute' function") # pragma: no cover
+                raise AttributeError(
+                    f"Plugin {plugin_name} does not have an 'execute' function"
+                )  # pragma: no cover
 
             print(f"Successfully loaded plugin: {plugin_name}")  # Debug print
-        except Exception as e: # pragma: no cover
+        except Exception as e:  # pragma: no cover
             print(f"Failed to load plugin {plugin_name}: {str(e)}")  # Debug print
-            logging.error(f"Failed to load plugin from {plugin_name}. Error: {str(e)}") # pragma: no cover
+            logging.error(
+                f"Failed to load plugin from {plugin_name}. Error: {str(e)}"
+            )  # pragma: no cover
 
     def start_plugin_thread(self, plugin_name: str) -> None:
         """
@@ -191,9 +204,9 @@ class PluginManager:
         if plugin_name not in self.plugins:
             logger.warning(f"{plugin_name} is not in our toy box. We can't start it.")
             return
-        
+
         plugin = self.plugins[plugin_name]
-        thread = PluginThread(plugin, {'name': 'World'}, self.shared_state)
+        thread = PluginThread(plugin, {"name": "World"}, self.shared_state)
         thread.start()
         self.plugin_threads[plugin_name] = thread
         logger.info(f"{plugin_name} is now playing on its track!")
@@ -225,7 +238,7 @@ class PluginManager:
         with self.lock:
             try:
                 self.stop_plugin_thread(plugin_name)
-                
+
                 module_name = f"plugins.{plugin_name}"
                 if module_name in sys.modules:
                     module = sys.modules[module_name]
@@ -233,11 +246,13 @@ class PluginManager:
                     self.plugins[plugin_name] = module
                 else:
                     self.load_plugin(plugin_name)
-                
+
                 logger.info(f"{plugin_name} got a makeover and is ready to play again!")
-            except Exception as e: # pragma: no cover
-                error_message = f"Oops! We couldn't give {plugin_name} a makeover. Here's why: {str(e)}" # pragma: no cover
-                logging.error(error_message)  # Make sure this line exists # pragma: no cover
+            except Exception as e:  # pragma: no cover
+                error_message = f"Oops! We couldn't give {plugin_name} a makeover. Here's why: {str(e)}"  # pragma: no cover
+                logging.error(
+                    error_message
+                )  # Make sure this line exists # pragma: no cover
                 # You might want to re-raise the exception or handle it differently depending on your needs
 
     def start_watchdog(self) -> None:
@@ -289,7 +304,7 @@ class PluginManager:
         Reality: This method is called when a file in the plugin directory is modified.
         It reloads the affected plugin if it's a Python file.
         """
-        if filename.endswith('.py'):
+        if filename.endswith(".py"):
             plugin_name = os.path.splitext(os.path.basename(filename))[0]
             self.reload_plugin(plugin_name)
         else:
@@ -311,6 +326,7 @@ class PluginManager:
             except Exception as e:
                 logger.error(f"Error executing plugin {plugin_name}: {e}")
 
+
 """
 Step 3: The Toy Upgrade Detector 🕵️‍♂️ (File Change Handler)
 
@@ -318,8 +334,9 @@ Toy analogy: This is like a detective that notices when toys get upgrades.
 
 Reality: This class extends FileSystemEventHandler to detect changes in plugin files.
 """
-class PluginReloader(FileSystemEventHandler):
 
+
+class PluginReloader(FileSystemEventHandler):
     def __init__(self, plugin_manager: PluginManager):
         """
         Step 3a: Giving the Detective a Walkie-Talkie
@@ -344,6 +361,7 @@ class PluginReloader(FileSystemEventHandler):
         print(f"Extracted filename: {filename}")
         self.plugin_manager.handle_plugin_change(filename)
 
+
 # This PluginManager system allows for dynamic loading, unloading, and reloading of plugins,
 # enabling a flexible and extensible application architecture.
 
@@ -351,7 +369,7 @@ class PluginReloader(FileSystemEventHandler):
 Congratulations, intrepid explorer! 🎉🚀
 
 You've successfully navigated the magical world of the PluginManager. You've seen how we load,
-manage, and execute plugins, and even how we keep an eye on them for changes. 
+manage, and execute plugins, and even how we keep an eye on them for changes.
 
 What's next on your adventure, you ask?
 

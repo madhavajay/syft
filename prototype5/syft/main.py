@@ -1,7 +1,7 @@
 """
 Welcome to SyftBox, where we make plugin management as easy as eating ice cream!
 
-This is our main file. It's like the ringmaster of our circus, keeping all the 
+This is our main file. It's like the ringmaster of our circus, keeping all the
 plugin clowns in check.
 
 Step 1: Import necessary modules
@@ -12,10 +12,12 @@ handle all our plugin-related operations.
 
 import logging
 import time
+
 from syft.plugin_manager import PluginManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def main() -> None:
     """
@@ -23,27 +25,28 @@ def main() -> None:
     --------------------------------
     This is the heart of our application. It sets up the PluginManager,
     loads plugins, starts the watchdog, and keeps the application running.
+
     """
 
     # Step 3: Create the PluginManager
     # --------------------------------
     # We create an instance of PluginManager, giving it the path to our plugins directory.
     # This is like hiring a zookeeper for our code animals (plugins).
-    plugin_manager = PluginManager('./syft/plugins')
-    
+    plugin_manager = PluginManager("./syft/plugins")
+
     # Step 4: Load Plugins
     # --------------------
     # We tell our PluginManager to find and load all available plugins in the specified directory.
     # This is like the zookeeper rounding up all the animals for the day's show.
     logger.info("Loading plugins")
     plugin_manager.load_plugins()
-    
+
     # Step 5: Execute Plugins
     # ----------------------
     # We execute all loaded plugins.
     logger.info("Executing plugins")
     plugin_manager.execute_plugins()
-    
+
     # Step 6: Start the Watchdog
     # --------------------------
     # We start a watchdog that will monitor our plugins directory for changes.
@@ -52,7 +55,7 @@ def main() -> None:
     # It's like having a guard dog that watches for any new or misbehaving animals.
     logger.info("Starting watchdog")
     plugin_manager.start_watchdog()
-    
+
     try:
         # Step 7: Enter the Main Loop
         # ---------------------------
@@ -78,6 +81,7 @@ def main() -> None:
         logger.info("Cleaning up")
         plugin_manager.cleanup()
 
+
 # Step 10: Run the Main Function
 # -----------------------------
 # This is a common Python idiom. It checks if this script is being run directly
@@ -86,10 +90,10 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-"""
+""" # type: ignore
 Next Steps:
 -----------
-Congratulations! You've survived the main.py file of SyftBox. 
+Congratulations! You've survived the main.py file of SyftBox.
 Here's what happens next:
 
 1. The PluginManager takes over, loading plugins from the './plugins' directory.
@@ -98,6 +102,6 @@ Here's what happens next:
 4. The main loop keeps the application alive, allowing plugins to run continuously.
 5. When you stop the application (Ctrl+C), it cleans up all resources before exiting.
 
-If you're not questioning your life choices yet, proceed to plugin_manager.py 
+If you're not questioning your life choices yet, proceed to plugin_manager.py
 to dive deeper into how plugins are managed. May the force be with you!
 """
