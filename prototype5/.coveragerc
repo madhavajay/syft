@@ -1,5 +1,8 @@
 [run]
-source = plugins
+source = .
+omit = 
+    run_tests.py
+    */__init__.py
 
 [report]
 exclude_lines =
