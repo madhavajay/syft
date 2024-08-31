@@ -17,7 +17,7 @@ from syft.plugin_manager import PluginManager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def main():
+def main() -> None:
     """
     Step 2: Define the main function
     --------------------------------
