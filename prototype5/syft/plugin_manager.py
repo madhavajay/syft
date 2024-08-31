@@ -150,25 +150,25 @@ class PluginManager:
         """
         try:
             plugin_name = os.path.basename(plugin_path).replace(".py", "")
-            print(f"Attempting to load plugin: {plugin_name}")  # Debug print
-            print(f"Plugin path: {plugin_path}")  # Debug print
+            logger.debug(f"Attempting to load plugin: {plugin_name}")
+            logger.debug(f"Plugin path: {plugin_path}")
 
             if not os.path.exists(plugin_path):
-                print(f"Plugin file not found: {plugin_path}")  # Debug print
+                logger.warning(f"Plugin file not found: {plugin_path}")
                 return
 
             spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)  # type: ignore
             if spec is None:
-                print(
+                logger.error(
                     f"Failed to create spec for plugin: {plugin_name}"
-                )  # Debug print # pragma: no cover
+                )  # pragma: no cover
                 return  # pragma: no cover
 
             module = importlib.util.module_from_spec(spec)  # type: ignore
             if module is None:
-                print(
+                logger.error(
                     f"Failed to create module for plugin: {plugin_name}"
-                )  # Debug print # pragma: no cover
+                )  # pragma: no cover
                 return  # pragma: no cover
 
             spec.loader.exec_module(module)
@@ -186,12 +186,9 @@ class PluginManager:
                     f"Plugin {plugin_name} does not have an 'execute' function"
                 )  # pragma: no cover
 
-            print(f"Successfully loaded plugin: {plugin_name}")  # Debug print
+            logger.info(f"Successfully loaded plugin: {plugin_name}")
         except Exception as e:  # pragma: no cover
-            print(f"Failed to load plugin {plugin_name}: {str(e)}")  # Debug print
-            logging.error(
-                f"Failed to load plugin from {plugin_name}. Error: {str(e)}"
-            )  # pragma: no cover
+            logger.error(f"Failed to load plugin {plugin_name}: {str(e)}")
 
     def start_plugin_thread(self, plugin_name: str) -> None:
         """
@@ -308,7 +305,7 @@ class PluginManager:
             plugin_name = os.path.splitext(os.path.basename(filename))[0]
             self.reload_plugin(plugin_name)
         else:
-            print(f"Ignoring non-Python file: {filename}")
+            logger.info(f"Ignoring non-Python file: {filename}")
 
     def execute_plugins(self) -> None:
         """
@@ -356,9 +353,9 @@ class PluginReloader(FileSystemEventHandler):
         Reality: This method is called when a file in the plugin directory is modified,
         triggering the plugin manager to reload the affected plugin.
         """
-        print(f"File modified: {event.src_path}")
+        logger.debug(f"File modified: {event.src_path}")
         filename = os.path.basename(event.src_path)
-        print(f"Extracted filename: {filename}")
+        logger.debug(f"Extracted filename: {filename}")
         self.plugin_manager.handle_plugin_change(filename)
 
 
