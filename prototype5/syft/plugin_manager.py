@@ -15,7 +15,7 @@ from typing import Dict, Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from shared_state import shared_state
+from .shared_state import shared_state
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

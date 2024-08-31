@@ -11,7 +11,7 @@ handle all our plugin-related operations.
 """
 
 import time
-from plugin_manager import PluginManager
+from syft.plugin_manager import PluginManager
 
 def main():
     """

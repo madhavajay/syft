@@ -1,5 +1,5 @@
 import pytest
-from shared_state import SharedState
+from syft.shared_state import SharedState
 
 @pytest.fixture
 def shared_state():

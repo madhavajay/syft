@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from main import main
+from syft.main import main
 
 @pytest.fixture
 def mock_plugin_manager():
-    with patch('main.PluginManager') as mock:
+    with patch('syft.main.PluginManager') as mock:
         instance = mock.return_value
         yield mock
         # Ensure cleanup is called after the test
@@ -14,7 +14,7 @@ def test_main_flow(mock_plugin_manager, capsys):
     # Mock time.sleep to raise KeyboardInterrupt on the first call
     mock_sleep = MagicMock(side_effect=[KeyboardInterrupt, None])
     
-    with patch('main.time.sleep', mock_sleep):
+    with patch('syft.main.time.sleep', mock_sleep):
         main()
 
     mock_plugin_manager.return_value.load_plugins.assert_called_once()

@@ -1,11 +1,15 @@
 import pytest
+import sys
+import os
 from unittest.mock import Mock, patch, MagicMock
-from plugin_manager import PluginManager, PluginThread, PluginReloader  # Add this import
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from syft.plugin_manager import PluginManager, PluginThread, PluginReloader
 
 @pytest.fixture
 def plugin_manager():
     """Fixture for creating a PluginManager instance."""
-    with patch('plugin_manager.Observer'):
+    with patch('syft.plugin_manager.Observer'):
         pm = PluginManager('./plugins')
         yield pm
         pm.cleanup()
@@ -47,7 +51,7 @@ def test_stop_plugin_thread(plugin_manager):
 
 def test_start_watchdog(plugin_manager):
     """Test starting the watchdog."""
-    with patch('plugin_manager.Observer') as mock_observer:
+    with patch('syft.plugin_manager.Observer') as mock_observer:
         plugin_manager.start_watchdog()
 
     mock_observer.return_value.start.assert_called_once()
