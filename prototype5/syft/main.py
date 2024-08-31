@@ -88,7 +88,7 @@ def main() -> None:
 # (as opposed to being imported as a module). If it is being run directly,
 # it calls the main() function to start the application.
 if __name__ == "__main__":
-    main()
+    main()  # pragma: no cover
 
 """ # type: ignore
 Next Steps:
