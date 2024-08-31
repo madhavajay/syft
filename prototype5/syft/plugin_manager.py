@@ -111,7 +111,6 @@ class PluginManager:
                 for filename in files:
                     if filename.endswith(".py") and filename != "__init__.py":
                         plugin_path = os.path.join(root, filename)
-                        plugin_name = os.path.splitext(filename)[0]
                         self.load_plugin(plugin_path)
 
     def load_plugin(self, plugin_path: str) -> None:
