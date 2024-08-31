@@ -1,16 +1,18 @@
 """
-Welcome to the SyftBox Configuration Plugin! 
+Welcome to the SyftBox Configuration Plugin!
 
 This plugin is like a helpful robot that sets up your SyftBox folder.
 It asks you where you want your folder, and if you don't answer, it just puts
 it on your desktop. Because robots know best, right?
+
 """
 
 import logging
 import os
-from typing import Dict, Any, Callable
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
+
 
 def prompt_callback(key: str) -> str:
     """
@@ -27,17 +29,20 @@ def prompt_callback(key: str) -> str:
             if not folder_path:
                 logger.warning("You said nothing. Desktop it is!")
                 return os.path.expanduser("~/Desktop/SyftBox")
-            
+
             if os.path.isdir(folder_path):
                 return folder_path
             else:
-                print(f"Um, '{folder_path}' isn't a real place. Try again, smartypants.")
+                print(
+                    f"Um, '{folder_path}' isn't a real place. Try again, smartypants."
+                )
         except EOFError:
             logger.warning("You broke the input. Desktop for you!")
             return os.path.expanduser("~/Desktop/SyftBox")
-    
+
     logger.warning("Three strikes, you're out! Desktop it is!")
     return os.path.expanduser("~/Desktop/SyftBox")
+
 
 def execute(data: Dict[str, Any], shared_state: Any) -> str:
     """
@@ -46,15 +51,13 @@ def execute(data: Dict[str, Any], shared_state: Any) -> str:
     """
     try:
         folder = shared_state.request_config(
-            'syftbox_folder',
-            prompt_callback,
-            namespace='hello_plugin'
+            "syftbox_folder", prompt_callback, namespace="hello_plugin"
         )
-        
+
         print(f"Ta-da! Your SyftBox Folder is at: {folder}")
-        
+
         os.makedirs(folder, exist_ok=True)
-        
+
         logger.info(f"Look at me, I made a folder at {folder}!")
         return folder
     except OSError as e:
