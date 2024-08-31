@@ -23,7 +23,8 @@ def execute(data, shared_state):
 """)
 
     plugin_manager.plugin_dir = str(tmp_path)
-    plugin_manager.load_plugin("test_plugin")
+    # Use the full path to the plugin file
+    plugin_manager.load_plugin(str(plugin_file))
 
     assert "test_plugin" in plugin_manager.plugins
     assert hasattr(plugin_manager.plugins["test_plugin"], "execute")

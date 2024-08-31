@@ -10,8 +10,12 @@ We import the time module for our main loop and the PluginManager class which wi
 handle all our plugin-related operations.
 """
 
+import logging
 import time
 from syft.plugin_manager import PluginManager
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def main():
     """
@@ -25,24 +29,32 @@ def main():
     # --------------------------------
     # We create an instance of PluginManager, giving it the path to our plugins directory.
     # This is like hiring a zookeeper for our code animals (plugins).
-    plugin_manager = PluginManager('./plugins')
+    plugin_manager = PluginManager('./syft/plugins')
     
     # Step 4: Load Plugins
     # --------------------
     # We tell our PluginManager to find and load all available plugins in the specified directory.
     # This is like the zookeeper rounding up all the animals for the day's show.
+    logger.info("Loading plugins")
     plugin_manager.load_plugins()
     
-    # Step 5: Start the Watchdog
+    # Step 5: Execute Plugins
+    # ----------------------
+    # We execute all loaded plugins.
+    logger.info("Executing plugins")
+    plugin_manager.execute_plugins()
+    
+    # Step 6: Start the Watchdog
     # --------------------------
     # We start a watchdog that will monitor our plugins directory for changes.
     # If any changes occur (like adding, modifying, or deleting plugin files),
     # the watchdog will notify the PluginManager to take appropriate action.
     # It's like having a guard dog that watches for any new or misbehaving animals.
+    logger.info("Starting watchdog")
     plugin_manager.start_watchdog()
     
     try:
-        # Step 6: Enter the Main Loop
+        # Step 7: Enter the Main Loop
         # ---------------------------
         # This is where we keep our application running indefinitely.
         # In a more complex application, you might have more logic here.
@@ -51,21 +63,22 @@ def main():
             # Sleep for 1 second. This prevents the loop from consuming too much CPU.
             time.sleep(1)
     except KeyboardInterrupt:
-        # Step 7: Handle Interruption
+        # Step 8: Handle Interruption
         # ---------------------------
         # If the user presses Ctrl+C, we catch the KeyboardInterrupt here.
         # This allows us to exit the program gracefully.
         print("Alright, alright, I'll stop. Sheesh.")
     finally:
-        # Step 8: Cleanup
+        # Step 9: Cleanup
         # ---------------
         # Whether the program ends normally or due to an interruption,
         # we always want to clean up our resources.
         # This is like telling the zookeeper to make sure all the animals
         # are back in their cages before going home.
+        logger.info("Cleaning up")
         plugin_manager.cleanup()
 
-# Step 9: Run the Main Function
+# Step 10: Run the Main Function
 # -----------------------------
 # This is a common Python idiom. It checks if this script is being run directly
 # (as opposed to being imported as a module). If it is being run directly,

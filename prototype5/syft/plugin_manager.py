@@ -15,7 +15,7 @@ from typing import Dict, Any
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from .shared_state import shared_state
+from .shared_state import shared_state, SharedState
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -95,6 +95,7 @@ class PluginManager:
         self.plugin_threads: Dict[str, PluginThread] = {}  # Toys currently playing on their tracks
         self.lock = threading.Lock()  # A special lock to make sure we don't mess up our toy collection
         self.observer: Observer = None  # Our toy box watcher (file system observer)
+        self.shared_state = SharedState()  # Use SharedState instance instead of a simple dict
 
     def load_plugins(self) -> None:
         """
@@ -105,37 +106,56 @@ class PluginManager:
         Reality: This method scans the plugin directory and attempts to load each .py file as a plugin.
         """
         with self.lock:  # Make sure no one messes with our toy box while we're looking inside
-            for filename in os.listdir(self.plugin_dir):
-                if filename.endswith(".py"):
-                    plugin_name = filename[:-3]  # Remove the .py extension
-                    self.load_plugin(plugin_name)  # Load each toy (plugin) we find
+            for root, dirs, files in os.walk(self.plugin_dir):
+                for filename in files:
+                    if filename.endswith(".py") and filename != "__init__.py":
+                        plugin_path = os.path.join(root, filename)
+                        plugin_name = os.path.splitext(filename)[0]
+                        self.load_plugin(plugin_path)
 
-    def load_plugin(self, plugin_name: str) -> None:
+    def load_plugin(self, plugin_path: str) -> None:
         """
-        Step 2c: Getting a Toy Ready 🔧 (Plugin Loading)
-
-        Toy analogy: We take a toy out of the box and make sure it's ready to play.
-
-        Reality: This method dynamically imports a plugin module and checks if it has the required 'execute' function.
+        Load a plugin from the specified path.
+        
+        Args:
+            plugin_path (str): The path to the plugin file or directory.
         """
         try:
-            module_name = f"plugins.{plugin_name}"
-            module_path = os.path.join(self.plugin_dir, f"{plugin_name}.py")
+            plugin_name = os.path.basename(plugin_path).replace('.py', '')
+            print(f"Attempting to load plugin: {plugin_name}")  # Debug print
+            print(f"Plugin path: {plugin_path}")  # Debug print
             
-            # Use Python's magic to make the toy work (import the plugin)
-            spec = importlib.util.spec_from_file_location(module_name, module_path)
+            if not os.path.exists(plugin_path):
+                print(f"Plugin file not found: {plugin_path}")  # Debug print
+                return
+
+            spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)
+            if spec is None:
+                print(f"Failed to create spec for plugin: {plugin_name}")  # Debug print
+                return
+
             module = importlib.util.module_from_spec(spec)
-            sys.modules[module_name] = module
+            if module is None:
+                print(f"Failed to create module for plugin: {plugin_name}")  # Debug print
+                return
+
             spec.loader.exec_module(module)
-            
-            # Check if the toy has all its parts (the 'execute' function)
-            if hasattr(module, 'execute'):
-                self.plugins[plugin_name] = module
-                logger.info(f"Yay! We got {plugin_name} ready to play!")
+
+            # Wrap the execute function in a simple object
+            class PluginWrapper:
+                def __init__(self, execute_func):
+                    self.execute = execute_func
+
+            # Check if the module has an execute function
+            if hasattr(module, 'execute') and callable(module.execute):
+                self.plugins[plugin_name] = PluginWrapper(module.execute)
             else:
-                logger.warning(f"Oh no! {plugin_name} is missing some parts. It can't play.")
+                raise AttributeError(f"Plugin {plugin_name} does not have an 'execute' function")
+
+            print(f"Successfully loaded plugin: {plugin_name}")  # Debug print
         except Exception as e:
-            logger.error(f"Oops! We couldn't get {plugin_name} ready. Here's why: {e}")
+            print(f"Failed to load plugin {plugin_name}: {str(e)}")  # Debug print
+            logging.error(f"Failed to load plugin from {plugin_name}. Error: {str(e)}")
 
     def start_plugin_thread(self, plugin_name: str) -> None:
         """
@@ -150,7 +170,7 @@ class PluginManager:
             return
         
         plugin = self.plugins[plugin_name]
-        thread = PluginThread(plugin, {'name': 'World'}, shared_state)
+        thread = PluginThread(plugin, {'name': 'World'}, self.shared_state)
         thread.start()
         self.plugin_threads[plugin_name] = thread
         logger.info(f"{plugin_name} is now playing on its track!")
@@ -245,6 +265,14 @@ class PluginManager:
         """
         plugin_name = plugin_file.split('.')[0]  # Remove the file extension
         self.reload_plugin(plugin_name)
+
+    def execute_plugins(self) -> None:
+        for plugin_name, plugin in self.plugins.items():
+            try:
+                logger.info(f"Executing plugin: {plugin_name}")
+                plugin.execute({}, self.shared_state)
+            except Exception as e:
+                logger.error(f"Error executing plugin {plugin_name}: {e}")
 
 """
 Step 3: The Toy Upgrade Detector 🕵️‍♂️ (File Change Handler)
