@@ -31,7 +31,7 @@ import logging
 import os
 import sys
 import threading
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -51,7 +51,7 @@ This allows multiple plugins to operate concurrently without interfering with ea
 """
 class PluginThread(threading.Thread):
     
-    def __init__(self, plugin: Any, data: Dict[str, Any], shared_state: Any):
+    def __init__(self, plugin: Any, data: Dict[str, Any], shared_state: SharedState):
         """
         Step 1a: Setting Up the Track
 
@@ -60,11 +60,11 @@ class PluginThread(threading.Thread):
         Reality: We're initializing the thread with the plugin, its data, and shared state.
         """
         super().__init__()
-        self.plugin = plugin  # The toy (plugin) we're going to play with
-        self.data = data  # The toy's accessories (data for the plugin)
-        self.shared_state = shared_state  # The playground rules (shared state for all plugins)
-        self.stop_event = threading.Event()  # A bell to signal when playtime is over
-        self.daemon = True  # This makes sure the thread stops when the main program stops
+        self.plugin: Any = plugin
+        self.data: Dict[str, Any] = data
+        self.shared_state: SharedState = shared_state
+        self.stop_event: threading.Event = threading.Event()
+        self.daemon: bool = True
 
     def run(self) -> None:
         """
@@ -112,12 +112,12 @@ class PluginManager:
 
         Reality: We're initializing the PluginManager with the directory where plugins are stored.
         """
-        self.plugin_dir = plugin_dir  # The shelf where we keep our toys (plugins)
-        self.plugins: Dict[str, Any] = {}  # A list of all our toys
-        self.plugin_threads: Dict[str, PluginThread] = {}  # Toys currently playing on their tracks
-        self.lock = threading.Lock()  # A special lock to make sure we don't mess up our toy collection
-        self.observer: Observer = None  # Our toy box watcher (file system observer)
-        self.shared_state = SharedState()  # Use SharedState instance instead of a simple dict
+        self.plugin_dir: str = plugin_dir
+        self.plugins: Dict[str, Any] = {}
+        self.plugin_threads: Dict[str, PluginThread] = {}
+        self.lock: threading.Lock = threading.Lock()
+        self.observer: Optional[Observer] = None
+        self.shared_state: SharedState = SharedState()
 
     def load_plugins(self) -> None:
         """
@@ -280,7 +280,7 @@ class PluginManager:
             self.stop_plugin_thread(plugin_name)
         logger.info("All toys are now resting in the toy box.")
 
-    def handle_plugin_change(self, filename):
+    def handle_plugin_change(self, filename: str) -> None:
         """
         Step 2j: Toy Upgrade Detector 🕵️‍♂️ (File Change Handler)
 
@@ -346,3 +346,18 @@ class PluginReloader(FileSystemEventHandler):
 
 # This PluginManager system allows for dynamic loading, unloading, and reloading of plugins,
 # enabling a flexible and extensible application architecture.
+
+"""
+Congratulations, intrepid explorer! 🎉🚀
+
+You've successfully navigated the magical world of the PluginManager. You've seen how we load,
+manage, and execute plugins, and even how we keep an eye on them for changes. 
+
+What's next on your adventure, you ask?
+
+Head over to syft/main.py to see how all of this plugin magic comes together in the main
+application. There, you'll discover how we set up the PluginManager and keep our application
+running smoothly.
+
+Remember, in the world of coding, every line is a new adventure. Happy exploring!
+"""
