@@ -8,10 +8,11 @@ crowd-surfers.
 
 Step 1: Import the Bare Minimum
 -------------------------------
-We're only importing threading because we believe in the illusion of thread-safety:
+We're importing threading for our illusion of thread-safety, and typing for our type checks:
 """
 
-import threading  # For when we pretend to care about concurrency
+import threading
+from typing import Dict, Any, Optional, Callable
 
 """
 Step 2: Define the SharedState Class (aka "The Gossip Central")
@@ -22,45 +23,45 @@ high school locker room, but for data:
 
 class SharedState:
     def __init__(self):
-        self.data = {}  # The vault of secrets
-        self.lock = threading.Lock()  # Our bouncer, keeping the riff-raff out
+        self.data: Dict[str, Any] = {}  # The vault of secrets
+        self.lock: threading.Lock = threading.Lock()  # Our bouncer, keeping the riff-raff out
 
-    def get(self, key, namespace=None, default=None):
+    def get(self, key: str, namespace: Optional[str] = None, default: Any = None) -> Any:
         """
         Gets a value from shared state. It's like gossip, but with better naming.
         """
-        full_key = self._get_full_key(key, namespace)
+        full_key: str = self._get_full_key(key, namespace)
         with self.lock:  # No peeking while we're fetching!
             return self.data.get(full_key, default)
 
-    def set(self, key, value, namespace=None):
+    def set(self, key: str, value: Any, namespace: Optional[str] = None) -> None:
         """
         Sets a value in shared state. It's like writing on the bathroom wall, but more official.
         """
-        full_key = self._get_full_key(key, namespace)
+        full_key: str = self._get_full_key(key, namespace)
         with self.lock:  # Lock the stall door, we're writing something important
             self.data[full_key] = value
 
-    def request_config(self, key, prompt_callback, namespace=None):
+    def request_config(self, key: str, prompt_callback: Callable[[str], Any], namespace: Optional[str] = None) -> Any:
         """
         Requests a config value. It's like asking your mom for permission, but in code form.
         """
-        full_key = self._get_full_key(key, namespace)
+        full_key: str = self._get_full_key(key, namespace)
         with self.lock:  # Shh, the adults are talking
             if full_key not in self.data:
                 # Time to phone a friend
-                value = prompt_callback(key)
+                value: Any = prompt_callback(key)
                 self.data[full_key] = value
             return self.data[full_key]
 
-    def _get_full_key(self, key, namespace):
+    def _get_full_key(self, key: str, namespace: Optional[str]) -> str:
         """
         Generates a full key. It's like a secret handshake, but less cool.
         """
         return f"{namespace}.{key}" if namespace else key
 
 # Create a global instance of SharedState, because who doesn't love global variables?
-shared_state = SharedState()
+shared_state: SharedState = SharedState()
 
 """
 Next Steps:
