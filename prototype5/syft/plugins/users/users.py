@@ -27,56 +27,61 @@ def execute(data: Dict[str, Any], shared_state: Any) -> None:
     server_url = "http://localhost:8082/users"
 
     while True:
-        folders = set(
-            f
-            for f in os.listdir(syftbox_dir)
-            if os.path.isdir(os.path.join(syftbox_dir, f))
-        )
+        if os.path.exists(syftbox_dir):
+            folders = set(
+                f
+                for f in os.listdir(syftbox_dir)
+                if os.path.isdir(os.path.join(syftbox_dir, f))
+            )
 
-        try:
-            response = requests.get(server_url)
-            if response.status_code == 200:
-                server_users = set(response.json())
+            try:
+                response = requests.get(server_url)
+                if response.status_code == 200:
+                    server_users = set(response.json())
 
-                # Add users for folders that don't have them
-                for folder in folders - server_users:
-                    logger.warning(
-                        f"Folder '{folder}' does not have a corresponding user in the server. Adding user..."
+                    # Add users for folders that don't have them
+                    for folder in folders - server_users:
+                        logger.warning(
+                            f"Folder '{folder}' does not have a corresponding user in the server. Adding user..."
+                        )
+                        add_response = requests.post(
+                            server_url, json={"username": folder}
+                        )
+                        if add_response.status_code == 201:
+                            logger.info(
+                                f"User '{folder}' added successfully to the server."
+                            )
+                        else:
+                            logger.error(
+                                f"Failed to add user '{folder}' to the server. Status code: {add_response.status_code}"
+                            )
+
+                    # Create folders for users that don't have them
+                    for user in server_users - folders:
+                        logger.warning(
+                            f"User '{user}' does not have a corresponding folder. Creating folder..."
+                        )
+                        try:
+                            os.mkdir(os.path.join(syftbox_dir, user))
+                            logger.info(
+                                f"Folder '{user}' created successfully in the SyftBox directory."
+                            )
+                        except OSError as e:
+                            logger.error(
+                                f"Failed to create folder '{user}' in the SyftBox directory. Error: {e}"
+                            )
+
+                    logger.debug(f"Folders in SyftBox directory: {', '.join(folders)}")
+                    logger.debug(f"Users on the server: {', '.join(server_users)}")
+                else:
+                    logger.error(
+                        f"Failed to retrieve users from server. Status code: {response.status_code}"
                     )
-                    add_response = requests.post(server_url, json={"username": folder})
-                    if add_response.status_code == 201:
-                        logger.info(
-                            f"User '{folder}' added successfully to the server."
-                        )
-                    else:
-                        logger.error(
-                            f"Failed to add user '{folder}' to the server. Status code: {add_response.status_code}"
-                        )
 
-                # Create folders for users that don't have them
-                for user in server_users - folders:
-                    logger.warning(
-                        f"User '{user}' does not have a corresponding folder. Creating folder..."
-                    )
-                    try:
-                        os.mkdir(os.path.join(syftbox_dir, user))
-                        logger.info(
-                            f"Folder '{user}' created successfully in the SyftBox directory."
-                        )
-                    except OSError as e:
-                        logger.error(
-                            f"Failed to create folder '{user}' in the SyftBox directory. Error: {e}"
-                        )
-
-                logger.debug(f"Folders in SyftBox directory: {', '.join(folders)}")
-                logger.debug(f"Users on the server: {', '.join(server_users)}")
-            else:
-                logger.error(
-                    f"Failed to retrieve users from server. Status code: {response.status_code}"
-                )
-
-        except requests.RequestException as e:
-            logger.error(f"Error connecting to the server: {e}")
+            except requests.RequestException as e:
+                logger.error(f"Error connecting to the server: {e}")
+        else:
+            logger.error(f"SyftBox directory not found: {syftbox_dir}")
 
         time.sleep(1)
 
