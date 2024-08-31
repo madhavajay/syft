@@ -5,6 +5,10 @@ from unittest.mock import Mock, patch, MagicMock
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from syft.plugin_manager import PluginManager, PluginThread, PluginReloader
+import logging
+import tempfile
+import os
+from watchdog.events import FileModifiedEvent
 
 @pytest.fixture
 def plugin_manager():
@@ -119,4 +123,185 @@ def test_reload_plugin_exception(plugin_manager):
         plugin_manager.reload_plugin("test_plugin")
 
     assert "test_plugin" in plugin_manager.plugins
+
+def test_execute_plugins(plugin_manager, caplog):
+    # Create mock plugins
+    mock_plugin1 = Mock()
+    mock_plugin2 = Mock()
+    mock_plugin3 = Mock()
+
+    # Set up the plugins dictionary
+    plugin_manager.plugins = {
+        'plugin1': mock_plugin1,
+        'plugin2': mock_plugin2,
+        'plugin3': mock_plugin3
+    }
+
+    # Make plugin2 raise an exception when executed
+    mock_plugin2.execute.side_effect = Exception("Test exception")
+
+    # Execute the plugins
+    with caplog.at_level(logging.INFO):
+        plugin_manager.execute_plugins()
+
+    # Assert that all plugins were called with correct arguments
+    mock_plugin1.execute.assert_called_once_with({}, plugin_manager.shared_state)
+    mock_plugin2.execute.assert_called_once_with({}, plugin_manager.shared_state)
+    mock_plugin3.execute.assert_called_once_with({}, plugin_manager.shared_state)
+
+    # Check that the execution messages for all plugins were logged
+    assert "Executing plugin: plugin1" in caplog.text
+    assert "Executing plugin: plugin2" in caplog.text
+    assert "Executing plugin: plugin3" in caplog.text
+
+    # Check that the error for plugin2 was logged
+    assert "Error executing plugin plugin2: Test exception" in caplog.text
+
+def test_on_modified(plugin_manager):
+    """Test that on_modified function properly detects file modifications."""
+    # Create a temporary directory and file
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_file = os.path.join(temp_dir, "test_plugin.py")
+        with open(temp_file, "w") as f:
+            f.write("def execute(): pass")
+        
+        # Set up the plugin manager
+        plugin_manager.plugin_dir = temp_dir
+        plugin_manager.load_plugin(temp_file)
+        
+        # Create a PluginReloader instance
+        reloader = PluginReloader(plugin_manager)
+        
+        # Mock the reload_plugin method
+        with patch.object(plugin_manager, 'reload_plugin') as mock_reload:
+            # Simulate a file modification event
+            event = FileModifiedEvent(temp_file)
+            reloader.on_modified(event)
+            
+            # Check if reload_plugin was called with the correct plugin name
+            mock_reload.assert_called_once_with("test_plugin")
+
+        # Modify the file
+        with open(temp_file, "a") as f:
+            f.write("\ndef new_function(): pass")
+        
+        # Simulate another file modification event
+        with patch.object(plugin_manager, 'reload_plugin') as mock_reload:
+            event = FileModifiedEvent(temp_file)
+            reloader.on_modified(event)
+            
+            # Check if reload_plugin was called again
+            mock_reload.assert_called_once_with("test_plugin")
+
+        # Test with a non-Python file
+        non_python_file = os.path.join(temp_dir, "not_a_plugin.txt")
+        with open(non_python_file, "w") as f:
+            f.write("This is not a Python file")
+        
+        with patch.object(plugin_manager, 'reload_plugin') as mock_reload:
+            event = FileModifiedEvent(non_python_file)
+            reloader.on_modified(event)
+            
+            # Check that reload_plugin was not called
+            mock_reload.assert_not_called()
+
+def test_handle_plugin_change(plugin_manager):
+    """Test that handle_plugin_change is called and triggers a plugin reload when a file is modified."""
+    # Create a temporary directory and file
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_file = os.path.join(temp_dir, "test_plugin.py")
+        with open(temp_file, "w") as f:
+            f.write("def execute(data, shared_state): pass")
+        
+        # Set up the plugin manager
+        plugin_manager.plugin_dir = temp_dir
+        plugin_manager.load_plugin(temp_file)
+        
+        # Mock the reload_plugin method
+        with patch.object(plugin_manager, 'reload_plugin') as mock_reload:
+            # Call handle_plugin_change
+            plugin_manager.handle_plugin_change("test_plugin.py")
+            
+            # Check if reload_plugin was called with the correct plugin name
+            mock_reload.assert_called_once_with("test_plugin")
+
+        # Test with a non-Python file
+        non_python_file = "not_a_plugin.txt"
+        
+        with patch.object(plugin_manager, 'reload_plugin') as mock_reload:
+            plugin_manager.handle_plugin_change(non_python_file)
+            
+            # Check that reload_plugin was not called
+            mock_reload.assert_not_called()
+
+        # Test with a Python file that's not loaded as a plugin
+        unloaded_plugin = "unloaded_plugin.py"
+        
+        with patch.object(plugin_manager, 'reload_plugin') as mock_reload:
+            plugin_manager.handle_plugin_change(unloaded_plugin)
+            
+            # Check that reload_plugin was called, even if the plugin wasn't previously loaded
+            mock_reload.assert_called_once_with("unloaded_plugin")
+
+    # Test integration with PluginReloader
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_file = os.path.join(temp_dir, "test_plugin.py")
+        with open(temp_file, "w") as f:
+            f.write("def execute(data, shared_state): pass")
+        
+        plugin_manager.plugin_dir = temp_dir
+        plugin_manager.load_plugin(temp_file)
+        
+        reloader = PluginReloader(plugin_manager)
+        
+        with patch.object(plugin_manager, 'handle_plugin_change') as mock_handle_change:
+            event = FileModifiedEvent(temp_file)
+            reloader.on_modified(event)
+            
+            # Check if handle_plugin_change was called with the correct filename
+            mock_handle_change.assert_called_once_with("test_plugin.py")
+
+def test_reload_plugin_module_reload(plugin_manager):
+    # Setup
+    plugin_name = "test_plugin"
+    module_name = f"plugins.{plugin_name}"
+    mock_module = MagicMock()
+    
+    # Mock sys.modules to include our test module
+    with patch.dict(sys.modules, {module_name: mock_module}):
+        # Mock importlib.reload
+        with patch('importlib.reload') as mock_reload:
+            # Call the method
+            plugin_manager.reload_plugin(plugin_name)
+            
+            # Assertions
+            mock_reload.assert_called_once_with(mock_module)
+            assert plugin_manager.plugins[plugin_name] == mock_module
+
+    # Verify that the plugin was added to the plugins dictionary
+    assert plugin_name in plugin_manager.plugins
+
+def test_start_plugin_thread_nonexistent_plugin(plugin_manager, caplog):
+    # Setup
+    non_existent_plugin = "imaginary_plugin"
+    
+    # Ensure the plugin is not in the toy box
+    assert non_existent_plugin not in plugin_manager.plugins
+    
+    # Capture logs at WARNING level
+    with caplog.at_level(logging.WARNING):
+        # Call the method
+        plugin_manager.start_plugin_thread(non_existent_plugin)
+    
+    # Assertions
+    expected_message = f"{non_existent_plugin} is not in our toy box. We can't start it."
+    assert any(expected_message in record.message for record in caplog.records), \
+        f"Expected warning message not found in logs: {caplog.text}"
+    
+    # Verify that no thread was started
+    assert non_existent_plugin not in plugin_manager.plugin_threads
+
+    # Verify that the method returned early
+    assert len(plugin_manager.plugin_threads) == 0
+
 

@@ -213,7 +213,9 @@ class PluginManager:
                 
                 logger.info(f"{plugin_name} got a makeover and is ready to play again!")
             except Exception as e:
-                logger.error(f"Oops! We couldn't give {plugin_name} a makeover. Here's why: {e}")
+                error_message = f"Oops! We couldn't give {plugin_name} a makeover. Here's why: {str(e)}"
+                logging.error(error_message)  # Make sure this line exists
+                # You might want to re-raise the exception or handle it differently depending on your needs
 
     def start_watchdog(self) -> None:
         """
@@ -255,16 +257,12 @@ class PluginManager:
             self.stop_plugin_thread(plugin_name)
         logger.info("All toys are now resting in the toy box.")
 
-    def handle_plugin_change(self, plugin_file):
-        """
-        Step 2j: Toy Upgrade Alert! 🚨 (Plugin Update Handler)
-
-        Toy analogy: When a toy gets an upgrade, we quickly swap it with the old one.
-
-        Reality: This method is called when a plugin file is modified, triggering a reload of the plugin.
-        """
-        plugin_name = plugin_file.split('.')[0]  # Remove the file extension
-        self.reload_plugin(plugin_name)
+    def handle_plugin_change(self, filename):
+        if filename.endswith('.py'):
+            plugin_name = os.path.splitext(os.path.basename(filename))[0]
+            self.reload_plugin(plugin_name)
+        else:
+            print(f"Ignoring non-Python file: {filename}")
 
     def execute_plugins(self) -> None:
         for plugin_name, plugin in self.plugins.items():
@@ -302,10 +300,10 @@ class PluginReloader(FileSystemEventHandler):
         Reality: This method is called when a file in the plugin directory is modified,
         triggering the plugin manager to reload the affected plugin.
         """
-        if event.src_path.endswith(".py"):
-            plugin_name = os.path.basename(event.src_path)[:-3]  # Get the toy's name (remove .py)
-            logger.info(f"Wow! {event.src_path} got an upgrade!")
-            self.plugin_manager.reload_plugin(plugin_name)  # Tell the manager to update the toy
+        print(f"File modified: {event.src_path}")
+        filename = os.path.basename(event.src_path)
+        print(f"Extracted filename: {filename}")
+        self.plugin_manager.handle_plugin_change(filename)
 
 # This PluginManager system allows for dynamic loading, unloading, and reloading of plugins,
 # enabling a flexible and extensible application architecture.
