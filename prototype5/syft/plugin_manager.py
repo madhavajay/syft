@@ -370,9 +370,9 @@ manage, and execute plugins, and even how we keep an eye on them for changes.
 
 What's next on your adventure, you ask?
 
-Head over to syft/main.py to see how all of this plugin magic comes together in the main
-application. There, you'll discover how we set up the PluginManager and keep our application
-running smoothly.
+Head over to syft/shared_state.py to discover how we manage shared state across our plugins.
+There, you'll learn about the mystical SharedState class that allows our plugins to communicate
+and share information.
 
 Remember, in the world of coding, every line is a new adventure. Happy exploring!
 """
