@@ -16,6 +16,7 @@ Let's dive into the magical world of folder creation and see how our setup wizar
 
 import logging
 import os
+import time
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
@@ -93,17 +94,18 @@ def execute(data: Dict[str, Any], shared_state: Any) -> str:
     creates the folder, and returns its path.
     """
     try:
-        folder = shared_state.request_config(
-            "syftbox_folder", prompt_callback, namespace="hello_plugin"
-        )
+        while True:
+            folder = shared_state.request_config(
+                "syftbox_folder", prompt_callback, namespace="hello_plugin"
+            )
 
-        logger.info(f"Ta-da! Your SyftBox Folder is at: {folder}")
+            logger.debug(f"Ta-da! Your SyftBox Folder is at: {folder}")
 
-        os.makedirs(folder, exist_ok=True)
+            os.makedirs(folder, exist_ok=True)
 
-        logger.info(f"Look at me, I made a folder at {folder}!")
+            logger.debug(f"Look at me, I made a folder at {folder}!")
 
-        return folder
+            time.sleep(2)
     except OSError as e:
         error_message = f"Failed to set SyftBox Folder. Error: {e}"
         logger.error(error_message)
