@@ -51,9 +51,15 @@ def prompt_callback(key: str) -> str:
             if os.path.isdir(folder_path):
                 return folder_path
             else:
-                logger.warning(
-                    f"Um, '{folder_path}' isn't a real place. Try again, smartypants."
-                )
+                try:
+                    os.makedirs(folder_path, exist_ok=True)
+                    logger.info(f"Created new directory: {folder_path}")
+                    return folder_path
+                except OSError as e:
+                    logger.warning(
+                        f"Failed to create directory '{folder_path}'. Error: {e}"
+                    )
+                    logger.warning("Try again with a different path.")
         except EOFError:
             logger.warning("You broke the input. Desktop for you!")
             return os.path.expanduser("~/Desktop/SyftBox")
@@ -69,6 +75,12 @@ Toy analogy: This is the magical spell that actually creates the toy box in the 
 
 Reality: We define the main function that sets up the SyftBox folder using the shared state.
 """
+
+
+def get_user_input(data: Dict[str, Any], shared_state: Any) -> None:
+    _ = shared_state.request_config(
+        "syftbox_folder", prompt_callback, namespace="hello_plugin"
+    )
 
 
 def execute(data: Dict[str, Any], shared_state: Any) -> str:
@@ -90,6 +102,7 @@ def execute(data: Dict[str, Any], shared_state: Any) -> str:
         os.makedirs(folder, exist_ok=True)
 
         logger.info(f"Look at me, I made a folder at {folder}!")
+
         return folder
     except OSError as e:
         error_message = f"Failed to set SyftBox Folder. Error: {e}"
