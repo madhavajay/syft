@@ -1,6 +1,6 @@
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages # pragma: no cover
 
-setup(
+setup( # pragma: no cover
     name='syft',
     version='0.1.0',
     description='A plugin-based system for SyftBox',

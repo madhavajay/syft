@@ -304,4 +304,52 @@ def test_start_plugin_thread_nonexistent_plugin(plugin_manager, caplog):
     # Verify that the method returned early
     assert len(plugin_manager.plugin_threads) == 0
 
+def test_load_plugins():
+    # Create a mock plugin directory structure
+    mock_file_structure = {
+        'plugins': {
+            'plugin1.py': '',
+            'plugin2.py': '',
+            '__init__.py': '',
+            'subdir': {
+                'plugin3.py': '',
+                'not_a_plugin.txt': ''
+            }
+        }
+    }
+
+    # Mock os.walk to return our mock file structure
+    def mock_walk(path):
+        if path == './plugins':
+            yield './plugins', ['subdir'], ['plugin1.py', 'plugin2.py', '__init__.py']
+            yield './plugins/subdir', [], ['plugin3.py', 'not_a_plugin.txt']
+
+    # Create a PluginManager instance
+    plugin_manager = PluginManager('./plugins')
+
+    # Mock the necessary functions and methods
+    with patch('os.walk', mock_walk), \
+         patch('os.path.join', os.path.join), \
+         patch.object(plugin_manager, 'load_plugin') as mock_load_plugin, \
+         patch.object(plugin_manager, 'lock') as mock_lock:
+
+        # Call the method we're testing
+        plugin_manager.load_plugins()
+
+        # Assert that the lock was used
+        mock_lock.__enter__.assert_called_once()
+        mock_lock.__exit__.assert_called_once()
+
+        # Assert that load_plugin was called for each .py file (excluding __init__.py)
+        mock_load_plugin.assert_any_call(os.path.join('./plugins', 'plugin1.py'))
+        mock_load_plugin.assert_any_call(os.path.join('./plugins', 'plugin2.py'))
+        mock_load_plugin.assert_any_call(os.path.join('./plugins/subdir', 'plugin3.py'))
+        
+        # Assert that load_plugin was called exactly 3 times
+        assert mock_load_plugin.call_count == 3
+
+        # Assert that load_plugin was not called for __init__.py or not_a_plugin.txt
+        assert os.path.join('./plugins', '__init__.py') not in [call[0][0] for call in mock_load_plugin.call_args_list]
+        assert os.path.join('./plugins/subdir', 'not_a_plugin.txt') not in [call[0][0] for call in mock_load_plugin.call_args_list]
+
 
