@@ -1,8 +1,29 @@
 """
 Welcome to the Magical Plugin Playground! 🎪✨
 
-Imagine you have a toy box full of different toys (we call them plugins).
-This playground helps you manage and run all your plugins efficiently.
+Toy Box Story:
+Imagine you have a magical toy box filled with all sorts of wonderful toys (we call them plugins).
+Each toy has its own special abilities and can play on its own little track. You have a friendly
+robot helper (the PluginManager) who keeps everything organized. This robot can:
+- Unpack new toys and figure out how they work
+- Set up tracks for the toys to play on
+- Watch the toy box for any changes or upgrades to the toys
+- Help clean up when playtime is over
+
+Reality:
+In the world of software, this magical toy box is actually a powerful plugin system. The PluginManager
+is a sophisticated piece of software that manages the lifecycle of plugins in an application. It provides:
+- Dynamic loading and unloading of plugin modules
+- Concurrent execution of plugins in separate threads
+- Hot-reloading of plugins when their source code changes
+- Resource management and cleanup
+
+This plugin system allows for a flexible and extensible architecture, enabling developers to easily
+add new functionality to the application without modifying the core codebase. The PluginManager
+handles all the complexities of plugin discovery, initialization, execution, and termination,
+providing a seamless integration of plugins into the main application.
+
+Let's dive into the magical world of plugins and see how this playground works! 🚀
 """
 
 import importlib
@@ -115,10 +136,12 @@ class PluginManager:
 
     def load_plugin(self, plugin_path: str) -> None:
         """
-        Load a plugin from the specified path.
-        
-        Args:
-            plugin_path (str): The path to the plugin file or directory.
+        Step 2c: Inspecting a New Toy 🔍 (Plugin Loading)
+
+        Toy analogy: We carefully look at a new toy to see how it works.
+
+        Reality: This method loads a single plugin from the specified path.
+        It imports the plugin module and wraps its execute function in a PluginWrapper.
         """
         try:
             plugin_name = os.path.basename(plugin_path).replace('.py', '')
@@ -258,6 +281,14 @@ class PluginManager:
         logger.info("All toys are now resting in the toy box.")
 
     def handle_plugin_change(self, filename):
+        """
+        Step 2j: Toy Upgrade Detector 🕵️‍♂️ (File Change Handler)
+
+        Toy analogy: When we notice a toy has changed, we give it special attention.
+
+        Reality: This method is called when a file in the plugin directory is modified.
+        It reloads the affected plugin if it's a Python file.
+        """
         if filename.endswith('.py'):
             plugin_name = os.path.splitext(os.path.basename(filename))[0]
             self.reload_plugin(plugin_name)
@@ -265,6 +296,14 @@ class PluginManager:
             print(f"Ignoring non-Python file: {filename}")
 
     def execute_plugins(self) -> None:
+        """
+        Step 2k: Playtime for All! 🎭 (Plugin Execution)
+
+        Toy analogy: We let all the toys in our toy box play together.
+
+        Reality: This method executes all loaded plugins sequentially.
+        It catches and logs any exceptions that occur during plugin execution.
+        """
         for plugin_name, plugin in self.plugins.items():
             try:
                 logger.info(f"Executing plugin: {plugin_name}")
