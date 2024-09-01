@@ -38,22 +38,34 @@ def execute(data: Dict[str, Any], shared_state: Any) -> None:
                 response = requests.get(server_url)
                 if response.status_code == 200:
                     server_users = set(response.json())
-
                     # Add users for folders that don't have them
+
                     for folder in folders - server_users:
-                        logger.warning(
-                            f"Folder '{folder}' does not have a corresponding user in the server. Adding user..."
+                        public_key_path = os.path.join(
+                            syftbox_dir, folder, "public_key.pem"
                         )
-                        add_response = requests.post(
-                            server_url, json={"username": folder}
-                        )
-                        if add_response.status_code == 201:
-                            logger.info(
-                                f"User '{folder}' added successfully to the server."
+                        if os.path.exists(public_key_path):
+                            with open(public_key_path, "r") as f:
+                                public_key = f.read().strip()
+
+                            logger.warning(
+                                f"Folder '{folder}' does not have a corresponding user in the server. Adding user..."
                             )
+                            add_response = requests.post(
+                                server_url,
+                                json={"username": folder, "public_key": public_key},
+                            )
+                            if add_response.status_code == 201:
+                                logger.info(
+                                    f"User '{folder}' added successfully to the server."
+                                )
+                            else:
+                                logger.error(
+                                    f"Failed to add user '{folder}' to the server. Status code: {add_response.status_code}"
+                                )
                         else:
-                            logger.error(
-                                f"Failed to add user '{folder}' to the server. Status code: {add_response.status_code}"
+                            logger.debug(
+                                f"Folder '{folder}' does not have a public key. Skipping user creation."
                             )
 
                     # Create folders for users that don't have them

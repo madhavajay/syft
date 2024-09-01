@@ -43,11 +43,13 @@ def prompt_callback(key: str) -> str:
         try:
             folder_path = input(
                 f"Hey you! Where do you want your SyftBox Folder? "
-                f"(Hit Enter for Desktop/SyftBox) Attempt {attempt + 1}/{max_attempts}: "
+                f"(Hit Enter for ~/Desktop/SyftBox) Attempt {attempt + 1}/{max_attempts}: "
             ).strip()
             if not folder_path:
                 logger.warning("You said nothing. Desktop it is!")
                 return os.path.expanduser("~/Desktop/SyftBox")
+            elif folder_path.startswith("~/"):
+                folder_path = os.path.expanduser(folder_path)
 
             if os.path.isdir(folder_path):
                 return folder_path

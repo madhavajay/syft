@@ -4,6 +4,7 @@ import inspect  # Add this import
 import logging
 import os
 import threading
+import time
 from typing import Any, Callable, Dict
 
 from syft.shared_state import shared_state
@@ -75,15 +76,20 @@ class PluginManager:
 
     def execute_plugins(self) -> None:
         for plugin_name in self.plugins:
+            module = self.plugins[plugin_name]
+
+            if hasattr(module, "get_user_input"):
+                module.get_user_input({}, shared_state)
+
+        for plugin_name in self.plugins:
             self._start_plugin_thread(plugin_name)
 
-    def _start_plugin_thread(self, plugin_name: str) -> None:
+    def _start_plugin_thread(
+        self, plugin_name: str, skip_user_input: bool = False
+    ) -> None:
         self._stop_plugin_thread(plugin_name)
 
         module = self.plugins[plugin_name]
-
-        if hasattr(module, "get_user_input"):
-            module.get_user_input({}, shared_state)
 
         if hasattr(module, "execute"):
             stop_event = threading.Event()
@@ -128,6 +134,12 @@ class PluginManager:
                 logger.info(
                     f"Plugin {plugin_name} has stopped unexpectedly (probably because the execute() method finished. If you don't want this to happen, add a while:True loop.)"
                 )
+                time.sleep(1)
+                self._run_plugin(
+                    plugin_name=plugin_name,
+                    execute_func=execute_func,
+                    stop_event=stop_event,
+                )
 
     def start_watchdog(self) -> None:
         event_handler = PluginReloader(self)
@@ -167,6 +179,6 @@ class PluginReloader(FileSystemEventHandler):
             logger.info(f"Reloaded plugin: {plugin_name}")
 
             # Start the plugin in a new thread
-            self.plugin_manager._start_plugin_thread(plugin_name)
+            self.plugin_manager._start_plugin_thread(plugin_name, skip_user_input=True)
         except ImportError as e:
             logger.error(f"Failed to reload plugin {plugin_name}: {e}")
