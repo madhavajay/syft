@@ -6,14 +6,21 @@ import time
 import sys
 import logging
 import shutil
-from shared_state import shared_state
+from shared_state import SharedState
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
+import sqlite3
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# Initialize Flask app
+app = Flask(__name__)
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
 
 # Dictionary to store running plugins and their job IDs
 running_plugins = {}
@@ -21,10 +28,78 @@ running_plugins = {}
 # Dictionary to store loaded plugins
 loaded_plugins = {}
 
-app = Flask(__name__, static_folder='static', template_folder='templates')
-scheduler = APScheduler()
-scheduler.init_app(app)
-scheduler.start()
+import json
+import os
+
+CONFIG_FILE = 'syft_config.json'
+
+def load_or_create_config():
+    if os.path.exists(CONFIG_FILE) and not os.environ.get('SYFT_RECONFIGURE'):
+        with open(CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+        return config
+    
+    config = {}
+    config['syftbox_folder'] = get_user_input("Enter the path for SyftBox folder", os.path.expanduser("~/Desktop/SyftBox"))
+    config['syft_folder'] = get_user_input("Enter the path for Syft folder", os.path.expanduser("~/.syft"))
+    config['port'] = int(get_user_input("Enter the port to use", 8082))
+
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config, f)
+    
+    return config
+
+def get_user_input(prompt, default):
+    user_input = input(f"{prompt} (default: {default}): ").strip()
+    return user_input if user_input else default
+
+def process_folder_input(user_input, default_path):
+    if not user_input:
+        return default_path
+    if '/' not in user_input:
+        # User only provided a folder name, use it with the default parent path
+        parent_path = os.path.dirname(default_path)
+        return os.path.join(parent_path, user_input)
+    return os.path.expanduser(user_input)
+
+def reinitialize_sync_db(syftbox_folder):
+    db_path = os.path.join(syftbox_folder, '.sync_checkpoints.db')
+    
+    # Delete existing database if it exists
+    if os.path.exists(db_path):
+        try:
+            os.remove(db_path)
+            logger.info(f"Deleted existing .sync_checkpoints.db at {db_path}")
+        except Exception as e:
+            logger.error(f"Failed to delete existing .sync_checkpoints.db: {str(e)}")
+            return
+
+    # Initialize new database
+    try:
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS file_timestamps
+                     (relative_path TEXT PRIMARY KEY, timestamp REAL)''')
+        conn.commit()
+        conn.close()
+        logger.info(f"Initialized new .sync_checkpoints.db at {db_path}")
+    except Exception as e:
+        logger.error(f"Failed to initialize new .sync_checkpoints.db: {str(e)}")
+
+def initialize_shared_state():
+    config = load_or_create_config()
+
+    shared_state = SharedState()
+    shared_state.set("syftbox_folder", config['syftbox_folder'])
+    shared_state.set("syft_folder", config['syft_folder'])
+
+    logger.info(f"SyftBox folder set to: {config['syftbox_folder']}")
+    logger.info(f"Syft folder set to: {config['syft_folder']}")
+
+    # Reinitialize the sync database
+    reinitialize_sync_db(config['syftbox_folder'])
+
+    return shared_state, config['port']
 
 def run_plugin(plugin_name):
     try:
@@ -246,5 +321,6 @@ def remove_datasite(name):
         return jsonify(error=f"Failed to remove datasite: {str(e)}"), 500
 
 if __name__ == '__main__':
+    shared_state, port = initialize_shared_state()
     loaded_plugins = load_plugins()  # Load all plugins at startup
-    app.run(host='0.0.0.0', port=8082, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=True)

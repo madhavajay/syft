@@ -1,128 +1,131 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
-import re
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-import sqlite3
+import os
+import hashlib
+import json
+import time
+from flask import Flask, request, jsonify, send_file
+from werkzeug.utils import secure_filename
+from typing import Dict, List
 
 app = Flask(__name__)
 
-# SQLite database setup
-def init_db():
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (username TEXT PRIMARY KEY, public_key TEXT)''')
-    conn.commit()
-    conn.close()
+CACHE_FOLDER = "cache_files"
+CHANGELOG_FILE = "changelog.json"
+os.makedirs(CACHE_FOLDER, exist_ok=True)
 
-init_db()
+class ChangeLogEntry:
+    def __init__(self, filename: str, hash: str, modified: float, operation: str):
+        self.filename = filename
+        self.hash = hash
+        self.modified = modified
+        self.operation = operation
 
-def validate_username(username):
-    return True
+    def to_dict(self):
+        return {
+            "filename": self.filename,
+            "hash": self.hash,
+            "modified": self.modified,
+            "operation": self.operation
+        }
 
-def validate_public_key(public_key):
-    # try:
-    #     serialization.load_pem_public_key(public_key.encode())
-    #     return True
-    # except:
-    #     return False
-    return True
+changelog: List[ChangeLogEntry] = []
 
-@app.route('/')
-def index():
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT username FROM users")
-    users = [row[0] for row in c.fetchall()]
-    conn.close()
-    return render_template('index.html', users=users)
-
-@app.route('/users', methods=['POST'])
-def add_user():
-    username = request.form.get('username')
-    public_key = request.form.get('public_key')
-
-    if not username or not public_key:
-        return "Username and public key are required", 400
-
-    if not validate_username(username):
-        return "Invalid username format", 400
-
-    if not validate_public_key(public_key):
-        return "Invalid public key format", 400
-
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO users (username, public_key) VALUES (?, ?)", (username, public_key))
-        conn.commit()
-    except sqlite3.IntegrityError:
-        conn.close()
-        return "Username already exists", 409
-    finally:
-        conn.close()
-
-    return redirect(url_for('index'))
-
-@app.route('/users/<username>', methods=['DELETE'])
-def remove_user(username):
-    if not validate_username(username):
-        return "Invalid username format", 400
-
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("DELETE FROM users WHERE username = ?", (username,))
-    if c.rowcount == 0:
-        conn.close()
-        return "User not found", 404
-    conn.commit()
-    conn.close()
-
-    return "User removed successfully", 200
-
-@app.route('/users/<username>', methods=['GET'])
-def get_user(username):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username = ?", (username,))
-    user = c.fetchone()
-    conn.close()
-
-    if user:
-        return jsonify({"username": user[0], "public_key": user[1]})
+def load_changelog():
+    global changelog
+    if os.path.exists(CHANGELOG_FILE):
+        with open(CHANGELOG_FILE, 'r') as f:
+            changelog = [ChangeLogEntry(**entry) for entry in json.load(f)]
     else:
-        return "User not found", 404
+        # Initialize changelog with existing files
+        for root, _, filenames in os.walk(CACHE_FOLDER):
+            for filename in filenames:
+                file_path = os.path.join(root, filename)
+                rel_path = os.path.relpath(file_path, CACHE_FOLDER)
+                with open(file_path, "rb") as f:
+                    file_hash = hashlib.md5(f.read()).hexdigest()
+                changelog.append(ChangeLogEntry(
+                    filename=rel_path,
+                    hash=file_hash,
+                    modified=os.path.getmtime(file_path),
+                    operation='create'
+                ))
+        save_changelog()
 
-@app.route('/users/<username>', methods=['PUT'])
-def update_user(username):
-    new_public_key = request.form.get('public_key')
+def save_changelog():
+    with open(CHANGELOG_FILE, 'w') as f:
+        json.dump([entry.to_dict() for entry in changelog], f)
 
-    if not new_public_key:
-        return "Public key is required", 400
+# Make sure to call load_changelog() before starting the Flask app
+load_changelog()
 
-    if not validate_public_key(new_public_key):
-        return "Invalid public key format", 400
+@app.route('/files', methods=['GET'])
+def list_files():
+    files = {}
+    for root, _, filenames in os.walk(CACHE_FOLDER):
+        for filename in filenames:
+            file_path = os.path.join(root, filename)
+            rel_path = os.path.relpath(file_path, CACHE_FOLDER)
+            with open(file_path, "rb") as f:
+                file_hash = hashlib.md5(f.read()).hexdigest()
+            files[rel_path] = {
+                "filename": rel_path,
+                "hash": file_hash,
+                "modified": os.path.getmtime(file_path)
+            }
+    return jsonify(files)
 
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("UPDATE users SET public_key = ? WHERE username = ?", (new_public_key, username))
-    if c.rowcount == 0:
-        conn.close()
-        return "User not found", 404
-    conn.commit()
-    conn.close()
+@app.route('/changelog/<float:last_sync_time>', methods=['GET'])
+def get_changelog(last_sync_time):
+    return jsonify([entry.to_dict() for entry in changelog if entry.modified > last_sync_time])
 
-    return redirect(url_for('index'))
+# Add this new route to handle the case when last_sync_time is 0
+@app.route('/changelog/0', methods=['GET'])
+def get_full_changelog():
+    return jsonify([entry.to_dict() for entry in changelog])
 
-# Add this new route to get all users
-@app.route('/users', methods=['GET'])
-def get_all_users():
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT username FROM users")
-    users = [row[0] for row in c.fetchall()]
-    conn.close()
-    return jsonify(users)
+@app.route('/files/<path:file_path>', methods=['GET'])
+def download_file(file_path):
+    full_path = os.path.join(CACHE_FOLDER, file_path)
+    if not os.path.exists(full_path):
+        return "File not found", 404
+    return send_file(full_path)
+
+@app.route('/files/<path:file_path>', methods=['PUT'])
+def upload_file(file_path):
+    full_path = os.path.join(CACHE_FOLDER, file_path)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    file = request.files['file']
+    file.save(full_path)
+    
+    with open(full_path, "rb") as f:
+        file_hash = hashlib.md5(f.read()).hexdigest()
+    
+    modified_time = time.time()
+    changelog.append(ChangeLogEntry(
+        filename=file_path,
+        hash=file_hash,
+        modified=modified_time,
+        operation='update' if os.path.exists(full_path) else 'create'
+    ))
+    save_changelog()
+    
+    return jsonify({"filename": file_path, "status": "uploaded"})
+
+@app.route('/files/<path:file_path>', methods=['DELETE'])
+def delete_file(file_path):
+    full_path = os.path.join(CACHE_FOLDER, file_path)
+    if not os.path.exists(full_path):
+        return "File not found", 404
+    os.remove(full_path)
+    
+    changelog.append(ChangeLogEntry(
+        filename=file_path,
+        hash="",
+        modified=time.time(),
+        operation='delete'
+    ))
+    save_changelog()
+    
+    return jsonify({"filename": file_path, "status": "deleted"})
 
 if __name__ == '__main__':
     app.run(debug=True)

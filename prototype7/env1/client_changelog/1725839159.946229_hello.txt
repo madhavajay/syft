@@ -1,0 +1,1 @@
+{"path": "hello.txt", "timestamp": 1725839159.946229, "type": "DELETE"}

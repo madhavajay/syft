@@ -1,12 +1,10 @@
 from threading import Lock
 import os
 
+
 class SharedState:
     def __init__(self):
-        self.data = {
-            "syftbox_folder": os.path.expanduser("~/Desktop/SyftBox"),
-            "syft_folder": os.path.expanduser("~/.syft")
-        }
+        self.data = {}
         self.lock = Lock()
 
     def get(self, key, default=None):
@@ -27,4 +25,4 @@ class SharedState:
         return [folder for folder in os.listdir(syft_folder) 
                 if os.path.isdir(os.path.join(syft_folder, folder))]
 
-shared_state = SharedState()
+# Remove the shared_state instantiation from here
