@@ -1,0 +1,20 @@
+[
+    {
+        "filename": "bob/public_key.pem",
+        "hash": "1f403eaf17bee9b6ee1e139d6962ec1a",
+        "modified": 1725837051.304471,
+        "operation": "update"
+    },
+    {
+        "filename": "jane/public_key.pem",
+        "hash": "8a98b9553fa256d9c449f772b592685b",
+        "modified": 1725837051.30811,
+        "operation": "update"
+    },
+    {
+        "filename": "bilbo/public_key.pem",
+        "hash": "5123951e2ca64f9941685868bc89508a",
+        "modified": 1725837051.312521,
+        "operation": "update"
+    }
+]

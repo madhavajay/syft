@@ -1,0 +1,3 @@
+[run]
+omit =
+    run_tests.py

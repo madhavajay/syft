@@ -1,1 +1,0 @@
-{"content": "hi.txt", "path": "test_folder/hi.txt", "timestamp": 1725839807.8450649, "type": "ADD"}
