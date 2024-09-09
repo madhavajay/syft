@@ -1,0 +1,1 @@
+{"type": "DELETE", "path": "bilbo/hi.txt", "timestamp": 1725840722.563398}

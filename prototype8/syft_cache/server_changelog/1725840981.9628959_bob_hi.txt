@@ -1,0 +1,1 @@
+{"type": "DELETE", "path": "bob/hi.txt", "timestamp": 1725840981.9628959}

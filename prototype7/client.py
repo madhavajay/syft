@@ -75,12 +75,19 @@ def apply_changes(changes):
         elif change['type'] == 'DELETE':
             if os.path.exists(file_path):
                 os.remove(file_path)
+                # Remove empty directories
+                dir_path = os.path.dirname(file_path)
+                while dir_path != CLIENT_FOLDER:
+                    if not os.listdir(dir_path):
+                        os.rmdir(dir_path)
+                        dir_path = os.path.dirname(dir_path)
+                    else:
+                        break
 
 def save_changelog(changelog):
     for change in changelog:
-        # Use the timestamp if available, otherwise use current time
         timestamp = change.get('timestamp', time.time())
-        change_id = f"{timestamp}_{change['path']}"
+        change_id = f"{timestamp}_{change['path'].replace('/', '_')}"
         change_file = os.path.join(CLIENT_CHANGELOG_FOLDER, change_id)
         with open(change_file, 'w') as f:
             json.dump(change, f)
