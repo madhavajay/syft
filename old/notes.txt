@@ -1,9 +1,0 @@
-ssh azureuser@20.55.59.106
-SaVa5i2NFpRe#V
-
-export SERVER_IP=20.55.59.106
-export SERVER_USER=azureuser
-export MY_DATASITE=@madhava@syft-cache.org
-export SYFT_HOME=/Users/madhavajay/dev/syft/test_env
-export SSH_KEY=~/.ssh/syft-cache
-rsync -avz -e "ssh -i $SSH_KEY" $SYFT_HOME/$MY_DATASITE $SERVER_USER@$SERVER_IP:~/test_folder

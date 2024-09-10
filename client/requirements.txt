@@ -1,3 +1,4 @@
-flask
 cryptography
+flask
 flask-apscheduler
+requests

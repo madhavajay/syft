@@ -1,8 +1,8 @@
 import logging
 import os
-import requests
-import time
 from threading import Event
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,7 @@ REQUEST_TIMEOUT = 10  # Timeout for requests in seconds
 # Event to signal the plugin to stop
 stop_event = Event()
 
+
 def run(shared_state):
     if stop_event.is_set():
         logger.info("Plugin received stop signal before starting.")
@@ -24,6 +25,7 @@ def run(shared_state):
         sync_datasites(shared_state)
     except Exception as e:
         logger.error(f"Unexpected error in sync_new_datasites_to_cache: {str(e)}")
+
 
 def get_all_users():
     url = f"{CACHE_SERVER_URL}/users"
@@ -35,12 +37,10 @@ def get_all_users():
         logger.error(f"Failed to retrieve users from cache server: {str(e)}")
         return []
 
+
 def add_user(username, public_key):
     url = f"{CACHE_SERVER_URL}/users"
-    data = {
-        "username": username,
-        "public_key": public_key
-    }
+    data = {"username": username, "public_key": public_key}
     try:
         response = requests.post(url, data=data, timeout=REQUEST_TIMEOUT)
         if response.status_code == 200:
@@ -48,13 +48,16 @@ def add_user(username, public_key):
         elif response.status_code == 409:
             logger.warning(f"User {username} already exists.")
         else:
-            logger.error(f"Failed to add user {username}. Status code: {response.status_code}")
+            logger.error(
+                f"Failed to add user {username}. Status code: {response.status_code}"
+            )
             logger.error(f"Response: {response.text}")
     except requests.RequestException as e:
         logger.error(f"An error occurred while adding user {username}: {str(e)}")
 
+
 def sync_datasites(shared_state):
-    syft_folder = shared_state.get('syft_folder')
+    syft_folder = shared_state.get("syft_folder")
     if not syft_folder:
         logger.warning("syft_folder is not set in shared state")
         return
@@ -64,7 +67,11 @@ def sync_datasites(shared_state):
         return
 
     # Get all datasite folders in syft_folder
-    local_datasites = [f for f in os.listdir(syft_folder) if os.path.isdir(os.path.join(syft_folder, f))]
+    local_datasites = [
+        f
+        for f in os.listdir(syft_folder)
+        if os.path.isdir(os.path.join(syft_folder, f))
+    ]
 
     # Get list of users from the cache server
     server_users = get_all_users()
@@ -76,12 +83,12 @@ def sync_datasites(shared_state):
     for datasite in new_datasites:
         try:
             # Read the public key
-            public_key_path = os.path.join(syft_folder, datasite, 'public_key.pem')
+            public_key_path = os.path.join(syft_folder, datasite, "public_key.pem")
             if not os.path.exists(public_key_path):
                 logger.warning(f"Public key not found for datasite: {datasite}")
                 continue
 
-            with open(public_key_path, 'r') as key_file:
+            with open(public_key_path, "r") as key_file:
                 public_key = key_file.read()
 
             # Register the new datasite with the cache server
@@ -91,6 +98,7 @@ def sync_datasites(shared_state):
             logger.error(f"Error processing datasite {datasite}: {str(e)}")
 
     logger.info("Datasite synchronization with cache server completed")
+
 
 def stop():
     stop_event.set()
