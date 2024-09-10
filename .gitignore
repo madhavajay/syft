@@ -164,3 +164,7 @@ cython_debug/
 
 .DS_Store
 **/.DS_Store
+
+
+server/server_changelog/*
+server/server_data/*
