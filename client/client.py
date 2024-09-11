@@ -1,8 +1,8 @@
 import argparse
 import importlib
-import json
 import logging
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -13,13 +13,26 @@ import types
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Self, Tuple
+from typing import Tuple
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from flask import Flask, jsonify, render_template, request
 from flask_apscheduler import APScheduler
+from lib.lib import Jsonable
+
+
+def validate_email(email: str) -> bool:
+    # Define a regex pattern for a valid email
+    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+
+    # Use the match method to check if the email fits the pattern
+    if re.match(email_regex, email):
+        return True
+    else:
+        return False
+
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -46,50 +59,20 @@ DEFAULT_CONFIG_PATH = "./client_config.json"
 ICON_FOLDER = os.path.abspath("../assets/icon/")
 
 
-class Jsonable:
-    def to_dict(self) -> dict:
-        output = {}
-        for k, v in self.__dict__.items():
-            if k.startswith("_"):
-                continue
-            output[k] = v
-        return output
-
-    def __iter__(self):
-        for key, val in self.to_dict().items():
-            if key.startswith("_"):
-                yield key, val
-
-    def __getitem__(self, key):
-        if key.startswith("_"):
-            return None
-        return self.to_dict()[key]
-
-    @classmethod
-    def load(cls, filepath: str) -> Self:
-        try:
-            with open(filepath) as f:
-                data = f.read()
-                d = json.loads(data)
-                return cls(**d)
-        except Exception as e:
-            print(f"Unable to load file: {filepath}. {e}")
-        return None
-
-    def save(self, filepath: str) -> None:
-        d = self.to_dict()
-        with open(filepath, "w") as f:
-            f.write(json.dumps(d))
-
-
 @dataclass
 class ClientConfig(Jsonable):
-    sync_folder: Path
-    port: int
+    config_path: Path
+    sync_folder: Path | None = None
+    port: int | None = None
+    email: str | None = None
 
     @property
     def db_path(self) -> Path:
         return os.path.join(self.sync_folder, "sync_checkpoints.sqlite")
+
+    @property
+    def datasite_path(self) -> Path:
+        return os.path.join(self.sync_folder, self.email)
 
 
 class SharedState:
@@ -152,36 +135,61 @@ def copy_icon_file(icon_folder: str, dest_folder: str) -> None:
 
 
 def load_or_create_config(args) -> ClientConfig:
-    if os.path.exists(args.config):
-        print("Got file, ", args.config)
     client_config = None
     try:
-        client_config = ClientConfig.load(args.config)
-    except Exception as e:
-        print("e", e)
+        client_config = ClientConfig.load(args.config_path)
+    except Exception:
+        pass
+
+    if client_config is None and args.config_path:
+        config_path = os.path.abspath(os.path.expanduser(args.config_path))
+        client_config = ClientConfig(config_path=config_path)
 
     if client_config is None:
-        user_path = get_user_input(
+        config_path = get_user_input("Path to config file?", DEFAULT_CONFIG_PATH)
+        config_path = os.path.abspath(os.path.expanduser(config_path))
+        client_config = ClientConfig(config_path=config_path)
+
+    if args.sync_folder:
+        sync_folder = os.path.abspath(os.path.expanduser(args.sync_folder))
+        client_config.sync_folder = sync_folder
+
+    if client_config.sync_folder is None:
+        sync_folder = get_user_input(
             "Where do you want to Sync SyftBox to?", DEFAULT_SYNC_FOLDER
         )
-        user_path = os.path.abspath(os.path.expanduser(user_path))
-        port = int(get_user_input("Enter the port to use", DEFAULT_PORT))
-        client_config = ClientConfig(sync_folder=user_path, port=port)
+        sync_folder = os.path.abspath(os.path.expanduser(sync_folder))
+        client_config.sync_folder = sync_folder
 
     if not os.path.exists(client_config.sync_folder):
         os.makedirs(client_config.sync_folder, exist_ok=True)
-        print(f"Creating path: {client_config.sync_folder}")
 
     copy_icon_file(ICON_FOLDER, client_config.sync_folder)
-    # make macos icon
 
-    client_config.save(args.config)
+    if args.email:
+        client_config.email = args.email
 
+    if client_config.email is None:
+        email = get_user_input("What is your email address? ")
+        if not validate_email(email):
+            raise Exception(f"Invalid email: {email}")
+        client_config.email = email
+
+    if args.port:
+        client_config.port = args.port
+
+    if client_config.port is None:
+        port = int(get_user_input("Enter the port to use", DEFAULT_PORT))
+        client_config.port = port
+
+    client_config.save(args.config_path)
     return client_config
 
 
-def get_user_input(prompt, default):
-    user_input = input(f"{prompt} (default: {default}): ").strip()
+def get_user_input(prompt, default: str | None = None):
+    if default:
+        prompt = f"{prompt} (default: {default}): "
+    user_input = input(prompt).strip()
     return user_input if user_input else default
 
 
@@ -199,12 +207,12 @@ def reinitialize_sync_db(client_config):
     if os.path.exists(client_config.db_path):
         try:
             os.remove(client_config.db_path)
-            logger.info(
-                f"Deleted existing .sync_checkpoints.db at {client_config.db_path}"
-            )
-        except Exception as e:
-            logger.error(f"Failed to delete existing .sync_checkpoints.db: {str(e)}")
+            # logger.info(
+            #     f"Deleted existing .sync_checkpoints.db at {client_config.db_path}"
+            # )
+        except Exception:
             return
+            # logger.error(f"Failed to delete existing .sync_checkpoints.db: {str(e)}")
 
     try:
         conn = sqlite3.connect(client_config.db_path)
@@ -213,9 +221,10 @@ def reinitialize_sync_db(client_config):
                      (relative_path TEXT PRIMARY KEY, timestamp REAL)""")
         conn.commit()
         conn.close()
-        logger.info(f"Initialized new .sync_checkpoints.db at {client_config.db_path}")
-    except Exception as e:
-        logger.error(f"Failed to initialize new .sync_checkpoints.db: {str(e)}")
+        # logger.info(f"Initialized new .sync_checkpoints.db at {client_config.db_path}")
+    except Exception:
+        pass
+        # logger.error(f"Failed to initialize new .sync_checkpoints.db: {str(e)}")
 
 
 def initialize_shared_state(client_config: ClientConfig) -> SharedState:
@@ -226,11 +235,12 @@ def initialize_shared_state(client_config: ClientConfig) -> SharedState:
 
 def run_plugin(plugin_name):
     try:
-        logger.info(f"Running plugin: {plugin_name}")
+        # logger.info(f"Running plugin: {plugin_name}")
         module = loaded_plugins[plugin_name].module
         module.run(shared_state)
-    except Exception as e:
-        logger.exception(f"Error in plugin {plugin_name}: {str(e)}")
+    except Exception:
+        pass
+        # logger.exception(f"Error in plugin {plugin_name}: {str(e)}")
 
 
 def load_plugins(client_config: ClientConfig) -> dict[str, Plugin]:
@@ -240,7 +250,6 @@ def load_plugins(client_config: ClientConfig) -> dict[str, Plugin]:
         for item in os.listdir(PLUGINS_DIR):
             if item.endswith(".py") and not item.startswith("__"):
                 plugin_name = item[:-3]
-                print("got plugin name", plugin_name)
                 try:
                     module = importlib.import_module(f"plugins.{plugin_name}")
                     schedule = getattr(
@@ -284,10 +293,10 @@ def start_plugin(plugin_name):
             "start_time": time.time(),
             "schedule": plugin.schedule,
         }
-        logger.info(f"Plugin {plugin_name} started with interval {plugin.schedule}ms")
+        # logger.info(f"Plugin {plugin_name} started with interval {plugin.schedule}ms")
         return jsonify(message=f"Plugin {plugin_name} started successfully"), 200
     except Exception as e:
-        logger.exception(f"Failed to start plugin {plugin_name}")
+        # logger.exception(f"Failed to start plugin {plugin_name}")
         return jsonify(error=f"Failed to start plugin {plugin_name}: {str(e)}"), 500
 
 
@@ -372,10 +381,10 @@ def kill_plugin():
         # Remove the plugin from running_plugins
         del running_plugins[plugin_name]
 
-        logger.info(f"Plugin {plugin_name} stopped successfully")
+        # logger.info(f"Plugin {plugin_name} stopped successfully")
         return jsonify(message=f"Plugin {plugin_name} stopped successfully"), 200
     except Exception as e:
-        logger.exception(f"Failed to stop plugin {plugin_name}")
+        # logger.exception(f"Failed to stop plugin {plugin_name}")
         return jsonify(error=f"Failed to stop plugin {plugin_name}: {str(e)}"), 500
 
 
@@ -388,12 +397,12 @@ def get_shared_state():
 def update_shared_state():
     key = request.json.get("key")
     value = request.json.get("value")
-    logger.info(f"Received request to update {key} with value: {value}")
+    # logger.info(f"Received request to update {key} with value: {value}")
     if key is not None:
         old_value = shared_state.get(key)
         shared_state.set(key, value)
         new_value = shared_state.get(key)
-        logger.info(f"Updated {key}: old value '{old_value}', new value '{new_value}'")
+        # logger.info(f"Updated {key}: old value '{old_value}', new value '{new_value}'")
         return jsonify(
             message=f"Updated key '{key}' from '{old_value}' to '{new_value}'"
         ), 200
@@ -441,7 +450,7 @@ def add_datasite():
 
         return jsonify(message=f"Datasite '{name}' created successfully"), 201
     except Exception as e:
-        logger.exception(f"Failed to create datasite {name}")
+        # logger.exception(f"Failed to create datasite {name}")
         return jsonify(error=f"Failed to create datasite: {str(e)}"), 500
 
 
@@ -462,7 +471,7 @@ def remove_datasite(name):
         shutil.rmtree(datasite_path)
         return jsonify(message=f"Datasite '{name}' removed successfully"), 200
     except Exception as e:
-        logger.exception(f"Failed to remove datasite {name}")
+        # logger.exception(f"Failed to remove datasite {name}")
         return jsonify(error=f"Failed to remove datasite: {str(e)}"), 500
 
 
@@ -470,9 +479,9 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Run the web application with plugins."
     )
-    parser.add_argument(
-        "config", type=str, default=DEFAULT_CONFIG_PATH, help="config path"
-    )
+    parser.add_argument("--config_path", type=str, help="config path")
+    parser.add_argument("--sync_folder", type=str, help="sync folder path")
+    parser.add_argument("--email", type=str, help="email")
     parser.add_argument("--port", type=int, default=8080, help="Port number")
     return parser.parse_args()
 
@@ -482,16 +491,18 @@ if __name__ == "__main__":
     client_config = load_or_create_config(args)
     shared_state = initialize_shared_state(client_config)
     loaded_plugins = load_plugins(client_config)
-    print("loaded_plugins", loaded_plugins.keys())
-    first_plugin = list(loaded_plugins.keys())[0]
-    # for plugin_name, plugin in loaded_plugins.items():
-    print("first_plugin", first_plugin, type(first_plugin))
-    scheduler_thread = threading.Thread(target=start_plugin, args=(first_plugin,))
-    scheduler_thread.start()
+    threads = []
+    for plugin_name in loaded_plugins:
+        print("got plugin", plugin_name)
+        scheduler_thread = threading.Thread(target=start_plugin, args=(plugin_name,))
+        scheduler_thread.start()
+        threads.append(scheduler_thread)
+
     print(f"Client Running: http://localhost:{client_config.port}")
     try:
         app.run(host="0.0.0.0", port=client_config.port, debug=True)
     except KeyboardInterrupt:
         pass
     finally:
-        scheduler_thread.join()  # Ensure the scheduler thread is properly cleaned up
+        for thread in threads:
+            thread.join()
