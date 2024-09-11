@@ -7,6 +7,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import types
 from dataclasses import dataclass
@@ -481,5 +482,16 @@ if __name__ == "__main__":
     client_config = load_or_create_config(args)
     shared_state = initialize_shared_state(client_config)
     loaded_plugins = load_plugins(client_config)
+    print("loaded_plugins", loaded_plugins.keys())
+    first_plugin = list(loaded_plugins.keys())[0]
+    # for plugin_name, plugin in loaded_plugins.items():
+    print("first_plugin", first_plugin, type(first_plugin))
+    scheduler_thread = threading.Thread(target=start_plugin, args=(first_plugin,))
+    scheduler_thread.start()
     print(f"Client Running: http://localhost:{client_config.port}")
-    app.run(host="0.0.0.0", port=client_config.port, debug=True)
+    try:
+        app.run(host="0.0.0.0", port=client_config.port, debug=True)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        scheduler_thread.join()  # Ensure the scheduler thread is properly cleaned up
