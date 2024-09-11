@@ -1,11 +1,14 @@
+import argparse
 import hashlib
 import json
 import os
 import time
 
-from flask import Flask, jsonify, request, send_file
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 
-app = Flask(__name__)
+app = FastAPI()
 
 DATA_FOLDER = "server_data"
 CHANGELOG_FOLDER = "server_changelog"
@@ -20,9 +23,11 @@ def get_file_hash(file_path):
         return hashlib.md5(file.read()).hexdigest()
 
 
-@app.route("/push_changes", methods=["POST"])
-def push_changes():
-    changes = request.json["changes"]
+@app.post("/push_changes")
+async def push_changes(request: Request):
+    data = await request.json()
+    changes = data["changes"]
+
     for change in changes:
         timestamp = time.time()
         change["timestamp"] = timestamp
@@ -48,30 +53,50 @@ def push_changes():
                     else:
                         break
 
-    return jsonify({"status": "success"}), 200
+    return JSONResponse({"status": "success"}, status_code=200)
 
 
-@app.route("/get_full_changelog", methods=["GET"])
-def get_full_changelog():
+@app.get("/get_full_changelog")
+async def get_full_changelog():
     changelog = []
     for filename in sorted(os.listdir(CHANGELOG_FOLDER)):
-        print(filename)
-        with open(os.path.join(CHANGELOG_FOLDER, filename), "r") as f:
-            try:
+        try:
+            with open(os.path.join(CHANGELOG_FOLDER, filename), "r") as f:
                 changelog.append(json.load(f))
-            except Exception:
-                print(f"Skipping file: {filename}")
-    return jsonify(changelog)
+        except Exception:
+            print(f"Skipping file: {filename}")
+    return JSONResponse(changelog)
 
 
-@app.route("/get_file/<path:filename>", methods=["GET"])
-def get_file(filename):
+@app.get("/get_file/{filename:path}")
+async def get_file(filename: str):
     file_path = os.path.join(DATA_FOLDER, filename)
     if os.path.exists(file_path):
-        return send_file(file_path)
+        return FileResponse(file_path)
     else:
-        return jsonify({"error": "File not found"}), 404
+        raise HTTPException(status_code=404, detail="File not found")
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    parser = argparse.ArgumentParser(description="Run FastAPI server")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=5001,
+        help="Port to run the server on (default: 5001)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Run the server in debug mode with hot reloading",
+    )
+
+    args = parser.parse_args()
+
+    uvicorn.run(
+        "server:app" if args.debug else app,  # Use import string in debug mode
+        host="0.0.0.0",
+        port=args.port,
+        log_level="debug" if args.debug else "info",
+        reload=args.debug,  # Enable hot reloading only in debug mode
+    )
