@@ -1,11 +1,9 @@
 import argparse
-import zipfile
 import importlib
 import logging
 import os
 import re
 import shutil
-import sqlite3
 import subprocess
 import sys
 import threading
@@ -21,7 +19,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from flask import Flask, jsonify, render_template, request
 from flask_apscheduler import APScheduler
-from lib.lib import Jsonable
+
+from lib import Jsonable
 
 
 def validate_email(email: str) -> bool:
@@ -67,6 +66,13 @@ class ClientConfig(Jsonable):
     sync_folder: Path | None = None
     port: int | None = None
     email: str | None = None
+    token: int | None = None
+    server_url: str = "http://localhost:5001"
+
+    def save(self, path: str | None = None) -> None:
+        if path is None:
+            path = self.config_path
+        super().save(path)
 
     @property
     def db_path(self) -> Path:
@@ -235,33 +241,33 @@ def process_folder_input(user_input, default_path):
     return os.path.expanduser(user_input)
 
 
-def reinitialize_sync_db(client_config):
-    if os.path.exists(client_config.db_path):
-        try:
-            os.remove(client_config.db_path)
-            # logger.info(
-            #     f"Deleted existing .sync_checkpoints.db at {client_config.db_path}"
-            # )
-        except Exception:
-            return
-            # logger.error(f"Failed to delete existing .sync_checkpoints.db: {str(e)}")
+# def reinitialize_sync_db(client_config):
+#     if os.path.exists(client_config.db_path):
+#         try:
+#             os.remove(client_config.db_path)
+#             # logger.info(
+#             #     f"Deleted existing .sync_checkpoints.db at {client_config.db_path}"
+#             # )
+#         except Exception:
+#             return
+#             # logger.error(f"Failed to delete existing .sync_checkpoints.db: {str(e)}")
 
-    try:
-        conn = sqlite3.connect(client_config.db_path)
-        c = conn.cursor()
-        c.execute("""CREATE TABLE IF NOT EXISTS file_timestamps
-                     (relative_path TEXT PRIMARY KEY, timestamp REAL)""")
-        conn.commit()
-        conn.close()
-        # logger.info(f"Initialized new .sync_checkpoints.db at {client_config.db_path}")
-    except Exception:
-        pass
-        # logger.error(f"Failed to initialize new .sync_checkpoints.db: {str(e)}")
+#     try:
+#         conn = sqlite3.connect(client_config.db_path)
+#         c = conn.cursor()
+#         c.execute("""CREATE TABLE IF NOT EXISTS file_timestamps
+#                      (relative_path TEXT PRIMARY KEY, timestamp REAL)""")
+#         conn.commit()
+#         conn.close()
+#         # logger.info(f"Initialized new .sync_checkpoints.db at {client_config.db_path}")
+#     except Exception:
+#         pass
+#         # logger.error(f"Failed to initialize new .sync_checkpoints.db: {str(e)}")
 
 
 def initialize_shared_state(client_config: ClientConfig) -> SharedState:
     shared_state = SharedState(client_config=client_config)
-    reinitialize_sync_db(client_config)
+    # reinitialize_sync_db(client_config)
     return shared_state
 
 
@@ -524,7 +530,9 @@ if __name__ == "__main__":
     shared_state = initialize_shared_state(client_config)
     loaded_plugins = load_plugins(client_config)
     threads = []
-    for plugin_name in loaded_plugins:
+    # autorun_plugins = ["sync", "create_datasite"]
+    autorun_plugins = ["init", "nsync", "create_datasite"]
+    for plugin_name in autorun_plugins:
         print("got plugin", plugin_name)
         scheduler_thread = threading.Thread(target=start_plugin, args=(plugin_name,))
         scheduler_thread.start()

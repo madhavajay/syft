@@ -9,4 +9,8 @@ dependencies = [
     "flask>=3.0.3",
     "flask-apscheduler>=1.13.1",
     "requests>=2.32.3",
+    "syftbox-lib",
 ]
+
+[tool.uv.sources]
+syftbox-lib = { path = "../lib", editable = true }

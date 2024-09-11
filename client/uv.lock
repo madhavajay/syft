@@ -278,6 +278,7 @@ dependencies = [
     { name = "flask" },
     { name = "flask-apscheduler" },
     { name = "requests" },
+    { name = "syftbox-lib" },
 ]
 
 [package.metadata]
@@ -286,7 +287,13 @@ requires-dist = [
     { name = "flask", specifier = ">=3.0.3" },
     { name = "flask-apscheduler", specifier = ">=1.13.1" },
     { name = "requests", specifier = ">=2.32.3" },
+    { name = "syftbox-lib", editable = "../lib" },
 ]
+
+[[package]]
+name = "syftbox-lib"
+version = "0.1.0"
+source = { editable = "../lib" }
 
 [[package]]
 name = "tzdata"
