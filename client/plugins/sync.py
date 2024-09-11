@@ -9,7 +9,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SCHEDULE = 2000  # Run every 2 seconds
+DEFAULT_SCHEDULE = 5000  # Run every 2 seconds
 DESCRIPTION = (
     "A plugin that synchronizes files between the SyftBox folder and the cache server."
 )
@@ -20,6 +20,8 @@ LAST_SYNC_FILE = "last_sync.json"
 
 stop_event = Event()
 first_run = True
+
+PLUGIN_NAME = "sync"
 
 ICON_FILE = "Icon"  # special
 IGNORE_FILES = ["sync_checkpoints.sqlite"]
@@ -164,13 +166,17 @@ def sync(syftbox_folder):
             first_run = False
 
         current_state = get_local_state(syftbox_folder)
+        print("current_state", current_state)
         last_sync = load_last_sync(syftbox_folder)
+        print("last_sync", last_sync)
 
         local_changes = detect_local_changes(
             current_state, last_sync["state"], syftbox_folder
         )
+        print("local_changes", local_changes)
 
         if local_changes:
+            print("pushing local changes")
             if push_changes(local_changes):
                 pass
                 # logger.info(f"Pushed {len(local_changes)} local changes to server")
@@ -179,12 +185,21 @@ def sync(syftbox_folder):
                 # logger.error("Failed to push local changes")
 
         server_changelog = get_full_changelog()
+        print("get server change log", server_changelog)
         local_changelog = load_local_changelog(syftbox_folder)
+        print("local change log", local_changelog)
 
+        print(
+            "lengths of remove and local", len(server_changelog), len(local_changelog)
+        )
         if len(server_changelog) > len(local_changelog):
+            print("server is longer")
             new_changes = server_changelog[len(local_changelog) :]
+            print("new changes", new_changes)
             apply_changes(new_changes, syftbox_folder)
+            print("apply changes")
             save_changelog(syftbox_folder, new_changes)
+            print("Save changes")
             # logger.info(f"Applied {len(new_changes)} new changes from server")
 
         new_sync = {
@@ -193,6 +208,7 @@ def sync(syftbox_folder):
             else None,
             "state": get_local_state(syftbox_folder),
         }
+        print("Save sync", new_sync)
         save_last_sync(syftbox_folder, new_sync)
     except Exception:
         pass
@@ -200,22 +216,10 @@ def sync(syftbox_folder):
 
 
 def run(shared_state):
-    if stop_event.is_set():
-        # logger.info("Plugin received stop signal before starting.")
-        return
-
-    syftbox_folder = shared_state.sync_folder
-    if not syftbox_folder:
-        # logger.error("syftbox_folder is not set in shared state")
-        return
-
-    try:
-        sync(syftbox_folder)
-    except Exception:
-        pass
-        # logger.error(f"Unexpected error in sync_files_with_cache: {str(e)}")
+    if not stop_event.is_set():
+        sync(shared_state.sync_folder)
 
 
 def stop():
     stop_event.set()
-    logger.info("Stop signal received for sync_files_with_cache plugin.")
+    logger.info(f"Stop signal received for {PLUGIN_NAME} plugin.")

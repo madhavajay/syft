@@ -4,7 +4,6 @@ import logging
 import os
 import re
 import shutil
-import sqlite3
 import subprocess
 import sys
 import threading
@@ -20,7 +19,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from flask import Flask, jsonify, render_template, request
 from flask_apscheduler import APScheduler
-from lib.lib import Jsonable
+
+from lib import Jsonable
 
 
 def validate_email(email: str) -> bool:
@@ -56,7 +56,8 @@ sys.path.insert(0, os.path.dirname(PLUGINS_DIR))
 DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
 DEFAULT_PORT = 8082
 DEFAULT_CONFIG_PATH = "./client_config.json"
-ICON_FOLDER = os.path.abspath("../assets/icon/")
+ASSETS_FOLDER = os.path.abspath("../assets")
+ICON_FOLDER = os.path.abspath(f"{ASSETS_FOLDER}/icon/")
 
 
 @dataclass
@@ -65,6 +66,13 @@ class ClientConfig(Jsonable):
     sync_folder: Path | None = None
     port: int | None = None
     email: str | None = None
+    token: int | None = None
+    server_url: str = "http://localhost:5001"
+
+    def save(self, path: str | None = None) -> None:
+        if path is None:
+            path = self.config_path
+        super().save(path)
 
     @property
     def db_path(self) -> Path:
@@ -115,13 +123,43 @@ class Plugin:
     description: str
 
 
+# if you knew the pain of this function
 def find_icon_file(src_folder: str) -> Path:
     src_path = Path(src_folder)
 
-    for file_path in src_path.iterdir():
-        if "Icon" in file_path.name and "\r" in file_path.name:
-            return file_path
-    raise FileNotFoundError("Icon file with a carriage return not found.")
+    # Function to search for Icon\r file
+    def search_icon_file():
+        if os.path.exists(src_folder):
+            for file_path in src_path.iterdir():
+                if "Icon" in file_path.name and "\r" in file_path.name:
+                    return file_path
+        return None
+
+    # First attempt to find the Icon\r file
+    icon_file = search_icon_file()
+    if icon_file:
+        return icon_file
+
+    # If Icon\r is not found, search for icon.zip and unzip it
+    zip_file = Path(os.path.abspath(ASSETS_FOLDER)) / "icon.zip"
+    if zip_file.exists():
+        try:
+            # cant use other zip tools as they don't unpack it correctly
+            subprocess.run(
+                ["ditto", "-xk", str(zip_file), str(src_path.parent)], check=True
+            )
+
+            # Try to find the Icon\r file again after extraction
+            icon_file = search_icon_file()
+            if icon_file:
+                return icon_file
+        except subprocess.CalledProcessError:
+            raise RuntimeError("Failed to unzip icon.zip using macOS CLI tool.")
+
+    # If still not found, raise an error
+    raise FileNotFoundError(
+        "Icon file with a carriage return not found, and icon.zip did not contain it."
+    )
 
 
 def copy_icon_file(icon_folder: str, dest_folder: str) -> None:
@@ -203,33 +241,33 @@ def process_folder_input(user_input, default_path):
     return os.path.expanduser(user_input)
 
 
-def reinitialize_sync_db(client_config):
-    if os.path.exists(client_config.db_path):
-        try:
-            os.remove(client_config.db_path)
-            # logger.info(
-            #     f"Deleted existing .sync_checkpoints.db at {client_config.db_path}"
-            # )
-        except Exception:
-            return
-            # logger.error(f"Failed to delete existing .sync_checkpoints.db: {str(e)}")
+# def reinitialize_sync_db(client_config):
+#     if os.path.exists(client_config.db_path):
+#         try:
+#             os.remove(client_config.db_path)
+#             # logger.info(
+#             #     f"Deleted existing .sync_checkpoints.db at {client_config.db_path}"
+#             # )
+#         except Exception:
+#             return
+#             # logger.error(f"Failed to delete existing .sync_checkpoints.db: {str(e)}")
 
-    try:
-        conn = sqlite3.connect(client_config.db_path)
-        c = conn.cursor()
-        c.execute("""CREATE TABLE IF NOT EXISTS file_timestamps
-                     (relative_path TEXT PRIMARY KEY, timestamp REAL)""")
-        conn.commit()
-        conn.close()
-        # logger.info(f"Initialized new .sync_checkpoints.db at {client_config.db_path}")
-    except Exception:
-        pass
-        # logger.error(f"Failed to initialize new .sync_checkpoints.db: {str(e)}")
+#     try:
+#         conn = sqlite3.connect(client_config.db_path)
+#         c = conn.cursor()
+#         c.execute("""CREATE TABLE IF NOT EXISTS file_timestamps
+#                      (relative_path TEXT PRIMARY KEY, timestamp REAL)""")
+#         conn.commit()
+#         conn.close()
+#         # logger.info(f"Initialized new .sync_checkpoints.db at {client_config.db_path}")
+#     except Exception:
+#         pass
+#         # logger.error(f"Failed to initialize new .sync_checkpoints.db: {str(e)}")
 
 
 def initialize_shared_state(client_config: ClientConfig) -> SharedState:
     shared_state = SharedState(client_config=client_config)
-    reinitialize_sync_db(client_config)
+    # reinitialize_sync_db(client_config)
     return shared_state
 
 
@@ -492,7 +530,9 @@ if __name__ == "__main__":
     shared_state = initialize_shared_state(client_config)
     loaded_plugins = load_plugins(client_config)
     threads = []
-    for plugin_name in loaded_plugins:
+    # autorun_plugins = ["sync", "create_datasite"]
+    autorun_plugins = ["init", "nsync", "create_datasite"]
+    for plugin_name in autorun_plugins:
         print("got plugin", plugin_name)
         scheduler_thread = threading.Thread(target=start_plugin, args=(plugin_name,))
         scheduler_thread.start()
