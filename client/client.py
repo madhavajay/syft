@@ -1,4 +1,5 @@
 import argparse
+import zipfile
 import importlib
 import logging
 import os
@@ -56,7 +57,8 @@ sys.path.insert(0, os.path.dirname(PLUGINS_DIR))
 DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
 DEFAULT_PORT = 8082
 DEFAULT_CONFIG_PATH = "./client_config.json"
-ICON_FOLDER = os.path.abspath("../assets/icon/")
+ASSETS_FOLDER = os.path.abspath("../assets")
+ICON_FOLDER = os.path.abspath(f"{ASSETS_FOLDER}/icon/")
 
 
 @dataclass
@@ -115,13 +117,43 @@ class Plugin:
     description: str
 
 
+# if you knew the pain of this function
 def find_icon_file(src_folder: str) -> Path:
     src_path = Path(src_folder)
 
-    for file_path in src_path.iterdir():
-        if "Icon" in file_path.name and "\r" in file_path.name:
-            return file_path
-    raise FileNotFoundError("Icon file with a carriage return not found.")
+    # Function to search for Icon\r file
+    def search_icon_file():
+        if os.path.exists(src_folder):
+            for file_path in src_path.iterdir():
+                if "Icon" in file_path.name and "\r" in file_path.name:
+                    return file_path
+        return None
+
+    # First attempt to find the Icon\r file
+    icon_file = search_icon_file()
+    if icon_file:
+        return icon_file
+
+    # If Icon\r is not found, search for icon.zip and unzip it
+    zip_file = Path(os.path.abspath(ASSETS_FOLDER)) / "icon.zip"
+    if zip_file.exists():
+        try:
+            # cant use other zip tools as they don't unpack it correctly
+            subprocess.run(
+                ["ditto", "-xk", str(zip_file), str(src_path.parent)], check=True
+            )
+
+            # Try to find the Icon\r file again after extraction
+            icon_file = search_icon_file()
+            if icon_file:
+                return icon_file
+        except subprocess.CalledProcessError:
+            raise RuntimeError("Failed to unzip icon.zip using macOS CLI tool.")
+
+    # If still not found, raise an error
+    raise FileNotFoundError(
+        "Icon file with a carriage return not found, and icon.zip did not contain it."
+    )
 
 
 def copy_icon_file(icon_folder: str, dest_folder: str) -> None:

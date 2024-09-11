@@ -18,7 +18,7 @@ for folder in [DATA_FOLDER, CHANGELOG_FOLDER]:
         os.makedirs(folder)
 
 
-def get_file_hash(file_path):
+def get_file_hash(file_path: str) -> str:
     with open(file_path, "rb") as file:
         return hashlib.md5(file.read()).hexdigest()
 
