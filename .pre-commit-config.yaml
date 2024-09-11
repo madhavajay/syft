@@ -32,7 +32,7 @@ repos:
     rev: v0.3.1
     hooks:
       - id: absolufy-imports
-        args: ["--never", "--application-directories=packages/syft/src"]
+        args: ["--never"]
         always_run: true
 
   - repo: https://github.com/pycqa/isort

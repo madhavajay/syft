@@ -1,4 +1,0 @@
-cryptography
-flask
-flask-apscheduler
-requests
