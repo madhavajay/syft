@@ -15,44 +15,32 @@ DESCRIPTION = (
 )
 
 SERVER_URL = "http://localhost:5001"
-CLIENT_CHANGELOG_FOLDER = "syft_changelog"
+CLIENT_CHANGELOG_FOLDER = ".syft_changelog"
 LAST_SYNC_FILE = "last_sync.json"
 
 stop_event = Event()
 first_run = True
 
-ICON_FILE = "Icon"  # special
-IGNORE_FILES = ["sync_checkpoints.sqlite"]
-IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER]
 
-
-def get_file_hash(file_path: str) -> str:
+def get_file_hash(file_path):
     with open(file_path, "rb") as file:
         return hashlib.md5(file.read()).hexdigest()
 
 
-def get_local_state(syftbox_folder: str) -> dict[str, str]:
+def get_local_state(syftbox_folder):
     local_state = {}
     for root, dirs, files in os.walk(syftbox_folder):
-        print("root", root, dirs, files)
-        # ignore folder
         if CLIENT_CHANGELOG_FOLDER in root:
             continue
         for file in files:
-            print("file in files", file)
-            if file.startswith(ICON_FILE):
-                continue
-            if file in IGNORE_FILES:
-                continue
             path = os.path.join(root, file)
             rel_path = os.path.relpath(path, syftbox_folder)
             local_state[rel_path] = get_file_hash(path)
     return local_state
 
 
-def load_last_sync(syftbox_folder) -> dict:
+def load_last_sync(syftbox_folder):
     sync_file = os.path.join(syftbox_folder, CLIENT_CHANGELOG_FOLDER, LAST_SYNC_FILE)
-    print("loading sync_file", sync_file)
     if os.path.exists(sync_file):
         with open(sync_file, "r") as f:
             return json.load(f)
@@ -61,7 +49,6 @@ def load_last_sync(syftbox_folder) -> dict:
 
 def save_last_sync(syftbox_folder, sync_data):
     sync_file = os.path.join(syftbox_folder, CLIENT_CHANGELOG_FOLDER, LAST_SYNC_FILE)
-    print("saving sync_file", sync_file)
     os.makedirs(os.path.dirname(sync_file), exist_ok=True)
     with open(sync_file, "w") as f:
         json.dump(sync_data, f)
@@ -103,14 +90,12 @@ def apply_changes(changes, syftbox_folder):
     for change in changes:
         file_path = os.path.join(syftbox_folder, change["path"])
         if change["type"] in ["ADD", "MODIFY"]:
-            print("CHANGE", change["type"], "add or modify", file_path)
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "wb") as f:
                 f.write(
                     bytes.fromhex(change["content"])
                 )  # Convert hex string back to binary
         elif change["type"] == "DELETE":
-            print("CHANGE delete", file_path)
             if os.path.exists(file_path):
                 os.remove(file_path)
                 # Remove empty directories
@@ -147,21 +132,10 @@ def load_local_changelog(syftbox_folder):
 
 def clear_syftbox_folder(syftbox_folder):
     for root, dirs, files in os.walk(syftbox_folder, topdown=False):
-        print("Resetting syft box folders")
         for name in files:
-            if name.startswith(ICON_FILE):
-                continue  # special macOS icon file
-            if name in IGNORE_FILES:
-                continue  # normal ignore files
-            file_path = os.path.join(root, name)
-            print(f"> Deleting: {file_path}")
-            os.remove(file_path)
+            os.remove(os.path.join(root, name))
         for name in dirs:
-            if name in IGNORE_FOLDERS:
-                continue  # ignore folers
-            dir_path = os.path.join(root, name)
-            print(f"> Deleting: {dir_path}")
-            os.rmdir(dir_path)
+            os.rmdir(os.path.join(root, name))
 
 
 def sync(syftbox_folder):
@@ -173,16 +147,11 @@ def sync(syftbox_folder):
             first_run = False
 
         current_state = get_local_state(syftbox_folder)
-        print("Current state", current_state)
         last_sync = load_last_sync(syftbox_folder)
-        print("last sync", last_sync)
 
         local_changes = detect_local_changes(
             current_state, last_sync["state"], syftbox_folder
         )
-
-        print("local changes", local_changes)
-
         if local_changes:
             if push_changes(local_changes):
                 logger.info(f"Pushed {len(local_changes)} local changes to server")
@@ -190,16 +159,11 @@ def sync(syftbox_folder):
                 logger.error("Failed to push local changes")
 
         server_changelog = get_full_changelog()
-        print("server change log", server_changelog)
         local_changelog = load_local_changelog(syftbox_folder)
-        print("local change log", local_changelog)
 
         if len(server_changelog) > len(local_changelog):
             new_changes = server_changelog[len(local_changelog) :]
-            print("got new server changes", new_changes)
-            print("applying changes")
             apply_changes(new_changes, syftbox_folder)
-            print("updating change log")
             save_changelog(syftbox_folder, new_changes)
             logger.info(f"Applied {len(new_changes)} new changes from server")
 
@@ -209,10 +173,8 @@ def sync(syftbox_folder):
             else None,
             "state": get_local_state(syftbox_folder),
         }
-        print("new sync", new_sync)
         save_last_sync(syftbox_folder, new_sync)
     except Exception as e:
-        print("ERRROR", e)
         logger.error(f"Error in sync function: {str(e)}", exc_info=True)
 
 
