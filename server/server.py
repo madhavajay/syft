@@ -4,7 +4,6 @@ import json
 import os
 import random
 import sys
-import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,7 +11,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from lib import Jsonable
+from lib import FileChange, FileChangeKind, Jsonable, strtobin
 
 DATA_FOLDER = "data"
 SNAPSHOT_FOLDER = f"{DATA_FOLDER}/snapshot"
@@ -148,37 +147,32 @@ async def register(request: Request):
     return JSONResponse({"status": "success", "token": token}, status_code=200)
 
 
-@app.post("/push_changes")
-async def push_changes(request: Request):
+@app.post("/write")
+async def write(request: Request):
     data = await request.json()
-    changes = data["changes"]
+    email = data["email"]
+    change_dict = data["change"]
+    change_dict["kind"] = FileChangeKind(change_dict["kind"])
+    change = FileChange(**change_dict)
 
-    for change in changes:
-        timestamp = time.time()
-        change["timestamp"] = timestamp
-        change_id = f"{timestamp}_{change['path'].replace('/', '_')}"
-        change_file = os.path.join(CHANGELOG_FOLDER, change_id)
-        with open(change_file, "w") as f:
-            json.dump(change, f)
+    change.sync_folder = os.path.abspath(SNAPSHOT_FOLDER)
 
-        file_path = os.path.join(SNAPSHOT_FOLDER, change["path"])
-        if change["type"] == "ADD" or change["type"] == "MODIFY":
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, "wb") as f:
-                f.write(change["content"].encode())
-        elif change["type"] == "DELETE":
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                # Remove empty directories
-                dir_path = os.path.dirname(file_path)
-                while dir_path != SNAPSHOT_FOLDER:
-                    if not os.listdir(dir_path):
-                        os.rmdir(dir_path)
-                        dir_path = os.path.dirname(dir_path)
-                    else:
-                        break
-
-    return JSONResponse({"status": "success"}, status_code=200)
+    if change.kind_write:
+        bin_data = strtobin(data["data"])
+        result = change.write(bin_data)
+    elif change.kind_delete:
+        result = change.delete()
+    else:
+        raise Exception(f"Unknown type of change kind. {change.kind}")
+    if result:
+        print(f"> {email} {change.kind}: {change.internal_path}")
+        return JSONResponse(
+            {"status": "success", "change": change.to_dict()}, status_code=200
+        )
+    else:
+        return JSONResponse(
+            {"status": "error", "change": change.to_dict()}, status_code=400
+        )
 
 
 @app.get("/get_full_changelog")

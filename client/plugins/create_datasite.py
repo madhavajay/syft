@@ -18,12 +18,16 @@ def claim_datasite(client_config):
     if os.path.exists(file_path):
         perm_file = SyftPermission.load(file_path)
     else:
-        perm_file = SyftPermission(
-            vote=[client_config.email],
-            read=[client_config.email, USER_GROUP_GLOBAL],
-            write=[client_config.email],
-        )
-        perm_file.save(file_path)
+        print(f"> {client_config.email} Creating Datasite + Permfile")
+        try:
+            perm_file = SyftPermission(
+                admin=[client_config.email],
+                read=[client_config.email, USER_GROUP_GLOBAL],
+                write=[client_config.email],
+            )
+            perm_file.save(file_path)
+        except Exception as e:
+            print("Failed to create perm file", e)
 
 
 def run(shared_state):
