@@ -501,8 +501,7 @@ if __name__ == "__main__":
     shared_state = initialize_shared_state(client_config)
     loaded_plugins = load_plugins(client_config)
     threads = []
-    # autorun_plugins = ["sync", "create_datasite"]
-    autorun_plugins = ["init", "nsync", "create_datasite"]
+    autorun_plugins = ["init", "sync", "create_datasite"]
     for plugin_name in autorun_plugins:
         print("got plugin", plugin_name)
         scheduler_thread = threading.Thread(target=start_plugin, args=(plugin_name,))

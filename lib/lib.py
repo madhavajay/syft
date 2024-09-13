@@ -236,3 +236,56 @@ def get_datasites(sync_folder: str) -> list[str]:
         if "@" in folder:
             datasites.append(folder)
     return datasites
+
+
+@dataclass
+class PermissionTree(Jsonable):
+    tree: dict[str, SyftPermission]
+    parent_path: str
+
+    @classmethod
+    def from_path(cls, parent_path) -> Self:
+        perm_dict = {}
+        for root, dirs, files in os.walk(parent_path):
+            for file in files:
+                if file.endswith(".syftperm"):
+                    path = os.path.join(root, file)
+                    perm_dict[path] = SyftPermission.load(path)
+
+        return PermissionTree(tree=perm_dict, parent_path=parent_path)
+
+    def permission_for_path(self, path: str) -> SyftPermission:
+        parent_path = os.path.normpath(self.parent_path)
+        top_perm_file = perm_file_path(parent_path)
+        current_perm = self.tree[top_perm_file]
+
+        # default
+        if parent_path not in path:
+            return current_perm
+
+        sub_path = path.replace(parent_path, "")
+        current_perm_level = parent_path
+        for part in sub_path.split("/"):
+            if part == "":
+                continue
+
+            current_perm_level += "/" + part
+            next_perm_file = perm_file_path(current_perm_level)
+            if next_perm_file in self.tree:
+                # we could do some overlay with defaults but
+                # for now lets just use a fully defined overwriting perm file
+                next_perm = self.tree[next_perm_file]
+                current_perm = next_perm
+
+        return current_perm
+
+
+def filter_read_state(user_email: str, dir_state: DirState, perm_tree: PermissionTree):
+    filtered_tree = {}
+    root_dir = dir_state.sync_folder + "/" + dir_state.sub_path
+    for file_path, file_hash in dir_state.tree.items():
+        full_path = root_dir + "/" + file_path
+        perm_file_at_path = perm_tree.permission_for_path(full_path)
+        if user_email in perm_file_at_path.read or "GLOBAL" in perm_file_at_path.read:
+            filtered_tree[file_path] = file_hash
+    return filtered_tree
