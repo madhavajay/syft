@@ -5,6 +5,9 @@ import requests
 stop_event = Event()
 
 
+registered = False
+
+
 def register(client_config):
     response = requests.post(
         f"{client_config.server_url}/register", json={"email": client_config.email}
@@ -21,5 +24,4 @@ def run(shared_state):
     if not stop_event.is_set():
         if not shared_state.client_config.token:
             register(shared_state.client_config)
-        else:
-            print("READY FOR SYNC")
+            print("> Register Complete")

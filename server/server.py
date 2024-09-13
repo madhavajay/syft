@@ -124,8 +124,6 @@ class Users:
 
 USERS = Users()
 
-app = FastAPI()
-
 
 def create_folders(folders: list[str]) -> None:
     for folder in folders:
@@ -133,12 +131,20 @@ def create_folders(folders: list[str]) -> None:
             os.makedirs(folder, exist_ok=True)
 
 
-@app.on_event("startup")
-async def startup_event():
+async def lifespan(app: FastAPI):
+    # Startup
+    print("> Starting Server")
     print("> Creating Folders")
     create_folders(FOLDERS)
     print("> Loading Users")
     print(USERS)
+
+    yield  # Run the application
+
+    print("> Shutting down server")
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.post("/register")
@@ -222,7 +228,6 @@ async def dir_state(request: Request):
         response_json = {"sub_path": sub_path, "dir_state": remote_dir_state.to_dict()}
 
         if remote_dir_state:
-            print(f"> {email} dir_state: {sub_path}")
             return JSONResponse({"status": "success"} | response_json, status_code=200)
         else:
             return JSONResponse({"status": "error"}, status_code=400)
