@@ -75,10 +75,6 @@ class ClientConfig(Jsonable):
         super().save(path)
 
     @property
-    def db_path(self) -> Path:
-        return os.path.join(self.sync_folder, "sync_checkpoints.sqlite")
-
-    @property
     def datasite_path(self) -> Path:
         return os.path.join(self.sync_folder, self.email)
 
@@ -241,33 +237,8 @@ def process_folder_input(user_input, default_path):
     return os.path.expanduser(user_input)
 
 
-# def reinitialize_sync_db(client_config):
-#     if os.path.exists(client_config.db_path):
-#         try:
-#             os.remove(client_config.db_path)
-#             # logger.info(
-#             #     f"Deleted existing .sync_checkpoints.db at {client_config.db_path}"
-#             # )
-#         except Exception:
-#             return
-#             # logger.error(f"Failed to delete existing .sync_checkpoints.db: {str(e)}")
-
-#     try:
-#         conn = sqlite3.connect(client_config.db_path)
-#         c = conn.cursor()
-#         c.execute("""CREATE TABLE IF NOT EXISTS file_timestamps
-#                      (relative_path TEXT PRIMARY KEY, timestamp REAL)""")
-#         conn.commit()
-#         conn.close()
-#         # logger.info(f"Initialized new .sync_checkpoints.db at {client_config.db_path}")
-#     except Exception:
-#         pass
-#         # logger.error(f"Failed to initialize new .sync_checkpoints.db: {str(e)}")
-
-
 def initialize_shared_state(client_config: ClientConfig) -> SharedState:
     shared_state = SharedState(client_config=client_config)
-    # reinitialize_sync_db(client_config)
     return shared_state
 
 

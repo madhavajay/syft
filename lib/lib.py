@@ -1,12 +1,17 @@
 import base64
+import hashlib
 import json
 import os
 import zlib
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import Any, Self
 
 USER_GROUP_GLOBAL = "GLOBAL"
+
+ICON_FILE = "Icon"  # special
+IGNORE_FILES = []
 
 
 def perm_file_path(path: str) -> str:
@@ -167,3 +172,67 @@ class FileChange(Jsonable):
         except Exception as e:
             print("failed to write", path, e)
             return False
+
+
+@dataclass
+class DirState(Jsonable):
+    tree: dict[str, str]
+    timestamp: float
+    sync_folder: str
+    sub_path: str
+
+
+def get_file_hash(file_path: str) -> str:
+    with open(file_path, "rb") as file:
+        return hashlib.md5(file.read()).hexdigest()
+
+
+def ignore_dirs(directory: str, root: str, ignore_folders=None) -> bool:
+    if ignore_folders is not None:
+        for ignore_folder in ignore_folders:
+            if root.endswith(ignore_folder):
+                return True
+    return False
+
+
+def hash_dir(
+    sync_folder: str, sub_path: str, ignore_folders: list | None = None
+) -> DirState:
+    state_dict = {}
+    full_path = os.path.join(sync_folder, sub_path)
+    for root, dirs, files in os.walk(full_path):
+        if not ignore_dirs(full_path, root, ignore_folders):
+            for file in files:
+                if not ignore_file(full_path, root, file):
+                    path = os.path.join(root, file)
+                    rel_path = os.path.relpath(path, full_path)
+                    state_dict[rel_path] = get_file_hash(path)
+
+    utc_unix_timestamp = datetime.now().timestamp()
+    dir_state = DirState(
+        tree=state_dict,
+        timestamp=utc_unix_timestamp,
+        sync_folder=sync_folder,
+        sub_path=sub_path,
+    )
+    return dir_state
+
+
+def ignore_file(directory: str, root: str, filename: str) -> bool:
+    if directory == root:
+        if filename.startswith(ICON_FILE):
+            return True
+        if filename in IGNORE_FILES:
+            return True
+    if filename == ".DS_Store":
+        return True
+    return False
+
+
+def get_datasites(sync_folder: str) -> list[str]:
+    datasites = []
+    folders = os.listdir(sync_folder)
+    for folder in folders:
+        if "@" in folder:
+            datasites.append(folder)
+    return datasites
