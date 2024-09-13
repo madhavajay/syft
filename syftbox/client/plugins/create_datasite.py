@@ -1,7 +1,7 @@
 import logging
 import os
 
-from lib import USER_GROUP_GLOBAL, SyftPermission, perm_file_path
+from syftbox.lib import USER_GROUP_GLOBAL, SyftPermission, perm_file_path
 
 logger = logging.getLogger(__name__)
 

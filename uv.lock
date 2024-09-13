@@ -332,16 +332,15 @@ wheels = [
 ]
 
 [[package]]
-name = "syftbox-client"
+name = "syftbox"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "jinja2" },
     { name = "requests" },
-    { name = "syftbox-lib" },
     { name = "uvicorn" },
 ]
 
@@ -352,14 +351,8 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.114.0" },
     { name = "jinja2", specifier = ">=3.1.4" },
     { name = "requests", specifier = ">=2.32.3" },
-    { name = "syftbox-lib", editable = "../lib" },
     { name = "uvicorn", specifier = ">=0.30.6" },
 ]
-
-[[package]]
-name = "syftbox-lib"
-version = "0.1.0"
-source = { editable = "../lib" }
 
 [[package]]
 name = "typing-extensions"
@@ -393,11 +386,11 @@ wheels = [
 
 [[package]]
 name = "urllib3"
-version = "2.2.2"
+version = "2.2.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/43/6d/fa469ae21497ddc8bc93e5877702dca7cb8f911e337aca7452b5724f1bb6/urllib3-2.2.2.tar.gz", hash = "sha256:dd505485549a7a552833da5e6063639d0d177c04f23bc3864e41e5dc5f612168", size = 292266 }
+sdist = { url = "https://files.pythonhosted.org/packages/ed/63/22ba4ebfe7430b76388e7cd448d5478814d3032121827c12a2cc287e2260/urllib3-2.2.3.tar.gz", hash = "sha256:e7d814a81dad81e6caf2ec9fdedb284ecc9c73076b62654547cc64ccdcae26e9", size = 300677 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ca/1c/89ffc63a9605b583d5df2be791a27bc1a42b7c32bab68d3c8f2f73a98cd4/urllib3-2.2.2-py3-none-any.whl", hash = "sha256:a448b2f64d686155468037e1ace9f2d2199776e17f0a46610480d311f73e3472", size = 121444 },
+    { url = "https://files.pythonhosted.org/packages/ce/d9/5f4c13cecde62396b0d3fe530a50ccea91e7dfc1ccf0e09c228841bb5ba8/urllib3-2.2.3-py3-none-any.whl", hash = "sha256:ca899ca043dcb1bafa3e262d73aa25c465bfb49e0bd9dd5d59f1d0acba2f8fac", size = 126338 },
 ]
 
 [[package]]

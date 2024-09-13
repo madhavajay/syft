@@ -21,22 +21,22 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from lib import ClientConfig, SharedState, validate_email
+from syftbox.lib import ClientConfig, SharedState, validate_email
 
+current_dir = Path(__file__).parent
 # Initialize FastAPI app and scheduler
-
 
 templates = Jinja2Templates(directory="templates")
 
 
-PLUGINS_DIR = os.path.join(os.path.dirname(__file__), "plugins")
+PLUGINS_DIR = current_dir / "plugins"
 sys.path.insert(0, os.path.dirname(PLUGINS_DIR))
 
 DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
 DEFAULT_PORT = 8082
 DEFAULT_CONFIG_PATH = "./client_config.json"
-ASSETS_FOLDER = os.path.abspath("../assets")
-ICON_FOLDER = os.path.abspath(f"{ASSETS_FOLDER}/icon/")
+ASSETS_FOLDER = current_dir.parent / "assets"
+ICON_FOLDER = ASSETS_FOLDER / "icon"
 
 
 @dataclass
@@ -65,7 +65,8 @@ def find_icon_file(src_folder: str) -> Path:
         return icon_file
 
     # If Icon\r is not found, search for icon.zip and unzip it
-    zip_file = Path(os.path.abspath(ASSETS_FOLDER)) / "icon.zip"
+    zip_file = ASSETS_FOLDER / "icon.zip"
+
     if zip_file.exists():
         try:
             # cant use other zip tools as they don't unpack it correctly
@@ -123,6 +124,9 @@ def load_or_create_config(args) -> ClientConfig:
         sync_folder = os.path.abspath(os.path.expanduser(sync_folder))
         client_config.sync_folder = sync_folder
 
+    if args.server:
+        client_config.server_url = args.server
+
     if not os.path.exists(client_config.sync_folder):
         os.makedirs(client_config.sync_folder, exist_ok=True)
 
@@ -172,7 +176,6 @@ def initialize_shared_state(client_config: ClientConfig) -> SharedState:
 
 def load_plugins(client_config: ClientConfig) -> dict[str, Plugin]:
     loaded_plugins = {}
-
     if os.path.exists(PLUGINS_DIR) and os.path.isdir(PLUGINS_DIR):
         for item in os.listdir(PLUGINS_DIR):
             if item.endswith(".py") and not item.startswith("__"):
@@ -293,6 +296,9 @@ def parse_args():
     parser.add_argument("--sync_folder", type=str, help="sync folder path")
     parser.add_argument("--email", type=str, help="email")
     parser.add_argument("--port", type=int, default=8080, help="Port number")
+    parser.add_argument(
+        "--server", type=str, default="http://localhost:5001", help="Server"
+    )
     return parser.parse_args()
 
 
@@ -321,7 +327,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=current_dir / "static"), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -397,15 +403,21 @@ def kill_plugin(request: PluginRequest):
         )
 
 
-if __name__ == "__main__":
+def main() -> None:
     args = parse_args()
     client_config = load_or_create_config(args)
 
     debug = True
     uvicorn.run(
-        "client:app" if debug else app,  # Use import string in debug mode
+        "syftbox.client.client:app"
+        if debug
+        else app,  # Use import string in debug mode
         host="0.0.0.0",
         port=client_config.port,
         log_level="debug" if debug else "info",
         reload=debug,  # Enable hot reloading only in debug mode
     )
+
+
+if __name__ == "__main__":
+    main()

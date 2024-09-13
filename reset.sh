@@ -1,3 +1,3 @@
 #!/bin/bash
-rm -rf users
-rm -rf server/data
+rm -rf ./users
+rm -rf ./data
