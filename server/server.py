@@ -14,7 +14,9 @@ from lib import (
     FileChange,
     FileChangeKind,
     Jsonable,
+    PermissionTree,
     bintostr,
+    filter_read_state,
     get_datasites,
     hash_dir,
     strtobin,
@@ -203,19 +205,29 @@ async def read(request: Request):
 
 @app.post("/dir_state")
 async def dir_state(request: Request):
-    data = await request.json()
-    email = data["email"]
-    sub_path = data["sub_path"]
+    try:
+        data = await request.json()
+        email = data["email"]
+        sub_path = data["sub_path"]
+        full_path = os.path.join(SNAPSHOT_FOLDER, sub_path)
+        remote_dir_state = hash_dir(SNAPSHOT_FOLDER, sub_path)
 
-    # full_path = os.path.join(SNAPSHOT_FOLDER, sub_path)
-    remote_dir_state = hash_dir(SNAPSHOT_FOLDER, sub_path)
-    response_json = {"sub_path": sub_path, "dir_state": remote_dir_state.to_dict()}
+        # get the top level perm file
+        perm_tree = PermissionTree.from_path(full_path)
 
-    if remote_dir_state:
-        print(f"> {email} dir_state: {sub_path}")
-        return JSONResponse({"status": "success"} | response_json, status_code=200)
-    else:
-        return JSONResponse({"status": "error"}, status_code=400)
+        # filter the read state for this user by the perm tree
+        read_state = filter_read_state(email, remote_dir_state, perm_tree)
+        remote_dir_state.tree = read_state
+
+        response_json = {"sub_path": sub_path, "dir_state": remote_dir_state.to_dict()}
+
+        if remote_dir_state:
+            print(f"> {email} dir_state: {sub_path}")
+            return JSONResponse({"status": "success"} | response_json, status_code=200)
+        else:
+            return JSONResponse({"status": "error"}, status_code=400)
+    except Exception as e:
+        print("Failed to run /dir_state", e)
 
 
 @app.get("/datasites")

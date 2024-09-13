@@ -1,225 +1,396 @@
-import hashlib
-import json
-import logging
 import os
-import time
 from threading import Event
 
 import requests
 
-logger = logging.getLogger(__name__)
-
-DEFAULT_SCHEDULE = 5000  # Run every 2 seconds
-DESCRIPTION = (
-    "A plugin that synchronizes files between the SyftBox folder and the cache server."
+from lib import (
+    DirState,
+    FileChange,
+    FileChangeKind,
+    PermissionTree,
+    bintostr,
+    get_datasites,
+    hash_dir,
+    strtobin,
 )
 
-SERVER_URL = "http://localhost:5001"
 CLIENT_CHANGELOG_FOLDER = "syft_changelog"
-LAST_SYNC_FILE = "last_sync.json"
-
-stop_event = Event()
-first_run = True
-
-PLUGIN_NAME = "sync"
-
-ICON_FILE = "Icon"  # special
-IGNORE_FILES = []
 IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER]
 
 
-def get_file_hash(file_path: str) -> str:
-    with open(file_path, "rb") as file:
-        return hashlib.md5(file.read()).hexdigest()
-
-
-def get_local_state(syftbox_folder: str) -> dict[str, str]:
-    local_state = {}
-    for root, dirs, files in os.walk(syftbox_folder):
-        # ignore folder
-        if CLIENT_CHANGELOG_FOLDER in root:
-            continue
-        for file in files:
-            if file.startswith(ICON_FILE):
-                continue
-            if file in IGNORE_FILES:
-                continue
-            path = os.path.join(root, file)
-            rel_path = os.path.relpath(path, syftbox_folder)
-            local_state[rel_path] = get_file_hash(path)
-    return local_state
-
-
-def load_last_sync(syftbox_folder) -> dict:
-    sync_file = os.path.join(syftbox_folder, CLIENT_CHANGELOG_FOLDER, LAST_SYNC_FILE)
-    if os.path.exists(sync_file):
-        with open(sync_file, "r") as f:
-            return json.load(f)
-    return {"last_change_id": None, "state": {}}
-
-
-def save_last_sync(syftbox_folder, sync_data):
-    sync_file = os.path.join(syftbox_folder, CLIENT_CHANGELOG_FOLDER, LAST_SYNC_FILE)
-    # print("saving sync_file", sync_file)
-    os.makedirs(os.path.dirname(sync_file), exist_ok=True)
-    with open(sync_file, "w") as f:
-        json.dump(sync_data, f)
-
-
-def detect_local_changes(current_state, last_state, syftbox_folder):
-    changes = []
-    for file, file_hash in current_state.items():
-        if file not in last_state or last_state[file] != file_hash:
-            with open(os.path.join(syftbox_folder, file), "rb") as f:
-                content = f.read()
-            changes.append(
-                {
-                    "type": "MODIFY" if file in last_state else "ADD",
-                    "path": file,
-                    "content": content.hex(),  # Convert binary content to hex string
-                }
-            )
-
-    for file in last_state:
-        if file not in current_state:
-            changes.append({"type": "DELETE", "path": file})
-
-    return changes
-
-
-def push_changes(changes):
-    response = requests.post(f"{SERVER_URL}/push_changes", json={"changes": changes})
-    return response.status_code == 200
-
-
-def get_full_changelog():
-    response = requests.get(f"{SERVER_URL}/get_full_changelog")
-    return response.json()
-
-
-def apply_changes(changes, syftbox_folder):
-    for change in changes:
-        file_path = os.path.join(syftbox_folder, change["path"])
-        if change["type"] in ["ADD", "MODIFY"]:
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            with open(file_path, "wb") as f:
-                f.write(
-                    bytes.fromhex(change["content"])
-                )  # Convert hex string back to binary
-        elif change["type"] == "DELETE":
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                # Remove empty directories
-                dir_path = os.path.dirname(file_path)
-                while dir_path != syftbox_folder:
-                    if not os.listdir(dir_path):
-                        os.rmdir(dir_path)
-                        dir_path = os.path.dirname(dir_path)
-                    else:
-                        break
-
-
-def save_changelog(syftbox_folder, changelog):
-    changelog_folder = os.path.join(syftbox_folder, CLIENT_CHANGELOG_FOLDER)
-    os.makedirs(changelog_folder, exist_ok=True)
-    for change in changelog:
-        timestamp = change.get("timestamp", time.time())
-        change_id = f"{timestamp}_{change['path'].replace('/', '_')}"
-        change_file = os.path.join(changelog_folder, change_id)
-        with open(change_file, "w") as f:
-            json.dump(change, f)
-
-
-def load_local_changelog(syftbox_folder):
-    changelog_folder = os.path.join(syftbox_folder, CLIENT_CHANGELOG_FOLDER)
-    changelog = []
-    if os.path.exists(changelog_folder):
-        for filename in sorted(os.listdir(changelog_folder)):
-            if filename != LAST_SYNC_FILE:
-                with open(os.path.join(changelog_folder, filename), "r") as f:
-                    changelog.append(json.load(f))
-    return changelog
-
-
-def clear_syftbox_folder(syftbox_folder):
-    for root, dirs, files in os.walk(syftbox_folder, topdown=False):
-        for name in files:
-            if name.startswith(ICON_FILE):
-                continue  # special macOS icon file
-            if name in IGNORE_FILES:
-                continue  # normal ignore files
-            file_path = os.path.join(root, name)
-            os.remove(file_path)
-        for name in dirs:
-            if name in IGNORE_FOLDERS:
-                continue  # ignore folers
-            dir_path = os.path.join(root, name)
-            os.rmdir(dir_path)
-
-
-def sync(syftbox_folder):
-    global first_run
+# write operations
+def diff_dirstate(old, new):
+    sync_folder = old.sync_folder
+    old_sub_path = old.sub_path
     try:
-        if first_run:
-            # logger.info("First run: Clearing SyftBox folder and syncing with server")
-            clear_syftbox_folder(syftbox_folder)
-            first_run = False
-
-        current_state = get_local_state(syftbox_folder)
-        print("current_state", current_state)
-        last_sync = load_last_sync(syftbox_folder)
-        print("last_sync", last_sync)
-
-        local_changes = detect_local_changes(
-            current_state, last_sync["state"], syftbox_folder
-        )
-        print("local_changes", local_changes)
-
-        if local_changes:
-            print("pushing local changes")
-            if push_changes(local_changes):
-                pass
-                # logger.info(f"Pushed {len(local_changes)} local changes to server")
+        changes = []
+        for afile, file_hash in new.tree.items():
+            kind = None
+            if afile in old.tree.keys():
+                if old.tree[afile] != file_hash:
+                    # update
+                    kind = FileChangeKind.WRITE
             else:
+                # create
+                kind = FileChangeKind.CREATE
+
+            if kind:
+                change = FileChange(
+                    kind=kind,
+                    parent_path=old_sub_path,
+                    sub_path=afile,
+                    file_hash=file_hash,
+                    sync_folder=sync_folder,
+                )
+                changes.append(change)
+
+        for afile, file_hash in old.tree.items():
+            if afile not in new.tree.keys():
+                # delete
+                kind = FileChangeKind.DELETE
+                change = FileChange(
+                    kind=kind,
+                    parent_path=old.sub_path,
+                    sub_path=afile,
+                    file_hash=file_hash,
+                    sync_folder=sync_folder,
+                )
+                changes.append(change)
+        return changes
+    except Exception as e:
+        print("Error in diff_dirstate", str(e))
+        raise e
+
+
+def prune_invalid_changes(new, valid_changes) -> DirState:
+    new_tree = {}
+    for file, file_hash in new.tree.items():
+        internal_path = new.sub_path + "/" + file
+        if internal_path in valid_changes:
+            new_tree[file] = file_hash
+
+    return DirState(
+        tree=new_tree,
+        timestamp=new.timestamp,
+        sync_folder=new.sync_folder,
+        sub_path=new.sub_path,
+    )
+
+
+def delete_files(new, deleted_files) -> DirState:
+    new_tree = {}
+    for file, file_hash in new.tree.items():
+        internal_path = new.sub_path + "/" + file
+        if internal_path not in deleted_files:
+            new_tree[file] = file_hash
+
+    return DirState(
+        tree=new_tree,
+        timestamp=new.timestamp,
+        sync_folder=new.sync_folder,
+        sub_path=new.sub_path,
+    )
+
+
+stop_event = Event()
+
+
+stop_event = Event()
+
+PLUGIN_NAME = "sync"
+
+
+def filter_changes(
+    user_email: str, changes: list[FileChange], perm_tree: PermissionTree
+):
+    valid_changes = []
+    valid_change_files = []
+    invalid_changes = []
+    for change in changes:
+        if change.kind in [
+            FileChangeKind.WRITE,
+            FileChangeKind.CREATE,
+            FileChangeKind.DELETE,
+        ]:
+            perm_file_at_path = perm_tree.permission_for_path(change.full_path)
+            if (
+                user_email in perm_file_at_path.write
+                or "GLOBAL" in perm_file_at_path.write
+            ):
+                valid_changes.append(change)
+                valid_change_files.append(change.sub_path)
+                continue
+        invalid_changes.append(change)
+    return valid_changes, valid_change_files, invalid_changes
+
+
+def push_changes(client_config, changes):
+    written_changes = []
+    for change in changes:
+        try:
+            data = {
+                "email": client_config.email,
+                "change": change.to_dict(),
+            }
+            if change.kind_write:
+                data["data"] = bintostr(change.read())
+            elif change.kind_delete:
+                # no data
                 pass
-                # logger.error("Failed to push local changes")
 
-        server_changelog = get_full_changelog()
-        print("get server change log", server_changelog)
-        local_changelog = load_local_changelog(syftbox_folder)
-        print("local change log", local_changelog)
+            response = requests.post(
+                f"{client_config.server_url}/write",
+                json=data,
+            )
+            write_response = response.json()
+            change_result = write_response["change"]
+            change_result["kind"] = FileChangeKind(change_result["kind"])
+            ok_change = FileChange(**change_result)
+            if response.status_code == 200:
+                print(
+                    f"> {client_config.email} /write {change.kind} {change.internal_path}"
+                )
+                written_changes.append(ok_change)
+            else:
+                print(
+                    f"> {client_config.email} FAILED /write {change.kind} {change.internal_path}"
+                )
+        except Exception as e:
+            print("Failed to call /write on the server", str(e))
+    return written_changes
 
-        print(
-            "lengths of remove and local", len(server_changelog), len(local_changelog)
+
+def pull_changes(client_config, changes):
+    remote_changes = []
+    for change in changes:
+        try:
+            data = {
+                "email": client_config.email,
+                "change": change.to_dict(),
+            }
+            response = requests.post(
+                f"{client_config.server_url}/read",
+                json=data,
+            )
+            read_response = response.json()
+            change_result = read_response["change"]
+            change_result["kind"] = FileChangeKind(change_result["kind"])
+            ok_change = FileChange(**change_result)
+
+            if ok_change.kind_write:
+                data = strtobin(read_response["data"])
+            elif change.kind_delete:
+                data = None
+
+            if response.status_code == 200:
+                print(
+                    f"> {client_config.email} /read {change.kind} {change.internal_path}"
+                )
+                remote_changes.append((ok_change, data))
+            else:
+                print(
+                    f"> {client_config.email} FAILED /read {change.kind} {change.internal_path}"
+                )
+        except Exception as e:
+            print("Failed to call /read on the server", str(e))
+    return remote_changes
+
+
+def list_datasites(client_config):
+    datasites = []
+    try:
+        response = requests.get(
+            f"{client_config.server_url}/datasites",
         )
-        if len(server_changelog) > len(local_changelog):
-            print("server is longer")
-            new_changes = server_changelog[len(local_changelog) :]
-            print("new changes", new_changes)
-            apply_changes(new_changes, syftbox_folder)
-            print("apply changes")
-            save_changelog(syftbox_folder, new_changes)
-            print("Save changes")
-            # logger.info(f"Applied {len(new_changes)} new changes from server")
+        read_response = response.json()
+        remote_datasites = read_response["datasites"]
 
-        new_sync = {
-            "last_change_id": server_changelog[-1]["timestamp"]
-            if server_changelog
-            else None,
-            "state": get_local_state(syftbox_folder),
+        if response.status_code == 200:
+            print(f"> {client_config.email} /datasites")
+            datasites = remote_datasites
+        else:
+            print(f"> {client_config.email} FAILED /datasites")
+    except Exception as e:
+        print("Failed to call /datasites on the server", str(e))
+    return datasites
+
+
+def get_remote_state(client_config, sub_path: str):
+    try:
+        data = {
+            "email": client_config.email,
+            "sub_path": sub_path,
         }
-        print("Save sync", new_sync)
-        save_last_sync(syftbox_folder, new_sync)
-    except Exception:
-        pass
-        # logger.error(f"Error in sync function: {str(e)}", exc_info=True)
+
+        response = requests.post(
+            f"{client_config.server_url}/dir_state",
+            json=data,
+        )
+        state_response = response.json()
+        if response.status_code == 200:
+            print(f"> {client_config.email} /dir_state: {sub_path}")
+            dir_state = DirState(**state_response["dir_state"])
+            return dir_state
+        else:
+            print(f"> {client_config.email} FAILED /dir_state: {sub_path}")
+            return None
+    except Exception as e:
+        print("Failed to call /dir_state on the server", str(e))
+
+
+def create_datasites(client_config):
+    datasites = list_datasites(client_config)
+    for datasite in datasites:
+        # get the top level perm file
+        os.makedirs(os.path.join(client_config.sync_folder, datasite), exist_ok=True)
+
+
+def sync_up(client_config):
+    # create a folder to store the change log
+    change_log_folder = f"{client_config.sync_folder}/{CLIENT_CHANGELOG_FOLDER}"
+    os.makedirs(change_log_folder, exist_ok=True)
+
+    # get all the datasites
+    datasites = get_datasites(client_config.sync_folder)
+    for datasite in datasites:
+        # get the top level perm file
+        datasite_path = os.path.join(client_config.sync_folder, datasite)
+
+        perm_tree = PermissionTree.from_path(datasite_path)
+
+        dir_filename = f"{change_log_folder}/{datasite}.json"
+
+        # get the old dir state
+        old_dir_state = DirState.load(dir_filename)
+        if old_dir_state is None:
+            old_dir_state = DirState(
+                tree={},
+                timestamp=0,
+                sync_folder=client_config.sync_folder,
+                sub_path=datasite,
+            )
+            print(f"> SYNC_UP {client_config.email} Creating datasite:{datasite} state")
+
+        # get the new dir state
+        new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
+        changes = diff_dirstate(old_dir_state, new_dir_state)
+        if len(changes) == 0:
+            print("😴", end=None)
+            return
+
+        print("CALLING FILTER CHANGES")
+        val, val_files, inval = filter_changes(client_config.email, changes, perm_tree)
+        print("GOT VAL CHANGES", val)
+
+        # send val changes
+        results = push_changes(client_config, val)
+        deleted_files = []
+        changed_files = []
+        for result in results:
+            if result.kind_write:
+                changed_files.append(result.internal_path)
+            elif result.kind_delete:
+                deleted_files.append(result.internal_path)
+
+        synced_dir_state = prune_invalid_changes(new_dir_state, changed_files)
+
+        # combine successfulc hanges qwith old dir state
+        combined_tree = old_dir_state.tree
+        combined_tree.update(synced_dir_state.tree)
+        synced_dir_state.tree = combined_tree
+
+        synced_dir_state = delete_files(new_dir_state, deleted_files)
+
+        print(f"> SYNC_UP {client_config.email} NSYNC 👨‍👨‍👦‍👦")
+        synced_dir_state.save(dir_filename)
+
+
+def sync_down(client_config):
+    # create a folder to store the change log
+    change_log_folder = f"{client_config.sync_folder}/{CLIENT_CHANGELOG_FOLDER}"
+    os.makedirs(change_log_folder, exist_ok=True)
+
+    # get all the datasites
+    datasites = get_datasites(client_config.sync_folder)
+    for datasite in datasites:
+        # get the top level perm file
+
+        dir_filename = f"{change_log_folder}/{datasite}.json"
+
+        # get the new dir state
+        new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
+        print("current local state", new_dir_state)
+        remote_dir_state = get_remote_state(client_config, datasite)
+        if not remote_dir_state:
+            print(f"No remote state for dir: {datasite}")
+            return
+
+        print("got remote remote_dir_state", remote_dir_state)
+        changes = diff_dirstate(new_dir_state, remote_dir_state)
+        print("got changes", changes)
+
+        if len(changes) == 0:
+            print("😴", end=None)
+            return
+
+        # fetch writes from the /read endpoint
+        fetch_files = []
+        for change in changes:
+            if change.kind_write:
+                fetch_files.append(change)
+
+        results = pull_changes(client_config, fetch_files)
+
+        # make writes
+        changed_files = []
+        for change, data in results:
+            change.sync_folder = client_config.sync_folder
+            if change.kind_write:
+                result = change.write(data)
+                if result:
+                    changed_files.append(change.internal_path)
+
+        # delete local files dont need the server
+        deleted_files = []
+        for change in changes:
+            change.sync_folder = client_config.sync_folder
+            if change.kind_delete:
+                result = change.delete()
+                if result:
+                    deleted_files.append(change.internal_path)
+
+        synced_dir_state = prune_invalid_changes(new_dir_state, changed_files)
+
+        # combine successfulc hanges qwith old dir state
+        combined_tree = new_dir_state.tree
+        combined_tree.update(synced_dir_state.tree)
+        synced_dir_state.tree = combined_tree
+
+        synced_dir_state = delete_files(new_dir_state, deleted_files)
+
+        print(f"> {client_config.email} NSYNC 👨‍👨‍👦‍👦")
+        synced_dir_state.save(dir_filename)
 
 
 def run(shared_state):
-    if not stop_event.is_set():
-        sync(shared_state.sync_folder)
+    try:
+        if not stop_event.is_set():
+            if shared_state.client_config.token:
+                try:
+                    create_datasites(shared_state.client_config)
+                except Exception as e:
+                    print("failed to get_datasites", e)
 
+                try:
+                    sync_up(shared_state.client_config)
+                except Exception as e:
+                    print("failed to sync up", e)
 
-def stop():
-    stop_event.set()
-    logger.info(f"Stop signal received for {PLUGIN_NAME} plugin.")
+                try:
+                    sync_down(shared_state.client_config)
+                except Exception as e:
+                    print("failed to sync down", e)
+            else:
+                print("init first")
+    except Exception as e:
+        print("Failed to run plugin", e)
