@@ -14,6 +14,7 @@ from syftbox.lib import (
     strtobin,
 )
 
+DEFAULT_SCHEDULE = 1000
 CLIENT_CHANGELOG_FOLDER = "syft_changelog"
 IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER]
 
