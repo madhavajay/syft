@@ -165,5 +165,7 @@ cython_debug/
 **/.DS_Store
 
 
-server/data/*
+data/**
 users/**
+dist
+syftbox.egg-info

@@ -1,2 +1,2 @@
 #!/bin/bash
-cd server && uv run server.py --port=5001 --debug
+uv run syftbox/server/server.py --port=5001 --debug

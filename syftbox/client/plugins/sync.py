@@ -3,7 +3,7 @@ from threading import Event
 
 import requests
 
-from lib import (
+from syftbox.lib import (
     DirState,
     FileChange,
     FileChangeKind,

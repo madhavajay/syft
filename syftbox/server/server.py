@@ -10,7 +10,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from lib import (
+from syftbox.lib import (
     FileChange,
     FileChangeKind,
     Jsonable,
@@ -246,7 +246,7 @@ async def datasites(request: Request):
         return JSONResponse({"status": "error"}, status_code=400)
 
 
-if __name__ == "__main__":
+def main() -> None:
     parser = argparse.ArgumentParser(description="Run FastAPI server")
     parser.add_argument(
         "--port",
@@ -263,9 +263,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     uvicorn.run(
-        "server:app" if args.debug else app,  # Use import string in debug mode
+        "syftbox.server.server:app"
+        if args.debug
+        else app,  # Use import string in debug mode
         host="0.0.0.0",
         port=args.port,
         log_level="debug" if args.debug else "info",
         reload=args.debug,  # Enable hot reloading only in debug mode
     )
+
+
+if __name__ == "__main__":
+    main()
