@@ -24,7 +24,7 @@ first_run = True
 PLUGIN_NAME = "sync"
 
 ICON_FILE = "Icon"  # special
-IGNORE_FILES = ["sync_checkpoints.sqlite"]
+IGNORE_FILES = []
 IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER]
 
 

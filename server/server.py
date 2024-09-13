@@ -1,5 +1,4 @@
 import argparse
-import hashlib
 import json
 import os
 import random
@@ -8,17 +7,24 @@ from dataclasses import dataclass
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
-from lib import FileChange, FileChangeKind, Jsonable, strtobin
+from lib import (
+    FileChange,
+    FileChangeKind,
+    Jsonable,
+    bintostr,
+    get_datasites,
+    hash_dir,
+    strtobin,
+)
 
 DATA_FOLDER = "data"
 SNAPSHOT_FOLDER = f"{DATA_FOLDER}/snapshot"
-CHANGELOG_FOLDER = f"{DATA_FOLDER}/changelog"
 USER_FILE_PATH = f"{DATA_FOLDER}/users.json"
 
-FOLDERS = [DATA_FOLDER, SNAPSHOT_FOLDER, CHANGELOG_FOLDER]
+FOLDERS = [DATA_FOLDER, SNAPSHOT_FOLDER]
 
 
 def load_list(cls, filepath: str) -> list[Any]:
@@ -125,11 +131,6 @@ def create_folders(folders: list[str]) -> None:
             os.makedirs(folder, exist_ok=True)
 
 
-def get_file_hash(file_path: str) -> str:
-    with open(file_path, "rb") as file:
-        return hashlib.md5(file.read()).hexdigest()
-
-
 @app.on_event("startup")
 async def startup_event():
     print("> Creating Folders")
@@ -175,25 +176,57 @@ async def write(request: Request):
         )
 
 
-@app.get("/get_full_changelog")
-async def get_full_changelog():
-    changelog = []
-    for filename in sorted(os.listdir(CHANGELOG_FOLDER)):
-        try:
-            with open(os.path.join(CHANGELOG_FOLDER, filename), "r") as f:
-                changelog.append(json.load(f))
-        except Exception:
-            print(f"Skipping file: {filename}")
-    return JSONResponse(changelog)
+@app.post("/read")
+async def read(request: Request):
+    data = await request.json()
+    email = data["email"]
+    change_dict = data["change"]
+    change_dict["kind"] = FileChangeKind(change_dict["kind"])
+    change = FileChange(**change_dict)
+    change.sync_folder = os.path.abspath(SNAPSHOT_FOLDER)
 
-
-@app.get("/get_file/{filename:path}")
-async def get_file(filename: str):
-    file_path = os.path.join(SNAPSHOT_FOLDER, filename)
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
+    if change.kind_write:
+        json_dict = {"change": change.to_dict()}
+        bin_data = change.read()
+        json_dict["data"] = bintostr(bin_data)
     else:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise Exception(f"Unknown type of change kind. {change.kind}")
+
+    if json_dict:
+        print(f"> {email} {change.kind}: {change.internal_path}")
+        return JSONResponse({"status": "success"} | json_dict, status_code=200)
+    else:
+        return JSONResponse(
+            {"status": "error", "change": change.to_dict()}, status_code=400
+        )
+
+
+@app.post("/dir_state")
+async def dir_state(request: Request):
+    data = await request.json()
+    email = data["email"]
+    sub_path = data["sub_path"]
+
+    # full_path = os.path.join(SNAPSHOT_FOLDER, sub_path)
+    remote_dir_state = hash_dir(SNAPSHOT_FOLDER, sub_path)
+    response_json = {"sub_path": sub_path, "dir_state": remote_dir_state.to_dict()}
+
+    if remote_dir_state:
+        print(f"> {email} dir_state: {sub_path}")
+        return JSONResponse({"status": "success"} | response_json, status_code=200)
+    else:
+        return JSONResponse({"status": "error"}, status_code=400)
+
+
+@app.get("/datasites")
+async def datasites(request: Request):
+    datasites = get_datasites(SNAPSHOT_FOLDER)
+    response_json = {"datasites": datasites}
+    print("List datasites:", datasites)
+    if datasites:
+        return JSONResponse({"status": "success"} | response_json, status_code=200)
+    else:
+        return JSONResponse({"status": "error"}, status_code=400)
 
 
 if __name__ == "__main__":
