@@ -1,54 +1,33 @@
 import argparse
 import importlib
-import logging
 import os
-import re
-import shutil
 import subprocess
 import sys
-import threading
 import time
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Lock
 from typing import Tuple
 
+import uvicorn
+from apscheduler.schedulers.background import BackgroundScheduler
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from flask import Flask, jsonify, render_template, request
-from flask_apscheduler import APScheduler
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
-from lib import Jsonable
+from lib import ClientConfig, SharedState, validate_email
 
-
-def validate_email(email: str) -> bool:
-    # Define a regex pattern for a valid email
-    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
-
-    # Use the match method to check if the email fits the pattern
-    if re.match(email_regex, email):
-        return True
-    else:
-        return False
+# Initialize FastAPI app and scheduler
 
 
-# Set up logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+templates = Jinja2Templates(directory="templates")
 
-# Initialize Flask app
-app = Flask(__name__)
-scheduler = APScheduler()
-scheduler.init_app(app)
-scheduler.start()
-
-# Dictionary to store running plugins and their job IDs
-running_plugins = {}
-
-# Dictionary to store loaded plugins
-loaded_plugins = {}
 
 PLUGINS_DIR = os.path.join(os.path.dirname(__file__), "plugins")
 sys.path.insert(0, os.path.dirname(PLUGINS_DIR))
@@ -58,57 +37,6 @@ DEFAULT_PORT = 8082
 DEFAULT_CONFIG_PATH = "./client_config.json"
 ASSETS_FOLDER = os.path.abspath("../assets")
 ICON_FOLDER = os.path.abspath(f"{ASSETS_FOLDER}/icon/")
-
-
-@dataclass
-class ClientConfig(Jsonable):
-    config_path: Path
-    sync_folder: Path | None = None
-    port: int | None = None
-    email: str | None = None
-    token: int | None = None
-    server_url: str = "http://localhost:5001"
-
-    def save(self, path: str | None = None) -> None:
-        if path is None:
-            path = self.config_path
-        super().save(path)
-
-    @property
-    def datasite_path(self) -> Path:
-        return os.path.join(self.sync_folder, self.email)
-
-
-class SharedState:
-    def __init__(self, client_config: ClientConfig):
-        self.data = {}
-        self.lock = Lock()
-        self.client_config = client_config
-
-    @property
-    def sync_folder(self) -> str:
-        return self.client_config.sync_folder
-
-    def get(self, key, default=None):
-        with self.lock:
-            if key == "my_datasites":
-                return self._get_datasites()
-            return self.data.get(key, default)
-
-    def set(self, key, value):
-        with self.lock:
-            self.data[key] = value
-
-    def _get_datasites(self):
-        syft_folder = self.data.get(self.client_config.sync_folder)
-        if not syft_folder or not os.path.exists(syft_folder):
-            return []
-
-        return [
-            folder
-            for folder in os.listdir(syft_folder)
-            if os.path.isdir(os.path.join(syft_folder, folder))
-        ]
 
 
 @dataclass
@@ -242,16 +170,6 @@ def initialize_shared_state(client_config: ClientConfig) -> SharedState:
     return shared_state
 
 
-def run_plugin(plugin_name):
-    try:
-        # logger.info(f"Running plugin: {plugin_name}")
-        module = loaded_plugins[plugin_name].module
-        module.run(shared_state)
-    except Exception:
-        pass
-        # logger.exception(f"Error in plugin {plugin_name}: {str(e)}")
-
-
 def load_plugins(client_config: ClientConfig) -> dict[str, Plugin]:
     loaded_plugins = {}
 
@@ -274,39 +192,10 @@ def load_plugins(client_config: ClientConfig) -> dict[str, Plugin]:
                         description=description,
                     )
                     loaded_plugins[plugin_name] = plugin
-                    logger.info(f"Plugin {plugin} loaded successfully")
                 except Exception as e:
-                    logger.exception(f"Failed to load plugin {plugin_name}: {str(e)}")
+                    print(e)
 
     return loaded_plugins
-
-
-def start_plugin(plugin_name):
-    if plugin_name not in loaded_plugins:
-        return jsonify(error=f"Plugin {plugin_name} is not loaded"), 400
-
-    if plugin_name in running_plugins:
-        return jsonify(error=f"Plugin {plugin_name} is already running"), 400
-
-    try:
-        plugin = loaded_plugins[plugin_name]
-        job = scheduler.add_job(
-            func=run_plugin,
-            trigger="interval",
-            seconds=plugin.schedule / 1000,
-            id=plugin_name,
-            args=[plugin_name],
-        )
-        running_plugins[plugin_name] = {
-            "job": job,
-            "start_time": time.time(),
-            "schedule": plugin.schedule,
-        }
-        # logger.info(f"Plugin {plugin_name} started with interval {plugin.schedule}ms")
-        return jsonify(message=f"Plugin {plugin_name} started successfully"), 200
-    except Exception as e:
-        # logger.exception(f"Failed to start plugin {plugin_name}")
-        return jsonify(error=f"Failed to start plugin {plugin_name}: {str(e)}"), 500
 
 
 def generate_key_pair() -> Tuple[bytes, bytes]:
@@ -332,158 +221,70 @@ def is_valid_datasite_name(name):
     return name.isalnum() or all(c.isalnum() or c in ("-", "_") for c in name)
 
 
-@app.route("/plugins", methods=["GET"])
-def list_plugins():
-    plugins = []
-    for plugin_name, plugin in loaded_plugins.items():
-        plugins.append(
-            {
-                "name": plugin_name,
-                "default_schedule": plugin.schedule,
-                "is_running": plugin_name in running_plugins,
-                "description": plugin.description,
-            }
+@dataclass
+class Plugin:
+    name: str
+    module: types.ModuleType
+    schedule: int
+    description: str
+
+
+# API Models
+class PluginRequest(BaseModel):
+    plugin_name: str
+
+
+class SharedStateRequest(BaseModel):
+    key: str
+    value: str
+
+
+class DatasiteRequest(BaseModel):
+    name: str
+
+
+# Function to be scheduled
+def run_plugin(plugin_name):
+    try:
+        module = app.loaded_plugins[plugin_name].module
+        module.run(app.shared_state)
+    except Exception as e:
+        print(e)
+
+
+def start_plugin(plugin_name: str):
+    if plugin_name not in app.loaded_plugins:
+        raise HTTPException(
+            status_code=400, detail=f"Plugin {plugin_name} is not loaded"
         )
-    return jsonify(plugins=plugins)
 
+    if plugin_name in app.running_plugins:
+        raise HTTPException(
+            status_code=400, detail=f"Plugin {plugin_name} is already running"
+        )
 
-@app.route("/launch", methods=["POST"])
-def launch_plugin():
-    plugin_name = request.json.get("plugin_name")
-    if not plugin_name:
-        return jsonify(error="Plugin name is required"), 400
-
-    return start_plugin(plugin_name)
-
-
-@app.route("/running", methods=["GET"])
-def list_running_plugins():
-    running = {}
-    for name, data in running_plugins.items():
-        job = data["job"]
-        running[name] = {
-            "is_running": job.next_run_time is not None,
-            "run_time": time.time() - data["start_time"],
-            "schedule": data["schedule"],
+    try:
+        plugin = app.loaded_plugins[plugin_name]
+        job = app.scheduler.add_job(
+            func=run_plugin,
+            trigger="interval",
+            seconds=plugin.schedule / 1000,
+            id=plugin_name,
+            args=[plugin_name],
+        )
+        app.running_plugins[plugin_name] = {
+            "job": job,
+            "start_time": time.time(),
+            "schedule": plugin.schedule,
         }
-    return jsonify(running_plugins=running)
-
-
-@app.route("/kill", methods=["POST"])
-def kill_plugin():
-    plugin_name = request.json.get("plugin_name")
-    if not plugin_name:
-        return jsonify(error="Plugin name is required"), 400
-
-    if plugin_name not in running_plugins:
-        return jsonify(error=f"Plugin {plugin_name} is not running"), 400
-
-    try:
-        # Stop the scheduler job
-        scheduler.remove_job(plugin_name)
-
-        # Call the stop method if it exists
-        plugin_module = loaded_plugins[plugin_name].module
-        if hasattr(plugin_module, "stop"):
-            plugin_module.stop()
-
-        # Remove the plugin from running_plugins
-        del running_plugins[plugin_name]
-
-        # logger.info(f"Plugin {plugin_name} stopped successfully")
-        return jsonify(message=f"Plugin {plugin_name} stopped successfully"), 200
+        return {"message": f"Plugin {plugin_name} started successfully"}
     except Exception as e:
-        # logger.exception(f"Failed to stop plugin {plugin_name}")
-        return jsonify(error=f"Failed to stop plugin {plugin_name}: {str(e)}"), 500
+        raise HTTPException(
+            status_code=500, detail=f"Failed to start plugin {plugin_name}: {str(e)}"
+        )
 
 
-@app.route("/state", methods=["GET"])
-def get_shared_state():
-    return jsonify(shared_state.data)
-
-
-@app.route("/state/update", methods=["POST"])
-def update_shared_state():
-    key = request.json.get("key")
-    value = request.json.get("value")
-    # logger.info(f"Received request to update {key} with value: {value}")
-    if key is not None:
-        old_value = shared_state.get(key)
-        shared_state.set(key, value)
-        new_value = shared_state.get(key)
-        # logger.info(f"Updated {key}: old value '{old_value}', new value '{new_value}'")
-        return jsonify(
-            message=f"Updated key '{key}' from '{old_value}' to '{new_value}'"
-        ), 200
-    return jsonify(error="Invalid request"), 400
-
-
-@app.route("/")
-def plugin_manager():
-    return render_template("index.html")
-
-
-@app.route("/datasites", methods=["GET"])
-def list_datasites():
-    datasites = shared_state.get("my_datasites")
-    return jsonify(datasites=datasites)
-
-
-@app.route("/datasites", methods=["POST"])
-def add_datasite():
-    name = request.json.get("name")
-    if not name:
-        return jsonify(error="Datasite name is required"), 400
-
-    if not is_valid_datasite_name(name):
-        return jsonify(
-            error="Invalid datasite name. Use only alphanumeric characters, hyphens, and underscores."
-        ), 400
-
-    syft_folder = shared_state.client_config.sync_folder
-    if not syft_folder:
-        return jsonify(error="sync_folder is not set in shared state"), 500
-
-    datasite_path = os.path.join(syft_folder, name)
-    if os.path.exists(datasite_path):
-        return jsonify(error=f"Datasite '{name}' already exists"), 409
-
-    try:
-        os.makedirs(datasite_path)
-        private_key, public_key = generate_key_pair()
-
-        with open(os.path.join(datasite_path, "private_key.pem"), "wb") as f:
-            f.write(private_key)
-        with open(os.path.join(datasite_path, "public_key.pem"), "wb") as f:
-            f.write(public_key)
-
-        return jsonify(message=f"Datasite '{name}' created successfully"), 201
-    except Exception as e:
-        # logger.exception(f"Failed to create datasite {name}")
-        return jsonify(error=f"Failed to create datasite: {str(e)}"), 500
-
-
-@app.route("/datasites/<name>", methods=["DELETE"])
-def remove_datasite(name):
-    if not is_valid_datasite_name(name):
-        return jsonify(error="Invalid datasite name"), 400
-
-    syft_folder = shared_state.client_config.sync_folder
-    if not syft_folder:
-        return jsonify(error="syft_folder is not set in shared state"), 500
-
-    datasite_path = os.path.join(syft_folder, name)
-    if not os.path.exists(datasite_path):
-        return jsonify(error=f"Datasite '{name}' does not exist"), 404
-
-    try:
-        shutil.rmtree(datasite_path)
-        return jsonify(message=f"Datasite '{name}' removed successfully"), 200
-    except Exception as e:
-        # logger.exception(f"Failed to remove datasite {name}")
-        return jsonify(error=f"Failed to remove datasite: {str(e)}"), 500
-
-
+# Parsing arguments and initializing shared state
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Run the web application with plugins."
@@ -495,24 +296,116 @@ def parse_args():
     return parser.parse_args()
 
 
+async def lifespan(app: FastAPI):
+    # Startup
+    print("> Starting Client")
+    args = parse_args()
+    client_config = load_or_create_config(args)
+    app.shared_state = initialize_shared_state(client_config)
+
+    scheduler = BackgroundScheduler()
+    scheduler.start()
+    app.scheduler = scheduler
+    app.running_plugins = {}
+    app.loaded_plugins = load_plugins(client_config)
+
+    autorun_plugins = ["init", "sync", "create_datasite"]
+    for plugin in autorun_plugins:
+        start_plugin(plugin)
+
+    yield  # This yields control to run the application
+
+    # Shutdown (if necessary)
+    print("Shutting down...")
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def plugin_manager(request: Request):
+    # Pass the request to the template to allow FastAPI to render it
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/state")
+def get_shared_state():
+    return JSONResponse(content=app.shared_state.data)
+
+
+@app.get("/datasites")
+def list_datasites():
+    datasites = app.shared_state.get("my_datasites", [])
+    # Use jsonable_encoder to encode the datasites object
+    return JSONResponse(content={"datasites": jsonable_encoder(datasites)})
+
+
+# FastAPI Routes
+@app.get("/plugins")
+def list_plugins():
+    plugins = [
+        {
+            "name": plugin_name,
+            "default_schedule": plugin.schedule,
+            "is_running": plugin_name in app.running_plugins,
+            "description": plugin.description,
+        }
+        for plugin_name, plugin in app.loaded_plugins.items()
+    ]
+    return {"plugins": plugins}
+
+
+@app.post("/launch")
+def launch_plugin(request: PluginRequest):
+    return start_plugin(request.plugin_name)
+
+
+@app.get("/running")
+def list_running_plugins():
+    running = {
+        name: {
+            "is_running": data["job"].next_run_time is not None,
+            "run_time": time.time() - data["start_time"],
+            "schedule": data["schedule"],
+        }
+        for name, data in app.running_plugins.items()
+    }
+    return {"running_plugins": running}
+
+
+@app.post("/kill")
+def kill_plugin(request: PluginRequest):
+    plugin_name = request.plugin_name
+
+    if plugin_name not in app.running_plugins:
+        raise HTTPException(
+            status_code=400, detail=f"Plugin {plugin_name} is not running"
+        )
+
+    try:
+        app.scheduler.remove_job(plugin_name)
+        plugin_module = app.loaded_plugins[plugin_name].module
+        if hasattr(plugin_module, "stop"):
+            plugin_module.stop()
+        del app.running_plugins[plugin_name]
+        return {"message": f"Plugin {plugin_name} stopped successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to stop plugin {plugin_name}: {str(e)}"
+        )
+
+
 if __name__ == "__main__":
     args = parse_args()
     client_config = load_or_create_config(args)
-    shared_state = initialize_shared_state(client_config)
-    loaded_plugins = load_plugins(client_config)
-    threads = []
-    autorun_plugins = ["init", "sync", "create_datasite"]
-    for plugin_name in autorun_plugins:
-        print("got plugin", plugin_name)
-        scheduler_thread = threading.Thread(target=start_plugin, args=(plugin_name,))
-        scheduler_thread.start()
-        threads.append(scheduler_thread)
 
-    print(f"Client Running: http://localhost:{client_config.port}")
-    try:
-        app.run(host="0.0.0.0", port=client_config.port, debug=True)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        for thread in threads:
-            thread.join()
+    debug = True
+    uvicorn.run(
+        "client:app" if debug else app,  # Use import string in debug mode
+        host="0.0.0.0",
+        port=client_config.port,
+        log_level="debug" if debug else "info",
+        reload=debug,  # Enable hot reloading only in debug mode
+    )

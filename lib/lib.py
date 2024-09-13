@@ -2,10 +2,13 @@ import base64
 import hashlib
 import json
 import os
+import re
 import zlib
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
+from threading import Lock
 from typing import Any, Self
 
 USER_GROUP_GLOBAL = "GLOBAL"
@@ -289,3 +292,65 @@ def filter_read_state(user_email: str, dir_state: DirState, perm_tree: Permissio
         if user_email in perm_file_at_path.read or "GLOBAL" in perm_file_at_path.read:
             filtered_tree[file_path] = file_hash
     return filtered_tree
+
+
+def validate_email(email: str) -> bool:
+    # Define a regex pattern for a valid email
+    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+
+    # Use the match method to check if the email fits the pattern
+    if re.match(email_regex, email):
+        return True
+    else:
+        return False
+
+
+@dataclass
+class ClientConfig(Jsonable):
+    config_path: Path
+    sync_folder: Path | None = None
+    port: int | None = None
+    email: str | None = None
+    token: int | None = None
+    server_url: str = "http://localhost:5001"
+
+    def save(self, path: str | None = None) -> None:
+        if path is None:
+            path = self.config_path
+        super().save(path)
+
+    @property
+    def datasite_path(self) -> Path:
+        return os.path.join(self.sync_folder, self.email)
+
+
+class SharedState:
+    def __init__(self, client_config: ClientConfig):
+        self.data = {}
+        self.lock = Lock()
+        self.client_config = client_config
+
+    @property
+    def sync_folder(self) -> str:
+        return self.client_config.sync_folder
+
+    def get(self, key, default=None):
+        with self.lock:
+            if key == "my_datasites":
+                return self._get_datasites()
+            return self.data.get(key, default)
+
+    def set(self, key, value):
+        with self.lock:
+            self.data[key] = value
+
+    def _get_datasites(self):
+        syft_folder = self.data.get(self.client_config.sync_folder)
+        if not syft_folder or not os.path.exists(syft_folder):
+            return []
+
+        return [
+            folder
+            for folder in os.listdir(syft_folder)
+            if os.path.isdir(os.path.join(syft_folder, folder))
+        ]

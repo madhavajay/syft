@@ -147,9 +147,6 @@ def push_changes(client_config, changes):
             change_result["kind"] = FileChangeKind(change_result["kind"])
             ok_change = FileChange(**change_result)
             if response.status_code == 200:
-                print(
-                    f"> {client_config.email} /write {change.kind} {change.internal_path}"
-                )
                 written_changes.append(ok_change)
             else:
                 print(
@@ -206,7 +203,6 @@ def list_datasites(client_config):
         remote_datasites = read_response["datasites"]
 
         if response.status_code == 200:
-            print(f"> {client_config.email} /datasites")
             datasites = remote_datasites
         else:
             print(f"> {client_config.email} FAILED /datasites")
@@ -228,7 +224,6 @@ def get_remote_state(client_config, sub_path: str):
         )
         state_response = response.json()
         if response.status_code == 200:
-            print(f"> {client_config.email} /dir_state: {sub_path}")
             dir_state = DirState(**state_response["dir_state"])
             return dir_state
         else:
@@ -243,6 +238,18 @@ def create_datasites(client_config):
     for datasite in datasites:
         # get the top level perm file
         os.makedirs(os.path.join(client_config.sync_folder, datasite), exist_ok=True)
+
+
+def ascii_for_change(changes) -> str:
+    count = 0
+    change_text = ""
+    for change in changes:
+        count += 1
+        pipe = "├──"
+        if count == len(changes):
+            pipe = "└──"
+        change_text += pipe + change
+    return change_text
 
 
 def sync_up(client_config):
@@ -269,18 +276,14 @@ def sync_up(client_config):
                 sync_folder=client_config.sync_folder,
                 sub_path=datasite,
             )
-            print(f"> SYNC_UP {client_config.email} Creating datasite:{datasite} state")
 
         # get the new dir state
         new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
         changes = diff_dirstate(old_dir_state, new_dir_state)
         if len(changes) == 0:
-            print("😴", end=None)
-            return
+            return 0
 
-        print("CALLING FILTER CHANGES")
         val, val_files, inval = filter_changes(client_config.email, changes, perm_tree)
-        print("GOT VAL CHANGES", val)
 
         # send val changes
         results = push_changes(client_config, val)
@@ -301,11 +304,22 @@ def sync_up(client_config):
 
         synced_dir_state = delete_files(new_dir_state, deleted_files)
 
-        print(f"> SYNC_UP {client_config.email} NSYNC 👨‍👨‍👦‍👦")
+        change_text = ""
+        if len(changed_files):
+            change_text += f"🔼 Syncing Up {len(changed_files)} Changes\n"
+            change_text += ascii_for_change(changed_files)
+
+        if len(deleted_files):
+            change_text += f"❌ Syncing Up {len(deleted_files)} Deletes\n"
+            change_text += ascii_for_change(deleted_files)
+
+        print(change_text)
+
         synced_dir_state.save(dir_filename)
+        return len(changed_files) + len(deleted_files)
 
 
-def sync_down(client_config):
+def sync_down(client_config) -> int:
     # create a folder to store the change log
     change_log_folder = f"{client_config.sync_folder}/{CLIENT_CHANGELOG_FOLDER}"
     os.makedirs(change_log_folder, exist_ok=True)
@@ -319,19 +333,15 @@ def sync_down(client_config):
 
         # get the new dir state
         new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
-        print("current local state", new_dir_state)
         remote_dir_state = get_remote_state(client_config, datasite)
         if not remote_dir_state:
             print(f"No remote state for dir: {datasite}")
             return
 
-        print("got remote remote_dir_state", remote_dir_state)
         changes = diff_dirstate(new_dir_state, remote_dir_state)
-        print("got changes", changes)
 
         if len(changes) == 0:
-            print("😴", end=None)
-            return
+            return 0
 
         # fetch writes from the /read endpoint
         fetch_files = []
@@ -367,14 +377,25 @@ def sync_down(client_config):
         synced_dir_state.tree = combined_tree
 
         synced_dir_state = delete_files(new_dir_state, deleted_files)
+        change_text = ""
 
-        print(f"> {client_config.email} NSYNC 👨‍👨‍👦‍👦")
+        change_text = ""
+        if len(changed_files):
+            change_text += f"⏬ Syncing Down {len(changed_files)} Changes\n"
+            change_text += ascii_for_change(changed_files)
+        if len(deleted_files):
+            change_text += f"❌ Syncing Down {len(deleted_files)} Deletes\n"
+            change_text += ascii_for_change(deleted_files)
+
+        print(change_text)
         synced_dir_state.save(dir_filename)
+        return len(changed_files) + len(deleted_files)
 
 
 def run(shared_state):
     try:
         if not stop_event.is_set():
+            num_changes = 0
             if shared_state.client_config.token:
                 try:
                     create_datasites(shared_state.client_config)
@@ -382,15 +403,15 @@ def run(shared_state):
                     print("failed to get_datasites", e)
 
                 try:
-                    sync_up(shared_state.client_config)
+                    num_changes += sync_up(shared_state.client_config)
                 except Exception as e:
                     print("failed to sync up", e)
 
                 try:
-                    sync_down(shared_state.client_config)
+                    num_changes += sync_down(shared_state.client_config)
                 except Exception as e:
                     print("failed to sync down", e)
-            else:
-                print("init first")
+            if num_changes == 0:
+                print("✅ Synced")
     except Exception as e:
         print("Failed to run plugin", e)
