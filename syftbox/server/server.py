@@ -8,7 +8,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from syftbox.lib import (
     FileChange,
@@ -145,6 +145,21 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# Define the ASCII art
+ascii_art = r"""
+ ____         __ _   ____            
+/ ___| _   _ / _| |_| __ )  _____  __
+\___ \| | | | |_| __|  _ \ / _ \ \/ /
+ ___) | |_| |  _| |_| |_) | (_) >  < 
+|____/ \__, |_|  \__|____/ \___/_/\_\
+       |___/                         
+"""
+
+
+@app.get("/", response_class=PlainTextResponse)
+async def get_ascii_art():
+    return ascii_art
 
 
 @app.post("/register")
