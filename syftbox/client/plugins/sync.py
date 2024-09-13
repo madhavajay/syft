@@ -259,6 +259,9 @@ def sync_up(client_config):
 
     # get all the datasites
     datasites = get_datasites(client_config.sync_folder)
+
+    n_changes = 0
+
     for datasite in datasites:
         # get the top level perm file
         datasite_path = os.path.join(client_config.sync_folder, datasite)
@@ -281,7 +284,7 @@ def sync_up(client_config):
         new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
         changes = diff_dirstate(old_dir_state, new_dir_state)
         if len(changes) == 0:
-            return 0
+            continue
 
         val, val_files, inval = filter_changes(client_config.email, changes, perm_tree)
 
@@ -316,13 +319,17 @@ def sync_up(client_config):
         print(change_text)
 
         synced_dir_state.save(dir_filename)
-        return len(changed_files) + len(deleted_files)
+        n_changes += len(changed_files) + len(deleted_files)
+
+    return n_changes
 
 
 def sync_down(client_config) -> int:
     # create a folder to store the change log
     change_log_folder = f"{client_config.sync_folder}/{CLIENT_CHANGELOG_FOLDER}"
     os.makedirs(change_log_folder, exist_ok=True)
+
+    n_changes = 0
 
     # get all the datasites
     datasites = get_datasites(client_config.sync_folder)
@@ -341,7 +348,7 @@ def sync_down(client_config) -> int:
         changes = diff_dirstate(new_dir_state, remote_dir_state)
 
         if len(changes) == 0:
-            return 0
+            continue
 
         # fetch writes from the /read endpoint
         fetch_files = []
@@ -389,7 +396,9 @@ def sync_down(client_config) -> int:
 
         print(change_text)
         synced_dir_state.save(dir_filename)
-        return len(changed_files) + len(deleted_files)
+        n_changes += len(changed_files) + len(deleted_files)
+
+    return n_changes
 
 
 def run(shared_state):
