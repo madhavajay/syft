@@ -30,6 +30,4 @@ def run(shared_state):
             perm = perm_tree.permission_for_path(str(runr))
             
             if len(perm.write) == 1 and perm.write[0] == shared_state.client_config.email:
-                print("Running for:" + str(perm.write))
-                print("From:" + run_from)
                 os.system("cd "+run_from+"; sh run.sh")
