@@ -14,11 +14,12 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from syftbox.lib import ClientConfig, SharedState, validate_email
@@ -330,6 +331,16 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=current_dir / "static"), name="static")
 
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def plugin_manager(request: Request):
     # Pass the request to the template to allow FastAPI to render it
@@ -401,7 +412,35 @@ def kill_plugin(request: PluginRequest):
         raise HTTPException(
             status_code=500, detail=f"Failed to stop plugin {plugin_name}: {str(e)}"
         )
+@app.post("/file_operation")
+async def file_operation(operation: str = Body(...), file_path: str = Body(...), content: str = Body(None)):
+    full_path = Path(app.shared_state.client_config.sync_folder) / file_path
 
+    # Ensure the path is within the SyftBox directory
+    if not full_path.resolve().is_relative_to(Path(app.shared_state.client_config.sync_folder)):
+        raise HTTPException(status_code=403, detail="Access to files outside SyftBox directory is not allowed")
+
+    if operation == "read":
+        if not full_path.is_file():
+            raise HTTPException(status_code=404, detail="File not found")
+        return FileResponse(full_path)
+
+    elif operation == "write":
+        if content is None:
+            raise HTTPException(status_code=400, detail="Content is required for write operation")
+        
+        # Ensure the directory exists
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            with open(full_path, 'w') as f:
+                f.write(content)
+            return JSONResponse(content={"message": "File written successfully"})
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid operation. Use 'read' or 'write'")
 
 def main() -> None:
     args = parse_args()
