@@ -347,6 +347,15 @@ async def plugin_manager(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@app.get("/client_email")
+def get_client_email():
+    try:
+        email = app.shared_state.client_config.email
+        return JSONResponse(content={"email": email})
+    except AttributeError as e:
+        raise HTTPException(status_code=500, detail=f"Error accessing client email: {str(e)}")
+
+
 @app.get("/state")
 def get_shared_state():
     return JSONResponse(content=app.shared_state.data)
