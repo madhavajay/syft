@@ -425,23 +425,23 @@ async def file_operation(operation: str = Body(...), file_path: str = Body(...),
             raise HTTPException(status_code=404, detail="File not found")
         return FileResponse(full_path)
 
-    elif operation == "write":
+    elif operation in ["write", "append"]:
         if content is None:
-            raise HTTPException(status_code=400, detail="Content is required for write operation")
+            raise HTTPException(status_code=400, detail="Content is required for write or append operation")
         
         # Ensure the directory exists
         full_path.parent.mkdir(parents=True, exist_ok=True)
         
         try:
-            with open(full_path, 'w') as f:
+            mode = 'w' if operation == "write" else 'a'
+            with open(full_path, mode) as f:
                 f.write(content)
-            return JSONResponse(content={"message": "File written successfully"})
+            return JSONResponse(content={"message": f"File {operation}ed successfully"})
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to {operation} file: {str(e)}")
 
     else:
-        raise HTTPException(status_code=400, detail="Invalid operation. Use 'read' or 'write'")
-
+        raise HTTPException(status_code=400, detail="Invalid operation. Use 'read', 'write', or 'append'")
 def main() -> None:
     args = parse_args()
     client_config = load_or_create_config(args)
