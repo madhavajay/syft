@@ -7,7 +7,6 @@ import time
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
 
 import uvicorn
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -72,7 +71,8 @@ def find_icon_file(src_folder: str) -> Path:
         try:
             # cant use other zip tools as they don't unpack it correctly
             subprocess.run(
-                ["ditto", "-xk", str(zip_file), str(src_path.parent)], check=True
+                ["ditto", "-xk", str(zip_file), str(src_path.parent)],
+                check=True,
             )
 
             # Try to find the Icon\r file again after extraction
@@ -84,7 +84,7 @@ def find_icon_file(src_folder: str) -> Path:
 
     # If still not found, raise an error
     raise FileNotFoundError(
-        "Icon file with a carriage return not found, and icon.zip did not contain it."
+        "Icon file with a carriage return not found, and icon.zip did not contain it.",
     )
 
 
@@ -120,7 +120,8 @@ def load_or_create_config(args) -> ClientConfig:
 
     if client_config.sync_folder is None:
         sync_folder = get_user_input(
-            "Where do you want to Sync SyftBox to?", DEFAULT_SYNC_FOLDER
+            "Where do you want to Sync SyftBox to?",
+            DEFAULT_SYNC_FOLDER,
         )
         sync_folder = os.path.abspath(os.path.expanduser(sync_folder))
         client_config.sync_folder = sync_folder
@@ -184,10 +185,14 @@ def load_plugins(client_config: ClientConfig) -> dict[str, Plugin]:
                 try:
                     module = importlib.import_module(f"plugins.{plugin_name}")
                     schedule = getattr(
-                        module, "DEFAULT_SCHEDULE", 5000
+                        module,
+                        "DEFAULT_SCHEDULE",
+                        5000,
                     )  # Default to 5000ms if not specified
                     description = getattr(
-                        module, "DESCRIPTION", "No description available."
+                        module,
+                        "DESCRIPTION",
+                        "No description available.",
                     )
                     plugin = Plugin(
                         name=plugin_name,
@@ -202,9 +207,11 @@ def load_plugins(client_config: ClientConfig) -> dict[str, Plugin]:
     return loaded_plugins
 
 
-def generate_key_pair() -> Tuple[bytes, bytes]:
+def generate_key_pair() -> tuple[bytes, bytes]:
     private_key = rsa.generate_private_key(
-        public_exponent=65537, key_size=2048, backend=default_backend()
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend(),
     )
     public_key = private_key.public_key()
 
@@ -259,12 +266,14 @@ def run_plugin(plugin_name):
 def start_plugin(plugin_name: str):
     if plugin_name not in app.loaded_plugins:
         raise HTTPException(
-            status_code=400, detail=f"Plugin {plugin_name} is not loaded"
+            status_code=400,
+            detail=f"Plugin {plugin_name} is not loaded",
         )
 
     if plugin_name in app.running_plugins:
         raise HTTPException(
-            status_code=400, detail=f"Plugin {plugin_name} is already running"
+            status_code=400,
+            detail=f"Plugin {plugin_name} is already running",
         )
 
     try:
@@ -284,21 +293,25 @@ def start_plugin(plugin_name: str):
         return {"message": f"Plugin {plugin_name} started successfully"}
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to start plugin {plugin_name}: {str(e)}"
+            status_code=500,
+            detail=f"Failed to start plugin {plugin_name}: {e!s}",
         )
 
 
 # Parsing arguments and initializing shared state
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Run the web application with plugins."
+        description="Run the web application with plugins.",
     )
     parser.add_argument("--config_path", type=str, help="config path")
     parser.add_argument("--sync_folder", type=str, help="sync folder path")
     parser.add_argument("--email", type=str, help="email")
     parser.add_argument("--port", type=int, default=8080, help="Port number")
     parser.add_argument(
-        "--server", type=str, default="http://localhost:5001", help="Server"
+        "--server",
+        type=str,
+        default="http://localhost:5001",
+        help="Server",
     )
     return parser.parse_args()
 
@@ -354,7 +367,8 @@ def get_client_email():
         return JSONResponse(content={"email": email})
     except AttributeError as e:
         raise HTTPException(
-            status_code=500, detail=f"Error accessing client email: {str(e)}"
+            status_code=500,
+            detail=f"Error accessing client email: {e!s}",
         )
 
 
@@ -409,7 +423,8 @@ def kill_plugin(request: PluginRequest):
 
     if plugin_name not in app.running_plugins:
         raise HTTPException(
-            status_code=400, detail=f"Plugin {plugin_name} is not running"
+            status_code=400,
+            detail=f"Plugin {plugin_name} is not running",
         )
 
     try:
@@ -421,19 +436,22 @@ def kill_plugin(request: PluginRequest):
         return {"message": f"Plugin {plugin_name} stopped successfully"}
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to stop plugin {plugin_name}: {str(e)}"
+            status_code=500,
+            detail=f"Failed to stop plugin {plugin_name}: {e!s}",
         )
 
 
 @app.post("/file_operation")
 async def file_operation(
-    operation: str = Body(...), file_path: str = Body(...), content: str = Body(None)
+    operation: str = Body(...),
+    file_path: str = Body(...),
+    content: str = Body(None),
 ):
     full_path = Path(app.shared_state.client_config.sync_folder) / file_path
 
     # Ensure the path is within the SyftBox directory
     if not full_path.resolve().is_relative_to(
-        Path(app.shared_state.client_config.sync_folder)
+        Path(app.shared_state.client_config.sync_folder),
     ):
         raise HTTPException(
             status_code=403,
@@ -445,7 +463,7 @@ async def file_operation(
             raise HTTPException(status_code=404, detail="File not found")
         return FileResponse(full_path)
 
-    elif operation in ["write", "append"]:
+    if operation in ["write", "append"]:
         if content is None:
             raise HTTPException(
                 status_code=400,
@@ -462,7 +480,8 @@ async def file_operation(
             return JSONResponse(content={"message": f"File {operation}ed successfully"})
         except Exception as e:
             raise HTTPException(
-                status_code=500, detail=f"Failed to {operation} file: {str(e)}"
+                status_code=500,
+                detail=f"Failed to {operation} file: {e!s}",
             )
 
     else:

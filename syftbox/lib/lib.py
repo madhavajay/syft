@@ -9,7 +9,8 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from threading import Lock
-from typing import Any, Self
+
+from typing_extensions import Any, Self
 
 USER_GROUP_GLOBAL = "GLOBAL"
 
@@ -199,7 +200,9 @@ def ignore_dirs(directory: str, root: str, ignore_folders=None) -> bool:
 
 
 def hash_dir(
-    sync_folder: str, sub_path: str, ignore_folders: list | None = None
+    sync_folder: str,
+    sub_path: str,
+    ignore_folders: list | None = None,
 ) -> DirState:
     state_dict = {}
     full_path = os.path.join(sync_folder, sub_path)
@@ -301,8 +304,7 @@ def validate_email(email: str) -> bool:
     # Use the match method to check if the email fits the pattern
     if re.match(email_regex, email):
         return True
-    else:
-        return False
+    return False
 
 
 @dataclass

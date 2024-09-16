@@ -25,6 +25,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.12", "3.11", "3.10"]
+      fail-fast: false
 
     runs-on: ${{ matrix.os }}
     steps:
