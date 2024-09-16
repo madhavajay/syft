@@ -3,7 +3,7 @@ name = "syftbox"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "cryptography>=43.0.1",
     "requests>=2.32.3",
@@ -32,4 +32,4 @@ syftbox = "syftbox.main:main"
 pythonpath = ["."]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "mypy", "uv", "ruff"]
+dev = ["pytest", "pytest-xdist[psutil]", "pytest-cov", "mypy", "uv", "ruff"]
