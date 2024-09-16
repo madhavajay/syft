@@ -10,7 +10,8 @@ registered = False
 
 def register(client_config):
     response = requests.post(
-        f"{client_config.server_url}/register", json={"email": client_config.email}
+        f"{client_config.server_url}/register",
+        json={"email": client_config.email},
     )
     j = response.json()
     if "token" in j:

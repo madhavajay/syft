@@ -4,11 +4,11 @@ import os
 import random
 import sys
 from dataclasses import dataclass
-from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
+from typing_extensions import Any
 
 from syftbox.lib import (
     FileChange,
@@ -191,12 +191,13 @@ async def write(request: Request):
     if result:
         print(f"> {email} {change.kind}: {change.internal_path}")
         return JSONResponse(
-            {"status": "success", "change": change.to_dict()}, status_code=200
+            {"status": "success", "change": change.to_dict()},
+            status_code=200,
         )
-    else:
-        return JSONResponse(
-            {"status": "error", "change": change.to_dict()}, status_code=400
-        )
+    return JSONResponse(
+        {"status": "error", "change": change.to_dict()},
+        status_code=400,
+    )
 
 
 @app.post("/read")
@@ -218,10 +219,10 @@ async def read(request: Request):
     if json_dict:
         print(f"> {email} {change.kind}: {change.internal_path}")
         return JSONResponse({"status": "success"} | json_dict, status_code=200)
-    else:
-        return JSONResponse(
-            {"status": "error", "change": change.to_dict()}, status_code=400
-        )
+    return JSONResponse(
+        {"status": "error", "change": change.to_dict()},
+        status_code=400,
+    )
 
 
 @app.post("/dir_state")
@@ -244,8 +245,7 @@ async def dir_state(request: Request):
 
         if remote_dir_state:
             return JSONResponse({"status": "success"} | response_json, status_code=200)
-        else:
-            return JSONResponse({"status": "error"}, status_code=400)
+        return JSONResponse({"status": "error"}, status_code=400)
     except Exception as e:
         print("Failed to run /dir_state", e)
 
@@ -257,8 +257,7 @@ async def datasites(request: Request):
     print("List datasites:", datasites)
     if datasites:
         return JSONResponse({"status": "success"} | response_json, status_code=200)
-    else:
-        return JSONResponse({"status": "error"}, status_code=400)
+    return JSONResponse({"status": "error"}, status_code=400)
 
 
 def main() -> None:

@@ -101,7 +101,9 @@ PLUGIN_NAME = "sync"
 
 
 def filter_changes(
-    user_email: str, changes: list[FileChange], perm_tree: PermissionTree
+    user_email: str,
+    changes: list[FileChange],
+    perm_tree: PermissionTree,
 ):
     valid_changes = []
     valid_change_files = []
@@ -116,13 +118,13 @@ def filter_changes(
             if (
                 user_email in perm_file_at_path.write
                 or "GLOBAL" in perm_file_at_path.write
-            ) and perm_file_at_path.read != [user_email]: # skip upload if only we have read perms.
-                
+            ) and perm_file_at_path.read != [
+                user_email,
+            ]:  # skip upload if only we have read perms.
                 valid_changes.append(change)
                 valid_change_files.append(change.sub_path)
                 continue
-            elif perm_file_at_path.read == [user_email]:
-                
+            if perm_file_at_path.read == [user_email]:
                 if change.internal_path[-10:] == "_.syftperm":
                     # include changes for syft_perm file even if only we have read perms.
                     valid_changes.append(change)
@@ -159,7 +161,7 @@ def push_changes(client_config, changes):
                 written_changes.append(ok_change)
             else:
                 print(
-                    f"> {client_config.email} FAILED /write {change.kind} {change.internal_path}"
+                    f"> {client_config.email} FAILED /write {change.kind} {change.internal_path}",
                 )
         except Exception as e:
             print("Failed to call /write on the server", str(e))
@@ -190,12 +192,12 @@ def pull_changes(client_config, changes):
 
             if response.status_code == 200:
                 print(
-                    f"> {client_config.email} /read {change.kind} {change.internal_path}"
+                    f"> {client_config.email} /read {change.kind} {change.internal_path}",
                 )
                 remote_changes.append((ok_change, data))
             else:
                 print(
-                    f"> {client_config.email} FAILED /read {change.kind} {change.internal_path}"
+                    f"> {client_config.email} FAILED /read {change.kind} {change.internal_path}",
                 )
         except Exception as e:
             print("Failed to call /read on the server", str(e))
@@ -235,9 +237,8 @@ def get_remote_state(client_config, sub_path: str):
         if response.status_code == 200:
             dir_state = DirState(**state_response["dir_state"])
             return dir_state
-        else:
-            print(f"> {client_config.email} FAILED /dir_state: {sub_path}")
-            return None
+        print(f"> {client_config.email} FAILED /dir_state: {sub_path}")
+        return None
     except Exception as e:
         print("Failed to call /dir_state on the server", str(e))
 
@@ -346,7 +347,7 @@ def sync_down(client_config) -> int:
         # get the top level perm file
 
         dir_filename = f"{change_log_folder}/{datasite}.json"
-        
+
         datasite_path = os.path.join(client_config.sync_folder, datasite)
         perm_tree = PermissionTree.from_path(datasite_path)
 
@@ -355,7 +356,7 @@ def sync_down(client_config) -> int:
         remote_dir_state = get_remote_state(client_config, datasite)
         if not remote_dir_state:
             print(f"No remote state for dir: {datasite}")
-            return
+            return None
 
         changes = diff_dirstate(new_dir_state, remote_dir_state)
 
@@ -387,7 +388,7 @@ def sync_down(client_config) -> int:
                 perm_file_at_path = perm_tree.permission_for_path(change.sub_path)
                 if perm_file_at_path.read != [client_config.email]:
                     # the only reason we're wanting to delete this is because
-                    # we skipped sending it to the server. and the raeson we 
+                    # we skipped sending it to the server. and the raeson we
                     # skipped sending it to the server is because it's a file that
                     # only we can read, and so we don't want to share it with the
                     # server... who we might not trust. Aka... this is a private file/folder
@@ -413,10 +414,10 @@ def sync_down(client_config) -> int:
         if len(deleted_files):
             change_text += f"❌ Syncing Down {len(deleted_files)} Deletes\n"
             change_text += ascii_for_change(deleted_files)
-        
-        if(len(change_text) > 0):
+
+        if len(change_text) > 0:
             print(change_text)
-        
+
         synced_dir_state.save(dir_filename)
         n_changes += len(changed_files) + len(deleted_files)
 
