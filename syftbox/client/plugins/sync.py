@@ -116,13 +116,13 @@ def filter_changes(
             if (
                 user_email in perm_file_at_path.write
                 or "GLOBAL" in perm_file_at_path.write
-            ) and perm_file_at_path.read != [user_email]: # skip upload if only we have read perms.
-                
+            ) and perm_file_at_path.read != [
+                user_email
+            ]:  # skip upload if only we have read perms.
                 valid_changes.append(change)
                 valid_change_files.append(change.sub_path)
                 continue
             elif perm_file_at_path.read == [user_email]:
-                
                 if change.internal_path[-10:] == "_.syftperm":
                     # include changes for syft_perm file even if only we have read perms.
                     valid_changes.append(change)
@@ -346,7 +346,7 @@ def sync_down(client_config) -> int:
         # get the top level perm file
 
         dir_filename = f"{change_log_folder}/{datasite}.json"
-        
+
         datasite_path = os.path.join(client_config.sync_folder, datasite)
         perm_tree = PermissionTree.from_path(datasite_path)
 
@@ -387,7 +387,7 @@ def sync_down(client_config) -> int:
                 perm_file_at_path = perm_tree.permission_for_path(change.sub_path)
                 if perm_file_at_path.read != [client_config.email]:
                     # the only reason we're wanting to delete this is because
-                    # we skipped sending it to the server. and the raeson we 
+                    # we skipped sending it to the server. and the raeson we
                     # skipped sending it to the server is because it's a file that
                     # only we can read, and so we don't want to share it with the
                     # server... who we might not trust. Aka... this is a private file/folder
@@ -413,10 +413,10 @@ def sync_down(client_config) -> int:
         if len(deleted_files):
             change_text += f"❌ Syncing Down {len(deleted_files)} Deletes\n"
             change_text += ascii_for_change(deleted_files)
-        
-        if(len(change_text) > 0):
+
+        if len(change_text) > 0:
             print(change_text)
-        
+
         synced_dir_state.save(dir_filename)
         n_changes += len(changed_files) + len(deleted_files)
 
