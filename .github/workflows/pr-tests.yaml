@@ -41,6 +41,12 @@ jobs:
           pip install -U uv tox tox-uv pytest
           uv --version
 
+      - name: Get uv cache dir
+        id: pip-cache
+        shell: bash
+        run: |
+          echo "dir=$(uv cache dir)" >> $GITHUB_OUTPUT
+
       - name: Load github cache
         uses: actions/cache@v4
         with:
