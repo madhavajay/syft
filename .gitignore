@@ -170,3 +170,5 @@ users/**
 dist
 syftbox.egg-info
 keys/**
+scheduler.lock
+jobs.sqlite

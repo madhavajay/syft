@@ -79,6 +79,18 @@ class SyftPermission(Jsonable):
     write: list[str]
     filepath: str | None = None
 
+    @classmethod
+    def datasite_default(cls, email: str) -> Self:
+        return SyftPermission(
+            admin=[email],
+            read=[email],
+            write=[email],
+        )
+
+    @classmethod
+    def no_permission(self) -> Self:
+        return SyftPermission(admin=[], read=[], write=[])
+
     def __repr__(self) -> str:
         string = "SyftPermission:\n"
         string += f"{self.filepath}\n"
@@ -244,10 +256,28 @@ def get_datasites(sync_folder: str) -> list[str]:
     return datasites
 
 
+def build_tree_string(paths_dict, prefix=""):
+    lines = []
+    items = list(paths_dict.items())
+
+    for index, (key, value) in enumerate(items):
+        # Determine if it's the last item in the current directory level
+        connector = "└── " if index == len(items) - 1 else "├── "
+        lines.append(f"{prefix}{connector}{repr(key)}")
+
+        # Prepare the prefix for the next level
+        if isinstance(value, dict):
+            extension = "    " if index == len(items) - 1 else "│   "
+            lines.append(build_tree_string(value, prefix + extension))
+
+    return "\n".join(lines)
+
+
 @dataclass
 class PermissionTree(Jsonable):
     tree: dict[str, SyftPermission]
     parent_path: str
+    root_perm: SyftPermission | None
 
     @classmethod
     def from_path(cls, parent_path) -> Self:
@@ -258,12 +288,24 @@ class PermissionTree(Jsonable):
                     path = os.path.join(root, file)
                     perm_dict[path] = SyftPermission.load(path)
 
-        return PermissionTree(tree=perm_dict, parent_path=parent_path)
+        root_perm = None
+        root_perm_path = perm_file_path(parent_path)
+        if root_perm_path in perm_dict:
+            root_perm = perm_dict[root_perm_path]
+
+        return PermissionTree(
+            root_perm=root_perm, tree=perm_dict, parent_path=parent_path
+        )
+
+    @property
+    def root_or_default(self) -> SyftPermission:
+        if self.root_perm:
+            return self.root_perm
+        return SyftPermission.no_permission()
 
     def permission_for_path(self, path: str) -> SyftPermission:
         parent_path = os.path.normpath(self.parent_path)
-        top_perm_file = perm_file_path(parent_path)
-        current_perm = self.tree[top_perm_file]
+        current_perm = self.root_or_default
 
         # default
         if parent_path not in path:
@@ -284,6 +326,9 @@ class PermissionTree(Jsonable):
                 current_perm = next_perm
 
         return current_perm
+
+    def __repr__(self) -> str:
+        return f"PermissionTree: {self.parent_path}\n" + build_tree_string(self.tree)
 
 
 def filter_read_state(user_email: str, dir_state: DirState, perm_tree: PermissionTree):
