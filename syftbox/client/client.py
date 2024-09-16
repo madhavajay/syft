@@ -1,14 +1,17 @@
 import argparse
+import atexit
 import importlib
 import os
 import subprocess
 import sys
 import time
+import traceback
 import types
 from dataclasses import dataclass
 from pathlib import Path
 
 import uvicorn
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -260,6 +263,7 @@ def run_plugin(plugin_name):
         module = app.loaded_plugins[plugin_name].module
         module.run(app.shared_state)
     except Exception as e:
+        traceback.print_exc()
         print(e)
 
 
@@ -278,19 +282,25 @@ def start_plugin(plugin_name: str):
 
     try:
         plugin = app.loaded_plugins[plugin_name]
-        job = app.scheduler.add_job(
-            func=run_plugin,
-            trigger="interval",
-            seconds=plugin.schedule / 1000,
-            id=plugin_name,
-            args=[plugin_name],
-        )
-        app.running_plugins[plugin_name] = {
-            "job": job,
-            "start_time": time.time(),
-            "schedule": plugin.schedule,
-        }
-        return {"message": f"Plugin {plugin_name} started successfully"}
+
+        existing_job = app.scheduler.get_job(plugin_name)
+        if existing_job is None:
+            job = app.scheduler.add_job(
+                func=run_plugin,
+                trigger="interval",
+                seconds=plugin.schedule / 1000,
+                id=plugin_name,
+                args=[plugin_name],
+            )
+            app.running_plugins[plugin_name] = {
+                "job": job,
+                "start_time": time.time(),
+                "schedule": plugin.schedule,
+            }
+            return {"message": f"Plugin {plugin_name} started successfully"}
+        else:
+            print(f"Job {existing_job}, already added")
+            return {"message": f"Plugin {plugin_name} already started"}
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -316,6 +326,9 @@ def parse_args():
     return parser.parse_args()
 
 
+JOB_FILE = "jobs.sqlite"
+
+
 async def lifespan(app: FastAPI):
     # Startup
     print("> Starting Client")
@@ -323,13 +336,23 @@ async def lifespan(app: FastAPI):
     client_config = load_or_create_config(args)
     app.shared_state = initialize_shared_state(client_config)
 
-    scheduler = BackgroundScheduler()
+    # Clear the lock file on the first run if it exists
+    if os.path.exists(JOB_FILE):
+        os.remove(JOB_FILE)
+        print(f"> Cleared existing job file: {JOB_FILE}")
+
+    # Start the scheduler
+    jobstores = {"default": SQLAlchemyJobStore(url=f"sqlite:///{JOB_FILE}")}
+    scheduler = BackgroundScheduler(jobstores=jobstores)
     scheduler.start()
     app.scheduler = scheduler
+    atexit.register(stop_scheduler)
+
     app.running_plugins = {}
     app.loaded_plugins = load_plugins(client_config)
 
-    autorun_plugins = ["init", "sync", "create_datasite", "watch_and_run"]
+    # autorun_plugins = ["init", "sync", "create_datasite", "watch_and_run"]
+    autorun_plugins = ["init", "sync", "create_datasite"]
     for plugin in autorun_plugins:
         start_plugin(plugin)
 
@@ -337,6 +360,13 @@ async def lifespan(app: FastAPI):
 
     # Shutdown (if necessary)
     print("Shutting down...")
+
+
+def stop_scheduler():
+    # Remove the lock file if it exists
+    if os.path.exists(JOB_FILE):
+        os.remove(JOB_FILE)
+        print("Scheduler stopped and lock file removed.")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -504,6 +534,7 @@ def main() -> None:
         port=client_config.port,
         log_level="debug" if debug else "info",
         reload=debug,  # Enable hot reloading only in debug mode
+        reload_dirs="./syftbox",
     )
 
 

@@ -1,7 +1,7 @@
 import logging
 import os
 
-from syftbox.lib import USER_GROUP_GLOBAL, SyftPermission, perm_file_path
+from syftbox.lib import SyftPermission, perm_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,7 @@ def claim_datasite(client_config):
     else:
         print(f"> {client_config.email} Creating Datasite + Permfile")
         try:
-            perm_file = SyftPermission(
-                admin=[client_config.email],
-                read=[client_config.email, USER_GROUP_GLOBAL],
-                write=[client_config.email],
-            )
+            perm_file = SyftPermission.datasite_default(client_config.email)
             perm_file.save(file_path)
         except Exception as e:
             print("Failed to create perm file", e)

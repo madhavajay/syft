@@ -1,4 +1,5 @@
 import os
+import traceback
 from threading import Event
 
 import requests
@@ -432,16 +433,19 @@ def run(shared_state):
                 try:
                     create_datasites(shared_state.client_config)
                 except Exception as e:
+                    traceback.print_exc()
                     print("failed to get_datasites", e)
 
                 try:
                     num_changes += sync_up(shared_state.client_config)
                 except Exception as e:
+                    traceback.print_exc()
                     print("failed to sync up", e)
 
                 try:
                     num_changes += sync_down(shared_state.client_config)
                 except Exception as e:
+                    traceback.print_exc()
                     print("failed to sync down", e)
             if num_changes == 0:
                 print("✅ Synced")
