@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import ast
 import base64
 import copy
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -10,6 +12,7 @@ import sys
 import textwrap
 import types
 import zlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -19,6 +22,9 @@ from pathlib import Path
 from threading import Lock
 from urllib.parse import urlparse
 
+import markdown
+import pandas as pd
+import pkg_resources
 import requests
 from typing_extensions import Any, Self
 
@@ -405,6 +411,7 @@ class DatasiteManifest(Jsonable):
     datasite: str
     file_path: str
     datasets: dict = field(default_factory=dict)
+    code: dict = field(default_factory=dict)
 
     @classmethod
     def load_from_datasite(cls, path: str) -> DatasiteManifest | None:
@@ -413,7 +420,8 @@ class DatasiteManifest(Jsonable):
         try:
             manifest = DatasiteManifest.load(manifest_path)
             return manifest
-        except Exception:
+        except Exception as e:
+            print("e", e)
             pass
         return None
 
@@ -445,6 +453,10 @@ class DatasiteManifest(Jsonable):
         public_read = SyftPermission.mine_with_public_read(email=self.datasite)
         public_read.save(full_path)
         return Path(full_path)
+
+    def publish(self, item, overwrite: bool = False):
+        if isinstance(item, Callable):
+            syftbox_code(item).publish(self, overwrite=overwrite)
 
 
 @dataclass
@@ -506,8 +518,8 @@ class ClientConfig(Jsonable):
                 try:
                     dataset = TabularDataset(**dataset_dict)
                     dataset.syft_link = SyftLink(**dataset_dict["syft_link"])
-                    dataset.readme_path = SyftLink(**dataset_dict["readme_path"])
-                    dataset.loader_path = SyftLink(**dataset_dict["loader_path"])
+                    dataset.readme_link = SyftLink(**dataset_dict["readme_link"])
+                    dataset.loader_link = SyftLink(**dataset_dict["loader_link"])
                     dataset._client_config = self
                     datasets.append(dataset)
                 except Exception as e:
@@ -515,12 +527,27 @@ class ClientConfig(Jsonable):
 
         return DatasetResults(datasets)
 
+    def get_code(self):
+        manifests = self.get_all_manifests()
+        all_code = []
+        for datasite, manifest in manifests.items():
+            for func_name, code_dict in manifest.code.items():
+                try:
+                    code = Code(**code_dict)
+                    code.syft_link = SyftLink(**code_dict["syft_link"])
+                    code.readme_link = SyftLink(**code_dict["readme_link"])
+                    code.requirements_link = SyftLink(**code_dict["requirements_link"])
+                    code._client_config = self
+                    all_code.append(code)
+                except Exception as e:
+                    print(f"Bad dataset format. {datasite} {e}")
+
+        return CodeResults(all_code)
+
     def resolve_link(self, link: SyftLink) -> Path:
         return Path(os.path.join(os.path.abspath(self.sync_folder), link.sync_path))
 
     def use(self):
-        import os
-
         os.environ["SYFTBOX_CURRENT_CLIENT"] = self.config_path
         os.environ["SYFTBOX_SYNC_DIR"] = self.sync_folder
         print(f"> Setting Sync Dir to: {self.sync_folder}")
@@ -825,6 +852,7 @@ class SyftVault(Jsonable):
         syft_link.to_file(link_file_path)
         vault = cls.load_vault()
         vault.set_private(syft_link, private_path)
+        vault.save_vault()
         return True
 
 
@@ -857,8 +885,9 @@ def datasite(sync_path: str | None, datasite: str):
 def extract_datasite(sync_import_path: str) -> str:
     datasite_parts = []
     for part in sync_import_path.split("."):
-        if part == "datasets":
+        if part in ["datasets", "code"]:
             break
+
         datasite_parts.append(part)
     email_string = ".".join(datasite_parts)
     email_string = email_string.replace(".at.", "@")
@@ -872,7 +901,7 @@ def create_datasite_import_path(datasite: str) -> str:
     return import_path
 
 
-def attrs_for_datasite_import(module, sync_import_path: str) -> dict[str, Any]:
+def attrs_for_datasite_dataset_import(module, sync_import_path: str) -> dict[str, Any]:
     import os
 
     client_config_path = os.environ.get("SYFTBOX_CURRENT_CLIENT", None)
@@ -885,17 +914,18 @@ def attrs_for_datasite_import(module, sync_import_path: str) -> dict[str, Any]:
     datasets = []
     try:
         manifest = DatasiteManifest.load_from_datasite(datasite_path)
-        for dataset_name, dataset_dict in manifest.datasets.items():
-            try:
-                dataset = TabularDataset(**dataset_dict)
-                dataset.syft_link = SyftLink(**dataset_dict["syft_link"])
-                dataset.readme_path = SyftLink(**dataset_dict["readme_path"])
-                dataset.loader_path = SyftLink(**dataset_dict["loader_path"])
-                dataset._client_config = client_config
-                datasets.append(dataset)
-                setattr(module, dataset.clean_name, dataset)
-            except Exception as e:
-                print(f"Bad dataset format. {datasite} {e}")
+        if hasattr(manifest, "datasets"):
+            for dataset_name, dataset_dict in manifest.datasets.items():
+                try:
+                    dataset = TabularDataset(**dataset_dict)
+                    dataset.syft_link = SyftLink(**dataset_dict["syft_link"])
+                    dataset.readme_link = SyftLink(**dataset_dict["readme_link"])
+                    dataset.loader_link = SyftLink(**dataset_dict["loader_link"])
+                    dataset._client_config = client_config
+                    datasets.append(dataset)
+                    setattr(module, dataset.clean_name, dataset)
+                except Exception as e:
+                    print(f"Bad dataset format. {datasite} {e}")
     except Exception:
         pass
 
@@ -907,6 +937,41 @@ def attrs_for_datasite_import(module, sync_import_path: str) -> dict[str, Any]:
     module.__getitem__ = dataset_results.__getitem__
     module.__len__ = dataset_results.__len__
     module._repr_html_ = dataset_results._repr_html_
+
+
+def attrs_for_datasite_code_import(module, sync_import_path: str) -> dict[str, Any]:
+    client_config_path = os.environ.get("SYFTBOX_CURRENT_CLIENT", None)
+    if client_config_path is None:
+        raise Exception("run client_config.use()")
+    client_config = ClientConfig.load(client_config_path)
+    datasite = extract_datasite(sync_import_path)
+    datasite_path = os.path.join(client_config.sync_folder, datasite)
+    all_code = []
+    try:
+        manifest = DatasiteManifest.load_from_datasite(datasite_path)
+        if hasattr(manifest, "code"):
+            for func_name, code_dict in manifest.code.items():
+                try:
+                    code = Code(**code_dict)
+                    code.syft_link = SyftLink(**code_dict["syft_link"])
+                    code.readme_link = SyftLink(**code_dict["readme_link"])
+                    code.requirements_link = SyftLink(**code_dict["requirements_link"])
+                    code._client_config = client_config
+                    all_code.append(code)
+                    setattr(module, code.func_name, code)
+                except Exception as e:
+                    print(f"Bad dataset format. {datasite} {e}")
+    except Exception:
+        pass
+
+    code_results = CodeResults(all_code)
+    # Assign the dataset_results to the module
+    module.code_results = code_results
+
+    # Override the module's methods to delegate to dataset_results
+    module.__getitem__ = code_results.__getitem__
+    module.__len__ = code_results.__len__
+    module._repr_html_ = code_results._repr_html_
 
 
 def config_for_user(email: str, root_path: str | None = None) -> str:
@@ -957,8 +1022,15 @@ class DynamicLibSubmodulesLoader(Loader):
         if self.fullname.endswith(".datasets"):
             self.populate_datasets_module(module)
 
+        if self.fullname.endswith(".code"):
+            print("are we hitting this node?")
+            self.populate_code_module(module)
+
     def populate_datasets_module(self, module):
-        attrs_for_datasite_import(module, self.sync_path)
+        attrs_for_datasite_dataset_import(module, self.sync_path)
+
+    def populate_code_module(self, module):
+        attrs_for_datasite_code_import(module, self.sync_path)
 
 
 # Custom finder to locate and use the DynamicLibSubmodulesLoader
@@ -990,9 +1062,6 @@ def to_safe_function_name(name: str) -> str:
     return name
 
 
-import markdown
-
-
 def markdown_to_html(markdown_text):
     html = markdown.markdown(markdown_text)
     return html
@@ -1003,13 +1072,11 @@ class TabularDataset(Jsonable):
     name: str
     syft_link: SyftLink
     schema: dict | None = None
-    readme_path: SyftLink | None = None
-    loader_path: SyftLink | None = None
+    readme_link: SyftLink | None = None
+    loader_link: SyftLink | None = None
     _client_config: ClientConfig | None = None
 
     def _repr_html_(self):
-        import pandas as pd
-
         output = f"<strong>{self.name}</strong>\n"
         table_data = {
             "Attribute": ["Name", "Syft Link", "Schema", "Readme", "Loader"],
@@ -1017,15 +1084,15 @@ class TabularDataset(Jsonable):
                 self.name,
                 "..." + str(self.syft_link)[-20:],
                 str(self.schema),
-                "..." + str(self.readme_path)[-20:],
-                "..." + str(self.loader_path)[-20:],
+                "..." + str(self.readme_link)[-20:],
+                "..." + str(self.loader_link)[-20:],
             ],
         }
 
         # Create a DataFrame from the transposed data
         df = pd.DataFrame(table_data)
         if self._client_config:
-            readme = self._client_config.resolve_link(self.readme_path)
+            readme = self._client_config.resolve_link(self.readme_link)
             with open(readme) as f:
                 output += "\nREADME:\n" + markdown_to_html(f.read()) + "\n"
 
@@ -1034,8 +1101,6 @@ class TabularDataset(Jsonable):
     # can also do from df where you specify the destination
     @classmethod
     def from_csv(self, file_path: str, name: str | None = None):
-        import pandas as pd
-
         if name is None:
             name = os.path.basename(file_path)
         syft_link = SyftLink.from_path(file_path)
@@ -1068,7 +1133,7 @@ class TabularDataset(Jsonable):
 
     def load(self) -> Any:
         if self._client_config:
-            loader = self._client_config.resolve_link(self.loader_path)
+            loader = self._client_config.resolve_link(self.loader_link)
             with open(loader) as f:
                 code = f.read()
 
@@ -1092,9 +1157,10 @@ class TabularDataset(Jsonable):
 
     def loader_template_python(self) -> str:
         code = f"""
-        def load_{self.clean_name}(file_path: str):
+        def load_{self.clean_name}(file_path: str, resolve_private: bool = False):
             import pandas as pd
-            return pd.read_csv(file_path)
+            from syftbox.lib import sy_path
+            return pd.read_csv(sy_path(file_path, resolve_private=resolve_private))
         """
         return textwrap.dedent(code)
 
@@ -1118,16 +1184,16 @@ class TabularDataset(Jsonable):
         dataset_dir = manifest.root_dir / "datasets" / self.clean_name
         manifest.create_public_folder(dataset_dir)
         # write readme
-        readme_path = dataset_dir / "README.md"
-        with open(readme_path, "w") as f:
+        readme_link = dataset_dir / "README.md"
+        with open(readme_link, "w") as f:
             f.write(self.readme_template())
-        self.readme_path = SyftLink.from_path(readme_path)
+        self.readme_link = SyftLink.from_path(readme_link)
 
         # write loader
-        loader_path = dataset_dir / "loader.py"
-        with open(loader_path, "w") as f:
+        loader_link = dataset_dir / "loader.py"
+        with open(loader_link, "w") as f:
             f.write(self.loader_template_python())
-        self.loader_path = SyftLink.from_path(loader_path)
+        self.loader_link = SyftLink.from_path(loader_link)
 
     def publish(self, manifest: DatasiteManifest, overwrite: bool = False):
         if self.name in manifest.datasets and not overwrite:
@@ -1158,16 +1224,225 @@ class DatasetResults:
 
         table_data = []
         for item in self.data:
-            _item = item
             table_data.append(
                 {
                     "Name": item.name,
                     "Syft Link": "..." + str(item.syft_link)[-20:],
                     "Schema": str(list(item.schema.keys()))[0:100] + "...",
-                    "Readme": str(item.readme_path)[-20:],
-                    "Loader": str(item.loader_path)[-20:],
+                    "Readme": str(item.readme_link)[-20:],
+                    "Loader": str(item.loader_link)[-20:],
                 }
             )
 
         df = pd.DataFrame(table_data)
         return df._repr_html_()
+
+
+@dataclass
+class CodeResults:
+    data: list = field(default_factory=list)
+
+    def __getitem__(self, index):
+        return self.data[index]
+
+    def __len__(self):
+        return len(self.data)
+
+    def _repr_html_(self):
+        table_data = []
+        for item in self.data:
+            table_data.append(
+                {
+                    "Name": item.name,
+                    "Syft Link": "..." + str(item.syft_link)[-20:],
+                    "Schema": str(list(item.requirements.keys()))[0:100] + "...",
+                    "Readme": str(item.readme_link)[-20:],
+                }
+            )
+
+        df = pd.DataFrame(table_data)
+        return df._repr_html_()
+
+
+@dataclass
+class Code(Jsonable):
+    name: str
+    func_name: str
+    syft_link: SyftLink | None = None
+    readme_link: SyftLink | None = None
+    requirements_link: SyftLink | None = None
+    requirements: dict[str, str] | None = None
+    _func: Callable | None = None
+    _client_config: ClientConfig | None = None
+
+    def _repr_html_(self):
+        import pandas as pd
+
+        output = f"<strong>{self.name}</strong>\n"
+        table_data = {
+            "Attribute": ["Name", "Syft Link", "Readme", "Requirements"],
+            "Value": [
+                self.name,
+                "..." + str(self.syft_link)[-20:],
+                "..." + str(self.readme_link)[-20:],
+                "..." + str(self.requirements_link)[-20:],
+            ],
+        }
+
+        # Create a DataFrame from the transposed data
+        df = pd.DataFrame(table_data)
+        if self._client_config:
+            readme = self._client_config.resolve_link(self.readme_link)
+            with open(readme) as f:
+                output += "\nREADME:\n" + markdown_to_html(f.read()) + "\n"
+
+        return output + df._repr_html_()
+
+    # can also do from df where you specify the destination
+    @classmethod
+    def from_func(self, func: Callable):
+        name = func.__name__
+        code = Code(func_name=name, _func=func, name=name)
+        # code.write_files(manifest)
+        return code
+
+    def get_function_source(self, func):
+        source_code = inspect.getsource(func)
+        dedented_code = textwrap.dedent(source_code)
+        dedented_code = dedented_code.strip()
+        decorator = "@syftbox_code"
+        if dedented_code.startswith(decorator):
+            dedented_code = dedented_code[len(decorator) :]
+        return dedented_code
+
+    @property
+    def import_string(self) -> str:
+        string = "from syftbox.lib."
+        string += create_datasite_import_path(self.syft_link.datasite)  # a.at.b.com
+        string += ".code import "
+        string += self.clean_name
+        return string
+
+    def readme_template(self) -> str:
+        readme = f"""
+        # {self.name}
+
+        Code:
+
+        ## Import Syntax
+        client_config.use()
+        {self.import_string}
+
+        ## Python Usage Example
+        result = {self.func_name}()
+        """
+        return textwrap.dedent(readme)
+
+    def __call__(self, *args, **kwargs):
+        return self._func(*args, **kwargs)
+
+    @property
+    def code(self):
+        code = ""
+        if self._client_config:
+            code_link = self._client_config.resolve_link(self.syft_link)
+            with open(code_link) as f:
+                code = f.read()
+        from IPython.display import Markdown
+
+        return Markdown(f"```python\n{code}\n```")
+
+    def run(self, *args, resolve_private: bool = False, **kwargs):
+        # todo figure out how to override sy_path in the sub code
+        if self._client_config:
+            code_link = self._client_config.resolve_link(self.syft_link)
+            with open(code_link) as f:
+                code = f.read()
+
+            # Evaluate the code and store the function in memory
+            local_vars = {}
+            exec(code, {}, local_vars)
+
+            # Get the function name
+            function_name = f"{self.clean_name}"
+            if function_name not in local_vars:
+                raise ValueError(
+                    f"Function {function_name} not found in the loader code."
+                )
+
+            # Get the function from the local_vars
+            inner_function = local_vars[function_name]
+
+            return inner_function(*args, **kwargs)
+        else:
+            raise Exception("run client_config.use()")
+
+    def extract_imports(self, source_code):
+        imports = set()
+        tree = ast.parse(source_code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imports.add(alias.name.split(".")[0])
+            elif isinstance(node, ast.ImportFrom):
+                imports.add(node.module.split(".")[0])
+        return imports
+
+    @property
+    def clean_name(self) -> str:
+        return to_safe_function_name(self.name)
+
+    def write_files(self, manifest) -> bool:
+        code_dir = Path(manifest.root_dir / "code" / self.clean_name)
+        manifest.create_public_folder(code_dir)
+
+        # write code
+        code_path = code_dir / (self.clean_name + ".py")
+        source = self.get_function_source(self._func)
+        with open(code_path, "w") as f:
+            f.write(source)
+        self.syft_link = SyftLink.from_path(code_path)
+
+        # write readme
+        readme_link = code_dir / "README.md"
+        with open(readme_link, "w") as f:
+            f.write(self.readme_template())
+        self.readme_link = SyftLink.from_path(readme_link)
+
+        # write requirements.txt
+        imports = self.extract_imports(source)
+        requirements = {}
+
+        installed_packages = {pkg.key: pkg.version for pkg in pkg_resources.working_set}
+        requirements_txt_path = code_dir / "requirements.txt"
+        with open(requirements_txt_path, "w") as f:
+            for package in imports:
+                if package in installed_packages:
+                    requirements[package] = installed_packages[package]
+                    f.write(f"{package}=={installed_packages[package]}\n")
+                else:
+                    requirements[package] = ""
+                    f.write(f"{package}\n")
+                    print(
+                        f"Warning: {package} is not installed in the current environment."
+                    )
+        self.requirements_link = SyftLink.from_path(requirements_txt_path)
+        self.requirements = requirements
+
+    def publish(self, manifest: DatasiteManifest, overwrite: bool = False):
+        if self.name in manifest.code and not overwrite:
+            raise Exception(f"Code: {self.name} already in manifest")
+        self.write_files(manifest)
+        manifest.code[self.name] = self.to_dict()
+        manifest.save(manifest.file_path)
+        print("✅ Code Published")
+
+    @property
+    def file_path(self):
+        if self._client_config:
+            return self._client_config.resolve_link(self.syft_link)
+
+
+def syftbox_code(func):
+    code = Code.from_func(func)
+    return code
