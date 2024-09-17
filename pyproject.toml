@@ -13,6 +13,8 @@ dependencies = [
     "jinja2>=3.1.4",
     "typing-extensions>=4.12.2",
     "sqlalchemy>=2.0.34",
+    "markdown>=3.7",
+    "pandas>=2.2.2",
 ]
 
 [build-system]

@@ -326,9 +326,6 @@ def parse_args():
     return parser.parse_args()
 
 
-JOB_FILE = "jobs.sqlite"
-
-
 async def lifespan(app: FastAPI):
     # Startup
     print("> Starting Client")
@@ -337,12 +334,14 @@ async def lifespan(app: FastAPI):
     app.shared_state = initialize_shared_state(client_config)
 
     # Clear the lock file on the first run if it exists
-    if os.path.exists(JOB_FILE):
-        os.remove(JOB_FILE)
-        print(f"> Cleared existing job file: {JOB_FILE}")
+    job_file = client_config.config_path.replace(".json", ".sql")
+    app.job_file = job_file
+    if os.path.exists(job_file):
+        os.remove(job_file)
+        print(f"> Cleared existing job file: {job_file}")
 
     # Start the scheduler
-    jobstores = {"default": SQLAlchemyJobStore(url=f"sqlite:///{JOB_FILE}")}
+    jobstores = {"default": SQLAlchemyJobStore(url=f"sqlite:///{job_file}")}
     scheduler = BackgroundScheduler(jobstores=jobstores)
     scheduler.start()
     app.scheduler = scheduler
@@ -364,8 +363,8 @@ async def lifespan(app: FastAPI):
 
 def stop_scheduler():
     # Remove the lock file if it exists
-    if os.path.exists(JOB_FILE):
-        os.remove(JOB_FILE)
+    if os.path.exists(app.job_file):
+        os.remove(app.job_file)
         print("Scheduler stopped and lock file removed.")
 
 

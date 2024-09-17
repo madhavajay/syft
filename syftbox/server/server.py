@@ -39,7 +39,7 @@ def load_list(cls, filepath: str) -> list[Any]:
                 ds.append(cls(**di))
             return ds
     except Exception as e:
-        print(f"Unable to load file: {filepath}. {e}")
+        print(f"Unable to load list file: {filepath}. {e}")
     return None
 
 
@@ -61,7 +61,7 @@ def load_dict(cls, filepath: str) -> list[Any]:
                 dicts[key] = cls(**value)
             return dicts
     except Exception as e:
-        print(f"Unable to load file: {filepath}. {e}")
+        print(f"Unable to load dict file: {filepath}. {e}")
     return None
 
 
@@ -254,7 +254,6 @@ async def dir_state(request: Request):
 async def datasites(request: Request):
     datasites = get_datasites(SNAPSHOT_FOLDER)
     response_json = {"datasites": datasites}
-    print("List datasites:", datasites)
     if datasites:
         return JSONResponse({"status": "success"} | response_json, status_code=200)
     return JSONResponse({"status": "error"}, status_code=400)
