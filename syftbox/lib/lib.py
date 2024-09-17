@@ -1157,10 +1157,10 @@ class TabularDataset(Jsonable):
 
     def loader_template_python(self) -> str:
         code = f"""
-        def load_{self.clean_name}(file_path: str, resolve_private: bool = False):
+        def load_{self.clean_name}(file_path: str):
             import pandas as pd
             from syftbox.lib import sy_path
-            return pd.read_csv(sy_path(file_path, resolve_private=resolve_private))
+            return pd.read_csv(sy_path(file_path))
         """
         return textwrap.dedent(code)
 
