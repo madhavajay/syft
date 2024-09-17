@@ -282,7 +282,13 @@ def sync_up(client_config):
         dir_filename = f"{change_log_folder}/{datasite}.json"
 
         # get the old dir state
-        old_dir_state = DirState.load(dir_filename)
+        old_dir_state = None
+        try:
+            # it might not exist yet
+            old_dir_state = DirState.load(dir_filename)
+        except Exception:
+            pass
+
         if old_dir_state is None:
             old_dir_state = DirState(
                 tree={},
@@ -293,6 +299,7 @@ def sync_up(client_config):
 
         # get the new dir state
         new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
+
         changes = diff_dirstate(old_dir_state, new_dir_state)
         if len(changes) == 0:
             continue
@@ -350,6 +357,7 @@ def sync_down(client_config) -> int:
         dir_filename = f"{change_log_folder}/{datasite}.json"
 
         datasite_path = os.path.join(client_config.sync_folder, datasite)
+
         perm_tree = PermissionTree.from_path(datasite_path)
 
         # get the new dir state
