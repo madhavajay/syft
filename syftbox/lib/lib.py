@@ -7,8 +7,11 @@ import hashlib
 import inspect
 import json
 import os
+import pkgutil
 import re
+import subprocess
 import sys
+import sysconfig
 import textwrap
 import types
 import zlib
@@ -20,13 +23,14 @@ from importlib.abc import Loader, MetaPathFinder
 from importlib.util import spec_from_loader
 from pathlib import Path
 from threading import Lock
+from typing import Any
 from urllib.parse import urlparse
 
 import markdown
 import pandas as pd
 import pkg_resources
 import requests
-from typing_extensions import Any, Self
+from typing_extensions import Self
 
 USER_GROUP_GLOBAL = "GLOBAL"
 
@@ -128,6 +132,26 @@ class SyftPermission(Jsonable):
     def mine_with_public_read(self, email: str) -> Self:
         return SyftPermission(admin=[email], read=[email, "GLOBAL"], write=[email])
 
+    @classmethod
+    def mine_with_public_write(self, email: str) -> Self:
+        return SyftPermission(
+            admin=[email], read=[email, "GLOBAL"], write=[email, "GLOBAL"]
+        )
+
+    @classmethod
+    def theirs_with_my_read(self, their_email, my_email: str) -> Self:
+        return SyftPermission(
+            admin=[their_email], read=[their_email, my_email], write=[their_email]
+        )
+
+    @classmethod
+    def theirs_with_my_read_write(self, their_email, my_email: str) -> Self:
+        return SyftPermission(
+            admin=[their_email],
+            read=[their_email, my_email],
+            write=[their_email, my_email],
+        )
+
     def __repr__(self) -> str:
         string = "SyftPermission:\n"
         string += f"{self.filepath}\n"
@@ -199,11 +223,34 @@ class FileChange(Jsonable):
         return self.parent_path + "/" + self.sub_path
 
     def read(self) -> bytes:
-        with open(self.full_path, "rb") as f:
-            return f.read()
+        if is_symlink(self.full_path):
+            # write a text file with a syftlink
+            data = convert_to_symlink(self.full_path).encode("utf-8")
+            return data
+        else:
+            with open(self.full_path, "rb") as f:
+                return f.read()
 
     def write(self, data: bytes) -> bool:
-        return self.write_to(data, self.full_path)
+        # if its a syftlink turn it into a symlink
+        if data.startswith(b"syft://"):
+            syft_link = SyftLink.from_url(data.decode("utf-8"))
+            abs_path = os.path.join(
+                os.path.abspath(self.sync_folder), syft_link.sync_path
+            )
+            if not os.path.exists(abs_path):
+                raise Exception(
+                    f"Cant make symlink because source doesnt exist {abs_path}"
+                )
+            dir_path = os.path.dirname(self.full_path)
+            os.makedirs(dir_path, exist_ok=True)
+            if os.path.exists(self.full_path) and is_symlink(self.full_path):
+                os.unlink(self.full_path)
+            os.symlink(abs_path, self.full_path)
+
+            return True
+        else:
+            return self.write_to(data, self.full_path)
 
     def delete(self) -> bool:
         try:
@@ -235,9 +282,34 @@ class DirState(Jsonable):
     sub_path: str
 
 
+def get_symlink(file_path) -> str:
+    return os.readlink(file_path)
+
+
+def is_symlink(file_path) -> bool:
+    return os.path.islink(file_path)
+
+
+def symlink_to_syftlink(file_path):
+    return SyftLink.from_path(file_path)
+
+
+def convert_to_symlink(path):
+    if not is_symlink(path):
+        raise Exception(f"Cant convert a non symlink {path}")
+    abs_path = get_symlink(path)
+    syft_link = symlink_to_syftlink(abs_path)
+    return str(syft_link)
+
+
 def get_file_hash(file_path: str) -> str:
-    with open(file_path, "rb") as file:
-        return hashlib.md5(file.read()).hexdigest()
+    if is_symlink(file_path):
+        # return the hash of the syftlink instead
+        sym_link_string = convert_to_symlink(file_path)
+        return hashlib.md5(sym_link_string.encode("utf-8")).hexdigest()
+    else:
+        with open(file_path, "rb") as file:
+            return hashlib.md5(file.read()).hexdigest()
 
 
 def ignore_dirs(directory: str, root: str, ignore_folders=None) -> bool:
@@ -551,6 +623,16 @@ class ClientConfig(Jsonable):
         os.environ["SYFTBOX_CURRENT_CLIENT"] = self.config_path
         os.environ["SYFTBOX_SYNC_DIR"] = self.sync_folder
         print(f"> Setting Sync Dir to: {self.sync_folder}")
+
+    def create_job_inbox(self):
+        jobs = Path(self.datasite_path) / "jobs"
+        inbox = Path(self.datasite_path) / "jobs" / "inbox"
+        os.makedirs(jobs, exist_ok=True)
+        os.makedirs(inbox, exist_ok=True)
+        perm = SyftPermission.mine_with_public_write(self.email)
+        perm.save(inbox)
+        print("✅ Job Inbox Created")
+        return str(os.path.abspath(jobs))
 
 
 class SharedState:
@@ -1023,7 +1105,6 @@ class DynamicLibSubmodulesLoader(Loader):
             self.populate_datasets_module(module)
 
         if self.fullname.endswith(".code"):
-            print("are we hitting this node?")
             self.populate_code_module(module)
 
     def populate_datasets_module(self, module):
@@ -1075,6 +1156,7 @@ class TabularDataset(Jsonable):
     readme_link: SyftLink | None = None
     loader_link: SyftLink | None = None
     _client_config: ClientConfig | None = None
+    has_private: bool = False
 
     def _repr_html_(self):
         output = f"<strong>{self.name}</strong>\n"
@@ -1100,13 +1182,17 @@ class TabularDataset(Jsonable):
 
     # can also do from df where you specify the destination
     @classmethod
-    def from_csv(self, file_path: str, name: str | None = None):
+    def from_csv(
+        self, file_path: str, name: str | None = None, has_private: bool = False
+    ):
         if name is None:
             name = os.path.basename(file_path)
         syft_link = SyftLink.from_path(file_path)
         df = pd.read_csv(file_path)
         schema = self.create_schema(df)
-        return TabularDataset(name=name, syft_link=syft_link, schema=schema)
+        return TabularDataset(
+            name=name, syft_link=syft_link, schema=schema, has_private=has_private
+        )
 
     @property
     def import_string(self) -> str:
@@ -1117,9 +1203,10 @@ class TabularDataset(Jsonable):
         return string
 
     def readme_template(self) -> str:
+        private = f"\nPrivate data: {self.has_private}\n" if self.has_private else ""
         readme = f"""
         # {self.name}
-
+        {private}
         Schema: {self.schema}
 
         ## Import Syntax
@@ -1227,6 +1314,7 @@ class DatasetResults:
             table_data.append(
                 {
                     "Name": item.name,
+                    "Private": item.has_private,
                     "Syft Link": "..." + str(item.syft_link)[-20:],
                     "Schema": str(list(item.schema.keys()))[0:100] + "...",
                     "Readme": str(item.readme_link)[-20:],
@@ -1342,15 +1430,22 @@ class Code(Jsonable):
         return self._func(*args, **kwargs)
 
     @property
-    def code(self):
+    def raw_code(self) -> str:
+        if self._func:
+            return self.get_function_source(self._func)
+
         code = ""
         if self._client_config:
             code_link = self._client_config.resolve_link(self.syft_link)
             with open(code_link) as f:
                 code = f.read()
+        return code
+
+    @property
+    def code(self):
         from IPython.display import Markdown
 
-        return Markdown(f"```python\n{code}\n```")
+        return Markdown(f"```python\n{self.raw_code}\n```")
 
     def run(self, *args, resolve_private: bool = False, **kwargs):
         # todo figure out how to override sy_path in the sub code
@@ -1377,7 +1472,8 @@ class Code(Jsonable):
         else:
             raise Exception("run client_config.use()")
 
-    def extract_imports(self, source_code):
+    @classmethod
+    def extract_imports(cls, source_code):
         imports = set()
         tree = ast.parse(source_code)
         for node in ast.walk(tree):
@@ -1442,7 +1538,268 @@ class Code(Jsonable):
         if self._client_config:
             return self._client_config.resolve_link(self.syft_link)
 
+    def to_flow(
+        self, client_config, inputs=None, output=None, template="python", path=None
+    ) -> str:
+        if path is None:
+            path = Path(client_config.sync_folder) / "staging"
+            os.makedirs(path, exist_ok=True)
+        if output is None:
+            output = {}
+
+        if "name" not in output:
+            output["name"] = "result"
+        if "format" not in output:
+            output["format"] = "json"
+
+        their_email = list(inputs.values())[0].syft_link.datasite
+        if "permission" not in output:
+            perm = SyftPermission.theirs_with_my_read_write(
+                their_email=their_email, my_email=client_config.email
+            )
+            output["permission"] = perm
+
+        # create folders
+        init_flow(client_config, path, self.name, inputs, output, template)
+        # save main.py
+        main_code = create_main_py(client_config, inputs, output, self)
+
+        flow_dir = Path(os.path.abspath(f"{path}/{self.name}"))
+
+        main_code_path = flow_dir / "main.py"
+        with open(main_code_path, "w") as f:
+            f.write(main_code)
+        main_shell_path = flow_dir / "run.sh"
+        main_shell_code = make_run_sh()
+        with open(main_shell_path, "w") as f:
+            f.write(main_shell_code)
+        make_executable(main_shell_path)
+        return str(flow_dir)
+
 
 def syftbox_code(func):
     code = Code.from_func(func)
+    return code
+
+
+def get_syftbox_editable_path():
+    commands = [
+        ["uv", "pip", "list", "--format=columns"],
+        ["pip", "list", "--format=columns"],
+    ]
+
+    for command in commands:
+        try:
+            # Run the pip list command and filter for 'syftbox'
+            result = subprocess.run(command, capture_output=True, text=True, check=True)
+            for line in result.stdout.splitlines():
+                if "syftbox" in line:
+                    parts = line.split()
+                    if (
+                        len(parts) > 2 and "/" in parts[-1]
+                    ):  # Path is typically the last part
+                        return parts[-1]
+        except subprocess.CalledProcessError:
+            # Ignore errors and continue with the next command
+            continue
+
+    return None
+
+
+def make_executable(file_path):
+    import os
+    import stat
+
+    current_permissions = os.stat(file_path).st_mode
+    os.chmod(
+        file_path, current_permissions | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+    )
+
+
+def make_run_sh() -> str:
+    return """
+#!/bin/sh
+uv run main.py
+"""
+
+
+def init_flow(
+    client_config,
+    path,
+    name: str,
+    inputs: dict[str, Any],
+    output: dict[str, Any],
+    template: str = "python",
+):
+    flow_dir = Path(os.path.abspath(f"{path}/{name}"))
+    os.makedirs(flow_dir, exist_ok=True)
+    # make inputs
+    for inp, value in inputs.items():
+        inp_path = flow_dir / "inputs" / inp
+        os.makedirs(inp_path, exist_ok=True)
+
+        if isinstance(value, TabularDataset):
+            syft_link = value.syft_link
+            local_path = client_config.resolve_link(syft_link)
+            filename = os.path.basename(str(syft_link))
+            inp_link_path = inp_path / filename
+            if not os.path.exists(inp_link_path):
+                os.symlink(local_path, inp_link_path)
+            if value.has_private:
+                local_path_private = str(local_path) + ".syftlink"
+                if os.path.exists(local_path_private):
+                    inp_link_path_private = str(inp_link_path) + ".syftlink"
+                    if not os.path.exists(inp_link_path_private):
+                        os.symlink(local_path_private, inp_link_path_private)
+                else:
+                    print("Cant read private link?")
+            # value.syft_link.to_file(inp_link_path)
+
+    # create output
+    out_format = output["format"]
+    if out_format != "json":
+        raise Exception("Only supports json")
+    out_permission = output["permission"]
+    out_path = flow_dir / "output" / output["name"]
+    os.makedirs(out_path, exist_ok=True)
+    out_permission.save(out_path)
+
+
+def make_input_code(inputs):
+    code = """
+def input_reader():
+    from syftbox.lib import sy_path
+    import pandas as pd
+
+    inputs = {}
+"""
+    for key, value in inputs.items():
+        if isinstance(value, TabularDataset):
+            path = "./inputs/trade_data/trade_mock.csv"
+            code += f"    inputs['{key}'] = pd.read_csv(sy_path(\"{path}\"))"
+    code += """
+    return inputs
+"""
+    return textwrap.dedent(code)
+
+
+def make_output_code(output):
+    code = ""
+    name = output["name"]
+    if output["format"] == "json":
+        output_path = f"./output/{name}/{name}.json"
+        code += f"""
+def output_writer({name}):
+    import json
+
+    with open("{output_path}", "w") as f:
+        f.write(json.dumps({name}))
+"""
+    return textwrap.dedent(code)
+
+
+def get_standard_lib_modules():
+    """Return a set of standard library module names."""
+    standard_lib_path = sysconfig.get_path("stdlib")
+    return {module.name for module in pkgutil.iter_modules([standard_lib_path])}
+
+
+def get_deps(code):
+    imports = set()
+    tree = ast.parse(code)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imports.add(alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            imports.add(node.module.split(".")[0])
+
+    deps = {}
+    installed_packages = {pkg.key: pkg.version for pkg in pkg_resources.working_set}
+    standard_lib_modules = get_standard_lib_modules()
+
+    for package in imports:
+        # Skip standard library packages
+        if package not in standard_lib_modules:
+            if package in installed_packages:
+                deps[package] = installed_packages[package]
+            else:
+                deps[package] = ""
+
+    return deps
+
+
+def make_main_code(code_obj):
+    code = """
+def main():
+    print(f"Running: {__name__} from {__author__}")
+    inputs = input_reader()
+    print("> Reading Inputs", inputs)
+"""
+    code += f"""
+    output = {code_obj.clean_name}(**inputs)
+"""
+    code += """
+    print("> Writing Outputs", output)
+    output_writer(output)
+    print(f"> ✅ Running {__name__} Complete!")
+
+main()
+"""
+    return textwrap.dedent(code)
+
+
+def make_deps_comments(deps):
+    code = """
+# /// script
+# dependencies = [
+"""
+    for key, value in deps.items():
+        code += f'#    "{key}'
+        if value != "":
+            code += f"=={value}"
+        code += '",' + "\n"
+    code += "# ]\n"
+    code += "#"
+    syftbox_path = get_syftbox_editable_path()
+    if syftbox_path:
+        code += (
+            """
+# [tool.uv.sources]
+# syftbox = { path = \""""
+            + syftbox_path
+            + '", editable = true }'
+            ""
+        )
+
+    code += """
+# ///
+"""
+    return textwrap.dedent(code)
+
+
+def create_main_py(client_config, inputs, output, code_obj):
+    code = ""
+    code += f"__name__ = '{code_obj.name}'\n"
+    code += f"__author__ = '{client_config.email}'\n"
+    code += make_input_code(inputs)
+    code += "\n"
+    code += make_output_code(output)
+    code += "\n"
+    code += "\n# START YOUR CODE\n"
+    code += code_obj.raw_code
+    code += "\n"
+    code += "\n# END YOUR CODE\n"
+    code += "\n"
+    code += make_main_code(code_obj)
+    code += "\n"
+
+    deps = get_deps(code)
+
+    # prepend
+    deps_code = make_deps_comments(deps)
+    code = deps_code + "\n" + code
+    code += "\n"
+
+    code = textwrap.dedent(code)
     return code
