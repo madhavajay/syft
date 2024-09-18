@@ -173,31 +173,38 @@ async def register(request: Request):
 
 @app.post("/write")
 async def write(request: Request):
-    data = await request.json()
-    email = data["email"]
-    change_dict = data["change"]
-    change_dict["kind"] = FileChangeKind(change_dict["kind"])
-    change = FileChange(**change_dict)
+    try:
+        data = await request.json()
+        email = data["email"]
+        change_dict = data["change"]
+        change_dict["kind"] = FileChangeKind(change_dict["kind"])
+        change = FileChange(**change_dict)
 
-    change.sync_folder = os.path.abspath(SNAPSHOT_FOLDER)
+        change.sync_folder = os.path.abspath(SNAPSHOT_FOLDER)
 
-    if change.kind_write:
-        bin_data = strtobin(data["data"])
-        result = change.write(bin_data)
-    elif change.kind_delete:
-        result = change.delete()
-    else:
-        raise Exception(f"Unknown type of change kind. {change.kind}")
-    if result:
-        print(f"> {email} {change.kind}: {change.internal_path}")
+        if change.kind_write:
+            bin_data = strtobin(data["data"])
+            result = change.write(bin_data)
+        elif change.kind_delete:
+            result = change.delete()
+        else:
+            raise Exception(f"Unknown type of change kind. {change.kind}")
+        if result:
+            print(f"> {email} {change.kind}: {change.internal_path}")
+            return JSONResponse(
+                {"status": "success", "change": change.to_dict()},
+                status_code=200,
+            )
         return JSONResponse(
-            {"status": "success", "change": change.to_dict()},
-            status_code=200,
+            {"status": "error", "change": change.to_dict()},
+            status_code=400,
         )
-    return JSONResponse(
-        {"status": "error", "change": change.to_dict()},
-        status_code=400,
-    )
+    except Exception as e:
+        print("Exception writing", e)
+        return JSONResponse(
+            {"status": "error", "change": change.to_dict()},
+            status_code=400,
+        )
 
 
 @app.post("/read")

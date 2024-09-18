@@ -578,6 +578,18 @@ wheels = [
 ]
 
 [[package]]
+name = "postmarker"
+version = "1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests", marker = "python_full_version >= '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/51/79/a527c6e91bc1c6980bc779b83249f59bf1cba8b259147c799934297cc7a8/postmarker-1.0.tar.gz", hash = "sha256:e735303fdf8ede667a1c6e64a95a96e97f0dabbeca726d0ae1f066bdd799fe34", size = 21627 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/4b/045369491569fda223d2e0bc821534de14278dd4facdb386405ea17b9d80/postmarker-1.0-py3-none-any.whl", hash = "sha256:0fa49f236c7193650896cbf31bbfac34043e352574c6c7e3e2ad2b954704f064", size = 24134 },
+]
+
+[[package]]
 name = "psutil"
 version = "6.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -878,6 +890,7 @@ dependencies = [
     { name = "jinja2", marker = "python_full_version >= '3.12'" },
     { name = "markdown", marker = "python_full_version >= '3.12'" },
     { name = "pandas", marker = "python_full_version >= '3.12'" },
+    { name = "postmarker", marker = "python_full_version >= '3.12'" },
     { name = "requests", marker = "python_full_version >= '3.12'" },
     { name = "setuptools", marker = "python_full_version >= '3.12'" },
     { name = "sqlalchemy", marker = "python_full_version >= '3.12'" },
@@ -904,6 +917,7 @@ requires-dist = [
     { name = "markdown", specifier = ">=3.7" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "pandas", specifier = ">=2.2.2" },
+    { name = "postmarker", specifier = ">=1.0" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "pytest-xdist", extras = ["psutil"], marker = "extra == 'dev'" },

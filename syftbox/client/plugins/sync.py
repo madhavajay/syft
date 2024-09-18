@@ -16,7 +16,8 @@ from syftbox.lib import (
 )
 
 CLIENT_CHANGELOG_FOLDER = "syft_changelog"
-IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER]
+STAGING = "staging"
+IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER, STAGING]
 
 
 # write operations
@@ -125,8 +126,9 @@ def filter_changes(
                 valid_changes.append(change)
                 valid_change_files.append(change.sub_path)
                 continue
+            # todo we need to handle this properly
             if perm_file_at_path.read == [user_email]:
-                if change.internal_path[-10:] == "_.syftperm":
+                if change.internal_path.endswith("_.syftperm"):
                     # include changes for syft_perm file even if only we have read perms.
                     valid_changes.append(change)
                     valid_change_files.append(change.sub_path)
@@ -192,9 +194,9 @@ def pull_changes(client_config, changes):
                 data = None
 
             if response.status_code == 200:
-                print(
-                    f"> {client_config.email} /read {change.kind} {change.internal_path}",
-                )
+                # print(
+                #     f"> {client_config.email} /read {change.kind} {change.internal_path}",
+                # )
                 remote_changes.append((ok_change, data))
             else:
                 print(
@@ -259,7 +261,7 @@ def ascii_for_change(changes) -> str:
         pipe = "├──"
         if count == len(changes):
             pipe = "└──"
-        change_text += pipe + change
+        change_text += pipe + change + "\n"
     return change_text
 
 
@@ -308,6 +310,7 @@ def sync_up(client_config):
 
         # send val changes
         results = push_changes(client_config, val)
+
         deleted_files = []
         changed_files = []
         for result in results:
@@ -320,10 +323,12 @@ def sync_up(client_config):
 
         # combine successful changes qwith old dir state
         combined_tree = old_dir_state.tree
+
+        # add new successful changes
         combined_tree.update(synced_dir_state.tree)
         synced_dir_state.tree = combined_tree
 
-        synced_dir_state = delete_files(new_dir_state, deleted_files)
+        synced_dir_state = delete_files(synced_dir_state, deleted_files)
 
         change_text = ""
         if len(changed_files):
@@ -333,8 +338,6 @@ def sync_up(client_config):
         if len(deleted_files):
             change_text += f"❌ Syncing Up {len(deleted_files)} Deletes\n"
             change_text += ascii_for_change(deleted_files)
-
-        print(change_text)
 
         synced_dir_state.save(dir_filename)
         n_changes += len(changed_files) + len(deleted_files)

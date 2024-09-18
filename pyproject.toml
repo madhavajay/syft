@@ -16,6 +16,7 @@ dependencies = [
     "markdown>=3.7",
     "pandas>=2.2.2",
     "setuptools>=75.1.0",
+    "postmarker>=1.0",
 ]
 
 [build-system]
