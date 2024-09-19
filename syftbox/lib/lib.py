@@ -923,8 +923,13 @@ class SyftVault(Jsonable):
         return True
 
     def get_private(self, public: SyftLink) -> str:
-        if public.sync_path in self.mapping:
-            return self.mapping[public.sync_path]
+        public = public.sync_path
+        # bug where .private is getting added to the internal link content need to fix
+        private_extension = ".private"
+        if public.endswith(private_extension):
+            public = public[: -len(private_extension)]
+        if public in self.mapping:
+            return self.mapping[public]
         return None
 
     @classmethod
