@@ -351,7 +351,8 @@ async def lifespan(app: FastAPI):
     app.loaded_plugins = load_plugins(client_config)
 
     # autorun_plugins = ["init", "sync", "create_datasite", "watch_and_run"]
-    autorun_plugins = ["init", "sync", "create_datasite"]
+    # autorun_plugins = ["init", "sync", "create_datasite"]
+    autorun_plugins = ["init", "sync", "job_queue"]
     for plugin in autorun_plugins:
         start_plugin(plugin)
 
