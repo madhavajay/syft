@@ -232,8 +232,8 @@ class FileChange(Jsonable):
                 return f.read()
 
     def write(self, data: bytes) -> bool:
-        # if its a syftlink turn it into a symlink
-        if data.startswith(b"syft://"):
+        # if its a non private syftlink turn it into a symlink
+        if data.startswith(b"syft://") and not self.full_path.endswith(".private"):
             syft_link = SyftLink.from_url(data.decode("utf-8"))
             abs_path = os.path.join(
                 os.path.abspath(self.sync_folder), syft_link.sync_path
@@ -928,9 +928,9 @@ class SyftVault(Jsonable):
         return None
 
     @classmethod
-    def make_link(cls, public_path: str, private_path: str) -> bool:
+    def link_private(cls, public_path: str, private_path: str) -> bool:
         syft_link = SyftLink.from_path(public_path)
-        link_file_path = syftlink_path(public_path)
+        link_file_path = syftlink_private_path(public_path)
         syft_link.to_file(link_file_path)
         vault = cls.load_vault()
         vault.set_private(syft_link, private_path)
@@ -942,6 +942,10 @@ def syftlink_path(path):
     return f"{path}.syftlink"
 
 
+def syftlink_private_path(path):
+    return f"{path}.private"
+
+
 def sy_path(path, resolve_private: bool | None = None):
     if resolve_private is None:
         resolve_private = str_to_bool(os.environ.get("RESOLVE_PRIVATE", "False"))
@@ -949,13 +953,13 @@ def sy_path(path, resolve_private: bool | None = None):
     if not os.path.exists(path):
         raise Exception(f"No file at: {path}")
     if resolve_private:
-        link_path = syftlink_path(path)
+        link_path = syftlink_private_path(path)
         if not os.path.exists(link_path):
             raise Exception(f"No private link at: {link_path}")
         syft_link = SyftLink.from_file(link_path)
         vault = SyftVault.load_vault()
         private_path = vault.get_private(syft_link)
-        print("> Resolved private link", private_path)
+        print("> 🕵️‍♀️ Resolved private link", private_path)
         return private_path
     return path
 
@@ -1450,9 +1454,7 @@ class Code(Jsonable):
     def run(self, *args, resolve_private: bool = False, **kwargs):
         # todo figure out how to override sy_path in the sub code
         if self._client_config:
-            code_link = self._client_config.resolve_link(self.syft_link)
-            with open(code_link) as f:
-                code = f.read()
+            code = self.raw_code
 
             # Evaluate the code and store the function in memory
             local_vars = {}
@@ -1617,9 +1619,8 @@ def make_executable(file_path):
 
 
 def make_run_sh() -> str:
-    return """
-#!/bin/sh
-uv run main.py
+    return """#!/bin/sh
+uv run main.py $( [ "$1" = "--private" ] && echo '--private' )
 """
 
 
@@ -1646,9 +1647,9 @@ def init_flow(
             if not os.path.exists(inp_link_path):
                 os.symlink(local_path, inp_link_path)
             if value.has_private:
-                local_path_private = str(local_path) + ".syftlink"
+                local_path_private = str(local_path) + ".private"
                 if os.path.exists(local_path_private):
-                    inp_link_path_private = str(inp_link_path) + ".syftlink"
+                    inp_link_path_private = str(inp_link_path) + ".private"
                     if not os.path.exists(inp_link_path_private):
                         os.symlink(local_path_private, inp_link_path_private)
                 else:
@@ -1667,7 +1668,7 @@ def init_flow(
 
 def make_input_code(inputs):
     code = """
-def input_reader():
+def input_reader(private: bool = False):
     from syftbox.lib import sy_path
     import pandas as pd
 
@@ -1676,7 +1677,7 @@ def input_reader():
     for key, value in inputs.items():
         if isinstance(value, TabularDataset):
             path = "./inputs/trade_data/trade_mock.csv"
-            code += f"    inputs['{key}'] = pd.read_csv(sy_path(\"{path}\"))"
+            code += f"    inputs['{key}'] = pd.read_csv(sy_path(\"{path}\", resolve_private=private))"
     code += """
     return inputs
 """
@@ -1689,10 +1690,12 @@ def make_output_code(output):
     if output["format"] == "json":
         output_path = f"./output/{name}/{name}.json"
         code += f"""
-def output_writer({name}):
+def output_writer({name}, private: bool = False):
     import json
-
-    with open("{output_path}", "w") as f:
+    output_path = "{output_path}"
+    if not private:
+        output_path = output_path.replace(".json", ".mock.json")
+    with open(output_path, "w") as f:
         f.write(json.dumps({name}))
 """
     return textwrap.dedent(code)
@@ -1732,8 +1735,13 @@ def get_deps(code):
 def make_main_code(code_obj):
     code = """
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Process some input.")
+    parser.add_argument('--private', action='store_true', help='Run in private mode')
+    args = parser.parse_args()
+
     print(f"Running: {__name__} from {__author__}")
-    inputs = input_reader()
+    inputs = input_reader(private=args.private)
     print("> Reading Inputs", inputs)
 """
     code += f"""
@@ -1741,7 +1749,7 @@ def main():
 """
     code += """
     print("> Writing Outputs", output)
-    output_writer(output)
+    output_writer(output, private=args.private)
     print(f"> ✅ Running {__name__} Complete!")
 
 main()

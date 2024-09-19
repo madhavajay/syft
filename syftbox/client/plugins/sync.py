@@ -436,6 +436,10 @@ def sync_down(client_config) -> int:
     return n_changes
 
 
+SYNC_UP_ENABLED = True
+SYNC_DOWN_ENABLED = True
+
+
 def run(shared_state):
     try:
         if not stop_event.is_set():
@@ -448,13 +452,19 @@ def run(shared_state):
                     print("failed to get_datasites", e)
 
                 try:
-                    num_changes += sync_up(shared_state.client_config)
+                    if SYNC_UP_ENABLED:
+                        num_changes += sync_up(shared_state.client_config)
+                    else:
+                        print("❌ Sync Up Disabled")
                 except Exception as e:
                     traceback.print_exc()
                     print("failed to sync up", e)
 
                 try:
-                    num_changes += sync_down(shared_state.client_config)
+                    if SYNC_DOWN_ENABLED:
+                        num_changes += sync_down(shared_state.client_config)
+                    else:
+                        print("❌ Sync Down Disabled")
                 except Exception as e:
                     traceback.print_exc()
                     print("failed to sync down", e)
