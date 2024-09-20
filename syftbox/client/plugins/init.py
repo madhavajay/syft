@@ -5,9 +5,6 @@ import requests
 stop_event = Event()
 
 
-registered = False
-
-
 def register(client_config):
     response = requests.post(
         f"{client_config.server_url}/register",

@@ -1,5 +1,6 @@
 import os
 import traceback
+from collections import defaultdict
 from threading import Event
 
 import requests
@@ -18,6 +19,35 @@ from syftbox.lib import (
 CLIENT_CHANGELOG_FOLDER = "syft_changelog"
 STAGING = "staging"
 IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER, STAGING]
+
+
+# Recursive function to add folder structure
+def add_to_folder_tree(leaf, parts):
+    if not parts:
+        return
+    part = parts[0]
+    if part not in leaf:
+        leaf[part] = defaultdict(dict)
+    add_to_folder_tree(leaf[part], parts[1:])
+
+
+# Function to remove empty folders, working from deepest to shallowest
+def remove_empty_folders(leaf, current_path, root_dir):
+    # List all keys and attempt to remove empty subfolders first
+    for folder in list(leaf.keys()):
+        folder_path = os.path.join(current_path, folder)
+
+        # If the folder contains subfolders, recursively check them
+        if isinstance(leaf[folder], dict):
+            remove_empty_folders(leaf[folder], folder_path, root_dir)
+
+            # Now that we've processed the subfolders, check if it's empty on the filesystem
+            full_path = root_dir + "/" + folder_path
+            if os.path.isdir(full_path) and not os.listdir(full_path):
+                os.rmdir(full_path)  # Remove the empty folder from the file system
+                del leaf[folder]  # Remove it from the folder tree as well
+            else:
+                pass
 
 
 # write operations
@@ -120,19 +150,17 @@ def filter_changes(
             if (
                 user_email in perm_file_at_path.write
                 or "GLOBAL" in perm_file_at_path.write
-            ) and perm_file_at_path.read != [
-                user_email,
-            ]:  # skip upload if only we have read perms.
+            ) or user_email in perm_file_at_path.admin:
                 valid_changes.append(change)
                 valid_change_files.append(change.sub_path)
                 continue
-            # todo we need to handle this properly
-            if perm_file_at_path.read == [user_email]:
-                if change.internal_path.endswith("_.syftperm"):
-                    # include changes for syft_perm file even if only we have read perms.
-                    valid_changes.append(change)
-                    valid_change_files.append(change.sub_path)
-                    continue
+            # # todo we need to handle this properly
+            # if perm_file_at_path.admin == [user_email]:
+            #     if change.internal_path.endswith("_.syftperm"):
+            #         # include changes for syft_perm file even if only we have read perms.
+            #         valid_changes.append(change)
+            #         valid_change_files.append(change.sub_path)
+            #         continue
 
         invalid_changes.append(change)
     return valid_changes, valid_change_files, invalid_changes
@@ -301,11 +329,10 @@ def sync_up(client_config):
 
         # get the new dir state
         new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
-
         changes = diff_dirstate(old_dir_state, new_dir_state)
+
         if len(changes) == 0:
             continue
-
         val, val_files, inval = filter_changes(client_config.email, changes, perm_tree)
 
         # send val changes
@@ -398,7 +425,7 @@ def sync_down(client_config) -> int:
             change.sync_folder = client_config.sync_folder
             if change.kind_delete:
                 perm_file_at_path = perm_tree.permission_for_path(change.sub_path)
-                if perm_file_at_path.read != [client_config.email]:
+                if client_config.email in perm_file_at_path.admin:
                     # the only reason we're wanting to delete this is because
                     # we skipped sending it to the server. and the raeson we
                     # skipped sending it to the server is because it's a file that
@@ -409,6 +436,16 @@ def sync_down(client_config) -> int:
                 result = change.delete()
                 if result:
                     deleted_files.append(change.internal_path)
+
+        # remove empty folders
+        folder_tree = defaultdict(dict)
+        # Process each file and build the folder structure
+        for item in deleted_files:
+            folders = os.path.dirname(item).split("/")
+            add_to_folder_tree(folder_tree, folders)
+
+        # Remove empty folders, starting from the root directory
+        remove_empty_folders(folder_tree, "/", root_dir=client_config.sync_folder)
 
         synced_dir_state = prune_invalid_changes(new_dir_state, changed_files)
 

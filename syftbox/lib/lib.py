@@ -9,6 +9,7 @@ import json
 import os
 import pkgutil
 import re
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -127,6 +128,10 @@ class SyftPermission(Jsonable):
     @classmethod
     def no_permission(self) -> Self:
         return SyftPermission(admin=[], read=[], write=[])
+
+    @classmethod
+    def mine_no_permission(self, email: str) -> Self:
+        return SyftPermission(admin=[email], read=[], write=[])
 
     @classmethod
     def mine_with_public_read(self, email: str) -> Self:
@@ -446,7 +451,11 @@ def filter_read_state(user_email: str, dir_state: DirState, perm_tree: Permissio
     for file_path, file_hash in dir_state.tree.items():
         full_path = root_dir + "/" + file_path
         perm_file_at_path = perm_tree.permission_for_path(full_path)
-        if user_email in perm_file_at_path.read or "GLOBAL" in perm_file_at_path.read:
+        if (
+            user_email in perm_file_at_path.read
+            or "GLOBAL" in perm_file_at_path.read
+            or user_email in perm_file_at_path.admin
+        ):
             filtered_tree[file_path] = file_hash
     return filtered_tree
 
@@ -492,8 +501,7 @@ class DatasiteManifest(Jsonable):
         try:
             manifest = DatasiteManifest.load(manifest_path)
             return manifest
-        except Exception as e:
-            print("e", e)
+        except Exception:
             pass
         return None
 
@@ -539,6 +547,7 @@ class ClientConfig(Jsonable):
     email: str | None = None
     token: int | None = None
     server_url: str = "http://localhost:5001"
+    email_token: str | None = None
 
     def save(self, path: str | None = None) -> None:
         if path is None:
@@ -1546,7 +1555,14 @@ class Code(Jsonable):
             return self._client_config.resolve_link(self.syft_link)
 
     def to_flow(
-        self, client_config, inputs=None, output=None, template="python", path=None
+        self,
+        client_config,
+        inputs=None,
+        output=None,
+        template="python",
+        path=None,
+        write_back_approved_path: str | None = None,
+        write_back_denied_path: str | None = None,
     ) -> str:
         if path is None:
             path = Path(client_config.sync_folder) / "staging"
@@ -1581,6 +1597,24 @@ class Code(Jsonable):
         with open(main_shell_path, "w") as f:
             f.write(main_shell_code)
         make_executable(main_shell_path)
+
+        if write_back_approved_path is None:
+            write_back_approved_path = "jobs/outbox/2_approved"
+
+        if write_back_denied_path is None:
+            write_back_denied_path = "jobs/outbox/3_denied"
+
+        task_manifest = TaskManifest(
+            author=client_config.email,
+            result_datasite=client_config.email,
+            execution_datasite=their_email,
+            write_back_approved_path=write_back_approved_path,
+            write_back_denied_path=write_back_denied_path,
+        )
+
+        task_manifest_path = flow_dir / "manifest.json"
+        task_manifest.save(task_manifest_path)
+
         return str(flow_dir)
 
 
@@ -1657,9 +1691,6 @@ def init_flow(
                     inp_link_path_private = str(inp_link_path) + ".private"
                     if not os.path.exists(inp_link_path_private):
                         os.symlink(local_path_private, inp_link_path_private)
-                else:
-                    print("Cant read private link?")
-            # value.syft_link.to_file(inp_link_path)
 
     # create output
     out_format = output["format"]
@@ -1816,3 +1847,618 @@ def create_main_py(client_config, inputs, output, code_obj):
 
     code = textwrap.dedent(code)
     return code
+
+
+def create_dirs(pipeline, path):
+    for sub_dir in pipeline.rules.keys():
+        sub_path = path + "/" + sub_dir
+        os.makedirs(sub_path, exist_ok=True)
+
+
+def get_top_dirs(path):
+    directories = []
+    for dirname in os.listdir(path):
+        if os.path.isdir(path + "/" + dirname):
+            directories.append(dirname)
+    return sorted(directories)
+
+
+@dataclass
+class PipelineAction(Jsonable):
+    def run(self, client_config, state, task_path):
+        print(f"Running base run: {state} {task_path}")
+        return state
+
+    def is_complete(self, client_config, state, task_path) -> bool:
+        print("Is this step complete", self, state, task_path)
+        return True
+
+
+@dataclass
+class TaskManifest(Jsonable):
+    author: str
+    execution_datasite: str
+    result_datasite: str
+    write_back_approved_path: str
+    write_back_denied_path: str
+
+
+def find_and_run_script(task_path, extra_args):
+    script_path = os.path.join(task_path, "run.sh")
+    # Check if the script exists
+    if os.path.isfile(script_path):
+        # Set execution bit (+x)
+        os.chmod(script_path, os.stat(script_path).st_mode | 0o111)
+
+        # Run the script with extra command line arguments and capture the output
+        command = [script_path] + extra_args
+        try:
+            result = subprocess.run(
+                command, cwd=task_path, check=True, capture_output=True, text=True
+            )
+
+            print("✅ Script run.sh executed successfully.")
+            return result
+        except Exception as e:
+            print(e)
+    else:
+        raise FileNotFoundError(f"run.sh not found in {task_path}")
+
+
+@dataclass
+class PipelineActionRun(PipelineAction):
+    exit_code: int | None = None
+
+    def run(self, client_config, state, task_path):
+        extra_args = ["--private"]
+        try:
+            result = find_and_run_script(task_path, extra_args)
+            if hasattr(result, "returncode"):
+                self.exit_code = result.returncode
+                print(result.stdout)
+        except Exception as e:
+            print(f"Failed to run. {e}")
+        return state
+
+    def is_complete(self, client_config, state, task_path) -> bool:
+        return self.exit_code == 0  # 0 means success
+
+
+def make_email_body_incoming(
+    client_config, state, task_path, manifest, from_email, to_email
+):
+    task_name = os.path.basename(task_path)
+    return f"""
+    Hi,<br />
+    You have recieved a task `{task_name}` from: {from_email}.<br />
+    The files are in: {task_path}.<br />
+<br />
+    Either move them to 1_review or 5_rejected.<br />
+"""
+
+
+def make_email_body_review(
+    client_config, state, task_path, manifest, from_email, to_email
+):
+    task_name = os.path.basename(task_path)
+    return f"""
+    Hi,<br />
+    Your task `{task_name}` is being reviewed by: {to_email}.<br />
+    You will be notified when it is either accepted or rejected.<br />
+"""
+
+
+def make_email_body_verify(
+    client_config, state, task_path, manifest, from_email, to_email
+):
+    task_name = os.path.basename(task_path)
+    return f"""
+    Hi,<br />
+    The files are in: {task_path}.<br />
+<br />
+    The task `{task_name}` has run with private data and completed.<br />
+<br />
+    Please ensure you are happy to release the results, and either move<br />
+    the task `{task_name}` to 4_release or 5_rejected.<br />
+"""
+
+
+def make_email_body_error(
+    client_config, state, task_path, manifest, from_email, to_email
+):
+    task_name = os.path.basename(task_path)
+    return f"""
+    Hi,<br />
+    An error occured running `{task_name}` from: {from_email}.<br />
+    The files are in: {task_path}.<br />
+<br />
+    You could retry by moving the folder back to 2_queue or simply to 7_trash.<br />
+"""
+
+
+def make_email_body_denied(
+    client_config, state, task_path, manifest, from_email, to_email
+):
+    task_name = os.path.basename(task_path)
+    write_back = manifest.write_back_denied_path
+    return f"""
+    Hi,<br />
+    Your task `{task_name}` was denied by: {to_email}.<br />
+    Your files here: {write_back}<br />
+"""
+
+
+def make_email_body_released(
+    client_config, state, task_path, manifest, from_email, to_email
+):
+    task_name = os.path.basename(task_path)
+    write_back = manifest.write_back_approved_path
+    return f"""
+    Hi,<br />
+    Your task `{task_name}` has completed.<br />
+    {to_email} have released the private results back to you here: {write_back}<br />
+"""
+
+
+email_templates = {
+    "incoming": make_email_body_incoming,
+    "review": make_email_body_review,
+    "verify": make_email_body_verify,
+    "error": make_email_body_error,
+    "denied": make_email_body_denied,
+    "released": make_email_body_released,
+}
+
+
+@dataclass
+class PipelineActionEmail(PipelineAction):
+    subject: str
+    email_template: str
+    sent: bool | None = None
+
+    def run(self, client_config, state, task_path):
+        manifest = TaskManifest.load(task_path + "/manifest.json")
+        from_email = self.get_from(client_config, manifest)
+        to_email = self.get_to(client_config, manifest)
+        constructor = email_templates[self.email_template]
+        message = constructor(
+            client_config, state, task_path, manifest, from_email, to_email
+        )
+        success = send_email(
+            client_config.email_token, from_email, to_email, self.subject, message
+        )
+        self.sent = success
+        return state
+
+    def is_complete(self, client_config, state, task_path) -> bool:
+        return bool(self.sent)
+
+    def get_to(self, client_config, manifest) -> str:
+        pass
+
+    def get_from(self, client_config, manifest) -> str:
+        pass
+
+
+@dataclass
+class PipelineActionEmailToAuthor(PipelineActionEmail):
+    def get_to(self, client_config, manifest) -> str:
+        return manifest.result_datasite
+
+    def get_from(self, client_config, manifest) -> str:
+        return client_config.email
+
+
+@dataclass
+class PipelineActionEmailToDatasite(PipelineActionEmail):
+    # when running on the destination machine, this will need
+    # to change when the pipeline is on the sender as well
+    def get_to(self, client_config, manifest) -> str:
+        return client_config.email
+
+    def get_from(self, client_config, manifest) -> str:
+        return manifest.result_datasite
+
+
+@dataclass
+class PipelineActionDelete(PipelineAction):
+    def run(self, client_config, state, task_path):
+        try:
+            shutil.rmtree(task_path)
+            print(f"Task Deleted {task_path}")
+        except Exception as e:
+            print(f"Error: {e}")
+        return state
+
+    def is_complete(self, client_config, state, task_path) -> bool:
+        return not os.path.exists(task_path)
+
+
+@dataclass
+class PipelineActionMove(PipelineAction):
+    destination: str
+    datasite: str | None = None
+    temp_destination_path: str | None = None
+
+    def destination_path(self, client_config, task_path) -> str:
+        if self.datasite == "__author__":
+            manifest = TaskManifest.load(task_path + "/manifest.json")
+            if self.destination == "__write_back_approved__":
+                destination = manifest.write_back_approved_path
+            elif self.destination == "__write_back_denied__":
+                destination = manifest.write_back_denied_path
+
+            remote_path = (
+                client_config.sync_folder
+                + "/"
+                + manifest.result_datasite
+                + "/"
+                + destination
+                + "/"
+                + os.path.basename(task_path)
+            )
+            return os.path.abspath(remote_path)
+        return os.path.abspath(f"{task_path}/../../{self.destination}")
+
+    def run(self, client_config, state, task_path):
+        try:
+            self.temp_destination_path = self.destination_path(client_config, task_path)
+            shutil.move(task_path, self.destination_path(client_config, task_path))
+        except Exception as e:
+            print(f"Error: {e}")
+        return state
+
+    def is_complete(self, client_config, state, task_path) -> bool:
+        if (
+            not os.path.exists(task_path)
+            and self.temp_destination_path
+            and os.path.exists(self.temp_destination_path)
+        ):
+            return True
+        return False
+
+
+@dataclass
+class PipelineActionCopy(PipelineAction):
+    destination: str
+    datasite: str | None = None
+    temp_destination_path: str | None = None
+
+    def destination_path(self, client_config, task_path) -> str:
+        if self.datasite == "__author__":
+            manifest = TaskManifest.load(task_path + "/manifest.json")
+            if self.destination == "__write_back_approved__":
+                destination = manifest.write_back_approved_path
+            elif self.destination == "__write_back_denied__":
+                destination = manifest.write_back_denied_path
+
+            remote_path = (
+                client_config.sync_folder
+                + "/"
+                + manifest.result_datasite
+                + "/"
+                + destination
+                + "/"
+                + os.path.basename(task_path)
+            )
+            return os.path.abspath(remote_path)
+        return os.path.abspath(f"{task_path}/../../{self.destination}")
+
+    def run(self, client_config, state, task_path):
+        try:
+            self.temp_destination_path = self.destination_path(client_config, task_path)
+            shutil.copytree(task_path, self.destination_path(client_config, task_path))
+        except Exception as e:
+            print(f"Error: {e}")
+        return state
+
+    def is_complete(self, client_config, state, task_path) -> bool:
+        if os.path.exists(self.temp_destination_path):
+            return True
+        return False
+
+
+@dataclass
+class CurrentTaskState(Jsonable):
+    step: str
+    task: str
+    state: str
+    last_modified: float
+
+    @classmethod
+    def pending(cls, task: str, step: str) -> Self:
+        return CurrentTaskState(
+            step=step,
+            task=task,
+            state="pending",
+            last_modified=datetime.now().timestamp(),
+        )
+
+    def to_error(self) -> Self:
+        return self.change_state(state="error")
+
+    def change_state(self, state) -> Self:
+        self.state = state
+        self.last_modified = datetime.now().timestamp()
+        return self
+
+    def advance(self) -> Self:
+        to_state = None
+        if self.state == "pending":
+            to_state = "running"
+        elif self.state == "running":
+            to_state = "complete"
+        elif self.state == "error":
+            return self
+        elif self.state == "complete":
+            return self
+        else:
+            raise Exception(f"Unknown state: {self.state}")
+        print(f"> Advancing: {self.task} from {self.state} -> {to_state}")
+        return self.change_state(state=to_state)
+
+
+@dataclass
+class PipelineStep(Jsonable):
+    timeout_secs: int = 60 * 60 * 24 * 7  # 7 days
+    pending: list[PipelineAction] | None = None
+    running: list[PipelineAction] | None = None
+    complete: list[PipelineAction] | None = None
+    error: list[PipelineAction] | None = None
+
+
+def get_state_file(state_file, task, step):
+    try:
+        state = CurrentTaskState.load(state_file)
+        if state.step == step:
+            return state
+    except Exception:
+        pass
+
+    # overwrite with a new step pending
+    state = CurrentTaskState.pending(step=step, task=task)
+    state.save(state_file)
+    return state
+
+
+@dataclass
+class PipelineRule(Jsonable):
+    dirname: str
+    permission: SyftPermission
+    step: PipelineStep | None
+
+
+@dataclass
+class Pipeline(Jsonable):
+    rules: dict[str, PipelineRule]
+    path: str
+
+    @classmethod
+    def make_job_pipeline(cls, client_config) -> Self:
+        write_back_approved_path = (
+            client_config.datasite_path + "/" + "jobs/outbox/2_approved"
+        )
+        os.makedirs(write_back_approved_path, exist_ok=True)
+        public_write = SyftPermission.mine_with_public_write(client_config.email)
+        public_write.save(perm_file_path(write_back_approved_path))
+        write_back_denied_path = (
+            client_config.datasite_path + "/" + "jobs/outbox/3_denied"
+        )
+        os.makedirs(write_back_denied_path, exist_ok=True)
+        public_write = SyftPermission.mine_with_public_write(client_config.email)
+        public_write.save(perm_file_path(write_back_denied_path))
+
+        path = client_config.datasite_path + "/" + "jobs/inbox"
+        os.makedirs(path, exist_ok=True)
+        mine_no_permission = SyftPermission.mine_no_permission(client_config.email)
+
+        public_read = SyftPermission.mine_with_public_read(client_config.email)
+
+        public_write = SyftPermission.mine_with_public_write(client_config.email)
+        incoming_email = PipelineActionEmailToDatasite(
+            subject="You Recieved a Task", email_template="incoming"
+        )
+        review_email = PipelineActionEmailToAuthor(
+            subject="Your Task is in Review", email_template="review"
+        )
+
+        verify_email = PipelineActionEmailToAuthor(
+            subject="Task Complete, Please check private results",
+            email_template="verify",
+        )
+
+        error_email = PipelineActionEmailToDatasite(
+            subject="Task Error, Please check", email_template="error"
+        )
+
+        denied_email = PipelineActionEmailToDatasite(
+            subject="Your Task was Denied", email_template="denied"
+        )
+
+        released_email = PipelineActionEmailToAuthor(
+            subject="Task Complete, The private results have been released to you",
+            email_template="released",
+        )
+
+        incoming_rule = PipelineRule(
+            dirname="0_incoming",
+            permission=public_write,
+            step=PipelineStep(
+                running=[incoming_email],
+            ),
+        )
+
+        review_rule = PipelineRule(
+            dirname="1_review",
+            permission=public_read,
+            step=PipelineStep(
+                running=[review_email],
+            ),
+        )
+
+        queue_rule = PipelineRule(
+            dirname="2_queue",
+            permission=mine_no_permission,
+            step=PipelineStep(
+                running=[PipelineActionRun()],
+                complete=[PipelineActionMove(destination="3_verify")],
+            ),
+        )
+
+        verify_rule = PipelineRule(
+            dirname="3_verify",
+            permission=mine_no_permission,
+            step=PipelineStep(
+                running=[verify_email],
+            ),
+        )
+
+        release_rule = PipelineRule(
+            dirname="4_release",
+            permission=mine_no_permission,
+            step=PipelineStep(
+                running=[
+                    PipelineActionCopy(
+                        destination="__write_back_approved__", datasite="__author__"
+                    ),
+                    released_email,
+                    PipelineActionMove(destination="8_done"),
+                ],
+            ),
+        )
+
+        rejected_rule = PipelineRule(
+            dirname="5_rejected",
+            permission=mine_no_permission,
+            step=PipelineStep(
+                running=[
+                    PipelineActionMove(
+                        destination="__write_back_denied__", datasite="__author__"
+                    ),
+                    denied_email,
+                ],
+            ),
+        )
+
+        error_rule = PipelineRule(
+            dirname="6_error",
+            permission=mine_no_permission,
+            step=PipelineStep(
+                running=[error_email],
+            ),
+        )
+
+        trash_rule = PipelineRule(
+            dirname="7_trash",
+            permission=mine_no_permission,
+            step=PipelineStep(
+                running=[PipelineActionDelete()],
+            ),
+        )
+
+        done_rule = PipelineRule(
+            dirname="8_done",
+            permission=mine_no_permission,
+            step=None,
+        )
+
+        state_rule = PipelineRule(
+            dirname="state", permission=mine_no_permission, step=None
+        )
+
+        rules = {
+            "0_incoming": incoming_rule,
+            "1_review": review_rule,
+            "2_queue": queue_rule,
+            "3_verify": verify_rule,
+            "4_release": release_rule,
+            "5_rejected": rejected_rule,
+            "6_error": error_rule,
+            "7_trash": trash_rule,
+            "8_done": done_rule,
+            "state": state_rule,
+        }
+
+        pipeline = Pipeline(rules=rules, path=path)
+        return pipeline
+
+    def create_permission_files(self):
+        for step, rule in self.rules.items():
+            if rule.permission:
+                step_path = self.path + "/" + step
+                perm_file = perm_file_path(step_path)
+                rule.permission.save(perm_file)
+
+    def progress_pipeline(self, client_config):
+        states = ["pending", "running", "complete", "error"]
+        create_dirs(self, self.path)
+        self.create_permission_files()
+        pipeline_dirs = get_top_dirs(self.path)
+        if list(self.rules.keys()) != sorted(pipeline_dirs):
+            raise Exception(
+                f"Pipeline structure: {self.path} doesnt match pipeline: {self}"
+            )
+
+        for step, rule in self.rules.items():
+            tasks = get_top_dirs(self.path + "/" + step)
+            # outer loop makes sure that a single task can progress the entire way if possible
+            for task in tasks:
+                for state in states:
+                    task_path = state_file = self.path + "/" + step + "/" + task
+                    state_file = self.path + "/" + "state" + "/" + task + ".syftstate"
+                    current_task_state = get_state_file(state_file, task, step)
+                    if current_task_state.state != "complete":
+                        print(
+                            f"> Task {task} {current_task_state.step}:{current_task_state.state}"
+                        )
+                    if state == current_task_state.state:
+                        rule_steps = getattr(rule.step, state, None)
+                        if rule_steps is None:
+                            current_task_state = current_task_state.advance()
+                            current_task_state.save(state_file)
+                            continue
+                        else:
+                            for action in rule_steps:
+                                print(f"> Task Running: {action}")
+                                try:
+                                    current_task_state = action.run(
+                                        client_config, current_task_state, task_path
+                                    )
+                                except Exception as e:
+                                    print(f"Exception running action: {action} {e}")
+
+                                if action.is_complete(
+                                    client_config, current_task_state, task_path
+                                ):
+                                    current_task_state = current_task_state.advance()
+                                    current_task_state.save(state_file)
+                                    print(
+                                        f"> Task {task} {current_task_state.step}:{current_task_state.state}"
+                                    )
+                    else:
+                        pass
+
+
+def send_email(
+    token: str, from_email: str, to_email: str, subject: str, message: str
+) -> bool:
+    # Send the email
+    try:
+        if token:
+            from postmarker.core import PostmarkClient
+
+            # Create a Postmark client
+            client = PostmarkClient(server_token=token)
+            response = client.emails.send(
+                From="madhava@openmined.org",
+                To=to_email,
+                Subject=f"Syftbox {subject} from: {from_email}",
+                HtmlBody=message,
+                TextBody=message,
+            )
+            print("Email sent successfully:", response)
+        print("!!! Email requires a token!")
+        return True
+    except Exception as e:
+        print(f"Error sending email: {e}")
+    return False

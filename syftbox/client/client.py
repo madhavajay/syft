@@ -153,6 +153,10 @@ def load_or_create_config(args) -> ClientConfig:
         port = int(get_user_input("Enter the port to use", DEFAULT_PORT))
         client_config.port = port
 
+    email_token = os.environ.get("EMAIL_TOKEN", None)
+    if email_token:
+        client_config.email_token = email_token
+
     client_config.save(args.config_path)
     return client_config
 
@@ -350,9 +354,7 @@ async def lifespan(app: FastAPI):
     app.running_plugins = {}
     app.loaded_plugins = load_plugins(client_config)
 
-    # autorun_plugins = ["init", "sync", "create_datasite", "watch_and_run"]
-    # autorun_plugins = ["init", "sync", "create_datasite"]
-    autorun_plugins = ["init", "sync", "job_queue"]
+    autorun_plugins = ["init", "create_datasite", "job_queue", "sync"]
     for plugin in autorun_plugins:
         start_plugin(plugin)
 
