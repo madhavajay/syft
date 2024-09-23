@@ -97,7 +97,8 @@ def diff_dirstate(old, new):
             if afile not in new.tree.keys():
                 # delete
                 now = datetime.now().timestamp()
-                SECS_SINCE_CHANGE = 3
+                # TODO we need to overhaul this to prevent these kinds of edge cases
+                SECS_SINCE_CHANGE = 5
                 if now >= (file_info.last_modified + SECS_SINCE_CHANGE):
                     kind = FileChangeKind.DELETE
                     change = FileChange(

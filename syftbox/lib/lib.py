@@ -2050,7 +2050,7 @@ def make_email_body_review(
     task_name = os.path.basename(task_path)
     return f"""
     Hi,<br />
-    Your task `{task_name}` is being reviewed by: {to_email}.<br />
+    Your task `{task_name}` is being reviewed by: {from_email}.<br />
     You will be notified when it is either accepted or rejected.<br />
 """
 
@@ -2061,9 +2061,8 @@ def make_email_body_verify(
     task_name = os.path.basename(task_path)
     return f"""
     Hi,<br />
-    The files are in: {task_path}.<br />
-<br />
     The task `{task_name}` has run with private data and completed.<br />
+    The files are in: {task_path}.<br />
 <br />
     Please ensure you are happy to release the results, and either move<br />
     the task `{task_name}` to 4_release or 5_rejected.<br />
@@ -2210,7 +2209,14 @@ class PipelineActionMove(PipelineAction):
     def run(self, client_config, state, task_path):
         try:
             self.temp_destination_path = self.destination_path(client_config, task_path)
-            shutil.move(task_path, self.destination_path(client_config, task_path))
+
+            if os.path.exists(self.temp_destination_path):
+                print(f"> Overwriting destination: {self.temp_destination_path}")
+                shutil.rmtree(self.temp_destination_path)
+                # in move you do want the directory?
+                os.makedirs(self.temp_destination_path, exist_ok=True)
+
+            shutil.move(task_path, self.temp_destination_path)
         except Exception as e:
             print(f"Error: {e}")
         return state
@@ -2254,7 +2260,14 @@ class PipelineActionCopy(PipelineAction):
     def run(self, client_config, state, task_path):
         try:
             self.temp_destination_path = self.destination_path(client_config, task_path)
-            shutil.copytree(task_path, self.destination_path(client_config, task_path))
+
+            if os.path.exists(self.temp_destination_path):
+                print(f"> Overwriting destination: {self.temp_destination_path}")
+                shutil.rmtree(self.temp_destination_path)
+                # copy you dont want the directory
+                # os.makedirs(self.temp_destination_path, exist_ok=True)
+
+            shutil.copytree(task_path, self.temp_destination_path)
         except Exception as e:
             print(f"Error: {e}")
         return state
@@ -2389,7 +2402,7 @@ class Pipeline(Jsonable):
             subject="Your Task is in Review", email_template="review"
         )
 
-        verify_email = PipelineActionEmailToAuthor(
+        verify_email = PipelineActionEmailToDatasite(
             subject="Task Complete, Please check private results",
             email_template="verify",
         )
@@ -2398,7 +2411,7 @@ class Pipeline(Jsonable):
             subject="Task Error, Please check", email_template="error"
         )
 
-        denied_email = PipelineActionEmailToDatasite(
+        denied_email = PipelineActionEmailToAuthor(
             subject="Your Task was Denied", email_template="denied"
         )
 
@@ -2459,10 +2472,11 @@ class Pipeline(Jsonable):
             permission=mine_no_permission,
             step=PipelineStep(
                 running=[
-                    PipelineActionMove(
+                    PipelineActionCopy(
                         destination="__write_back_denied__", datasite="__author__"
                     ),
                     denied_email,
+                    PipelineActionMove(destination="7_trash"),
                 ],
             ),
         )
@@ -2479,7 +2493,8 @@ class Pipeline(Jsonable):
             dirname="7_trash",
             permission=mine_no_permission,
             step=PipelineStep(
-                running=[PipelineActionDelete()],
+                # running=[PipelineActionDelete()],
+                running=[],
             ),
         )
 
@@ -2584,7 +2599,8 @@ def send_email(
                 TextBody=message,
             )
             print("Email sent successfully:", response)
-        print("!!! Email requires a token!")
+        else:
+            print("!!! Email requires a token!")
         return True
     except Exception as e:
         print(f"Error sending email: {e}")
