@@ -45,7 +45,7 @@ def perm_file_path(path: str) -> str:
 
 
 def is_primitive_json_serializable(obj):
-    if isinstance(obj, (list, dict, str, int, float, bool, type(None))):
+    if isinstance(obj, (str, int, float, bool, type(None))):
         return True
     return False
 
@@ -53,8 +53,15 @@ def is_primitive_json_serializable(obj):
 def pack(obj) -> Any:
     if is_primitive_json_serializable(obj):
         return obj
+
     if hasattr(obj, "to_dict"):
         return obj.to_dict()
+
+    if isinstance(obj, list):
+        return [pack(val) for val in obj]
+
+    if isinstance(obj, dict):
+        return {k: pack(v) for k, v in obj.items()}
 
     raise Exception(f"Unable to pack type: {type(obj)} value: {obj}")
 
@@ -102,6 +109,7 @@ class SyftPermission(Jsonable):
     read: list[str]
     write: list[str]
     filepath: str | None = None
+    terminal: bool = False
 
     @classmethod
     def datasite_default(cls, email: str) -> Self:
@@ -119,6 +127,7 @@ class SyftPermission(Jsonable):
             and self.read == other.read
             and self.write == other.write
             and self.filepath == other.filepath
+            and self.terminal == other.terminal
         )
 
     def perm_path(self, path=None) -> str:
@@ -226,6 +235,7 @@ class FileChange(Jsonable):
     parent_path: str
     sub_path: str
     file_hash: str
+    last_modified: float
     sync_folder: str | None = None
 
     @property
@@ -254,6 +264,23 @@ class FileChange(Jsonable):
     def internal_path(self) -> str:
         return self.parent_path + "/" + self.sub_path
 
+    def hash_equal_or_none(self) -> bool:
+        if not os.path.exists(self.full_path):
+            return True
+
+        local_file_hash = get_file_hash(self.full_path)
+        return self.file_hash == local_file_hash
+
+    def newer(self) -> bool:
+        if not os.path.exists(self.full_path):
+            return True
+
+        local_last_modified = get_file_last_modified(self.full_path)
+        if self.last_modified >= local_last_modified:
+            return True
+
+        return False
+
     def read(self) -> bytes:
         if is_symlink(self.full_path):
             # write a text file with a syftlink
@@ -279,6 +306,11 @@ class FileChange(Jsonable):
             if os.path.exists(self.full_path) and is_symlink(self.full_path):
                 os.unlink(self.full_path)
             os.symlink(abs_path, self.full_path)
+            os.utime(
+                self.full_path,
+                (self.last_modified, self.last_modified),
+                follow_symlinks=False,
+            )
 
             return True
         else:
@@ -300,6 +332,11 @@ class FileChange(Jsonable):
         try:
             with open(path, "wb") as f:
                 f.write(data)
+            os.utime(
+                path,
+                (self.last_modified, self.last_modified),
+                follow_symlinks=False,
+            )
             return True
         except Exception as e:
             print("failed to write", path, e)
@@ -308,7 +345,7 @@ class FileChange(Jsonable):
 
 @dataclass
 class DirState(Jsonable):
-    tree: dict[str, str]
+    tree: dict[str, FileInfo]
     timestamp: float
     sync_folder: str
     sub_path: str
@@ -334,6 +371,10 @@ def convert_to_symlink(path):
     return str(syft_link)
 
 
+def get_file_last_modified(file_path: str) -> float:
+    return os.path.getmtime(file_path)
+
+
 def get_file_hash(file_path: str) -> str:
     if is_symlink(file_path):
         # return the hash of the syftlink instead
@@ -352,6 +393,12 @@ def ignore_dirs(directory: str, root: str, ignore_folders=None) -> bool:
     return False
 
 
+@dataclass
+class FileInfo(Jsonable):
+    file_hash: str
+    last_modified: float
+
+
 def hash_dir(
     sync_folder: str,
     sub_path: str,
@@ -365,7 +412,11 @@ def hash_dir(
                 if not ignore_file(full_path, root, file):
                     path = os.path.join(root, file)
                     rel_path = os.path.relpath(path, full_path)
-                    state_dict[rel_path] = get_file_hash(path)
+                    file_info = FileInfo(
+                        file_hash=get_file_hash(path),
+                        last_modified=get_file_last_modified(path),
+                    )
+                    state_dict[rel_path] = file_info
 
     utc_unix_timestamp = datetime.now().timestamp()
     dir_state = DirState(
@@ -466,6 +517,9 @@ class PermissionTree(Jsonable):
                 next_perm = self.tree[next_perm_file]
                 current_perm = next_perm
 
+            if current_perm.terminal:
+                return current_perm
+
         return current_perm
 
     def __repr__(self) -> str:
@@ -475,7 +529,7 @@ class PermissionTree(Jsonable):
 def filter_read_state(user_email: str, dir_state: DirState, perm_tree: PermissionTree):
     filtered_tree = {}
     root_dir = dir_state.sync_folder + "/" + dir_state.sub_path
-    for file_path, file_hash in dir_state.tree.items():
+    for file_path, file_info in dir_state.tree.items():
         full_path = root_dir + "/" + file_path
         perm_file_at_path = perm_tree.permission_for_path(full_path)
         if (
@@ -483,7 +537,7 @@ def filter_read_state(user_email: str, dir_state: DirState, perm_tree: Permissio
             or "GLOBAL" in perm_file_at_path.read
             or user_email in perm_file_at_path.admin
         ):
-            filtered_tree[file_path] = file_hash
+            filtered_tree[file_path] = file_info
     return filtered_tree
 
 
@@ -659,16 +713,6 @@ class ClientConfig(Jsonable):
         os.environ["SYFTBOX_CURRENT_CLIENT"] = self.config_path
         os.environ["SYFTBOX_SYNC_DIR"] = self.sync_folder
         print(f"> Setting Sync Dir to: {self.sync_folder}")
-
-    def create_job_inbox(self):
-        jobs = Path(self.datasite_path) / "jobs"
-        inbox = Path(self.datasite_path) / "jobs" / "inbox"
-        os.makedirs(jobs, exist_ok=True)
-        os.makedirs(inbox, exist_ok=True)
-        perm = SyftPermission.mine_with_public_write(self.email)
-        perm.save(inbox)
-        print("✅ Job Inbox Created")
-        return str(os.path.abspath(jobs))
 
 
 class ResettableTimer:
@@ -1662,10 +1706,10 @@ class Code(Jsonable):
         make_executable(main_shell_path)
 
         if write_back_approved_path is None:
-            write_back_approved_path = "jobs/outbox/2_approved"
+            write_back_approved_path = "results/2_approved"
 
         if write_back_denied_path is None:
-            write_back_denied_path = "jobs/outbox/3_denied"
+            write_back_denied_path = "results/3_denied"
 
         task_manifest = TaskManifest(
             author=client_config.email,
@@ -2228,6 +2272,16 @@ class CurrentTaskState(Jsonable):
     state: str
     last_modified: float
 
+    def __eq__(self, other):
+        if isinstance(other, CurrentTaskState):
+            return (
+                self.step == other.step
+                and self.task == other.task
+                and self.state == other.state
+                and self.last_modified == other.last_modified
+            )
+        return False
+
     @classmethod
     def pending(cls, task: str, step: str) -> Self:
         return CurrentTaskState(
@@ -2259,6 +2313,16 @@ class CurrentTaskState(Jsonable):
             raise Exception(f"Unknown state: {self.state}")
         print(f"> Advancing: {self.task} from {self.state} -> {to_state}")
         return self.change_state(state=to_state)
+
+    def ensure(self, path: str) -> bool:
+        try:
+            prev_state_file = CurrentTaskState.load(path)
+            if self == prev_state_file:
+                # no need to write
+                return True
+        except Exception:
+            pass
+        return self.save(path)
 
 
 @dataclass
@@ -2299,14 +2363,12 @@ class Pipeline(Jsonable):
     @classmethod
     def make_job_pipeline(cls, client_config) -> Self:
         write_back_approved_path = (
-            client_config.datasite_path + "/" + "jobs/outbox/2_approved"
+            client_config.datasite_path + "/" + "results/2_approved"
         )
         os.makedirs(write_back_approved_path, exist_ok=True)
         public_write = SyftPermission.mine_with_public_write(client_config.email)
         public_write.ensure(perm_file_path(write_back_approved_path))
-        write_back_denied_path = (
-            client_config.datasite_path + "/" + "jobs/outbox/3_denied"
-        )
+        write_back_denied_path = client_config.datasite_path + "/" + "results/3_denied"
         os.makedirs(write_back_denied_path, exist_ok=True)
         public_write = SyftPermission.mine_with_public_write(client_config.email)
         public_write.ensure(perm_file_path(write_back_denied_path))
@@ -2314,10 +2376,12 @@ class Pipeline(Jsonable):
         path = client_config.datasite_path + "/" + "jobs/inbox"
         os.makedirs(path, exist_ok=True)
         mine_no_permission = SyftPermission.mine_no_permission(client_config.email)
+        mine_no_permission.terminal = True  # prevent overriding in lower levels
 
         public_read = SyftPermission.mine_with_public_read(client_config.email)
 
         public_write = SyftPermission.mine_with_public_write(client_config.email)
+
         incoming_email = PipelineActionEmailToDatasite(
             subject="You Recieved a Task", email_template="incoming"
         )
@@ -2478,7 +2542,7 @@ class Pipeline(Jsonable):
                         rule_steps = getattr(rule.step, state, None)
                         if rule_steps is None:
                             current_task_state = current_task_state.advance()
-                            current_task_state.save(state_file)
+                            current_task_state.ensure(state_file)
                             continue
                         else:
                             for action in rule_steps:
@@ -2494,7 +2558,7 @@ class Pipeline(Jsonable):
                                     client_config, current_task_state, task_path
                                 ):
                                     current_task_state = current_task_state.advance()
-                                    current_task_state.save(state_file)
+                                    current_task_state.ensure(state_file)
                                     print(
                                         f"> Task {task} {current_task_state.step}:{current_task_state.state}"
                                     )

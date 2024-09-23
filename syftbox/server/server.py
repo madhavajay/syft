@@ -181,18 +181,33 @@ async def write(request: Request):
         change = FileChange(**change_dict)
 
         change.sync_folder = os.path.abspath(SNAPSHOT_FOLDER)
-
-        if change.kind_write:
-            bin_data = strtobin(data["data"])
-            result = change.write(bin_data)
-        elif change.kind_delete:
-            result = change.delete()
+        result = True
+        accepted = True
+        if change.newer():
+            if change.kind_write:
+                bin_data = strtobin(data["data"])
+                result = change.write(bin_data)
+            elif change.kind_delete:
+                if change.hash_equal_or_none():
+                    result = change.delete()
+                else:
+                    print(f"> 🔥 {change.kind} hash doesnt match so ignore {change}")
+                    accepted = False
+            else:
+                raise Exception(f"Unknown type of change kind. {change.kind}")
         else:
-            raise Exception(f"Unknown type of change kind. {change.kind}")
+            print(f"> 🔥 {change.kind} is older so ignore {change}")
+            accepted = False
+
         if result:
             print(f"> {email} {change.kind}: {change.internal_path}")
+            json_payload = {
+                "status": "success",
+                "change": change.to_dict(),
+                "accepted": accepted,
+            }
             return JSONResponse(
-                {"status": "success", "change": change.to_dict()},
+                json_payload,
                 status_code=200,
             )
         return JSONResponse(
@@ -249,7 +264,6 @@ async def dir_state(request: Request):
         remote_dir_state.tree = read_state
 
         response_json = {"sub_path": sub_path, "dir_state": remote_dir_state.to_dict()}
-
         if remote_dir_state:
             return JSONResponse({"status": "success"} | response_json, status_code=200)
         return JSONResponse({"status": "error"}, status_code=400)
