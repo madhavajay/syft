@@ -10,6 +10,7 @@ from syftbox.lib import (
     FileChange,
     FileChangeKind,
     PermissionTree,
+    ResettableTimer,
     bintostr,
     get_datasites,
     hash_dir,
@@ -477,7 +478,9 @@ SYNC_UP_ENABLED = True
 SYNC_DOWN_ENABLED = True
 
 
-def run(shared_state):
+def do_sync(shared_state):
+    event_length = len(shared_state.fs_events)
+    shared_state.fs_events = []
     try:
         if not stop_event.is_set():
             num_changes = 0
@@ -506,6 +509,26 @@ def run(shared_state):
                     traceback.print_exc()
                     print("failed to sync down", e)
             if num_changes == 0:
-                print("✅ Synced")
+                if event_length:
+                    print(f"✅ Synced {event_length} File Events")
+                else:
+                    print("✅ Synced due to Timer")
     except Exception as e:
         print("Failed to run plugin", e)
+
+
+FLUSH_SYNC_TIMEOUT = 0.5
+DEFAULT_SCHEDULE = 10000
+
+
+def run(shared_state, *args, **kwargs):
+    if "sync" not in shared_state.timers:
+        shared_state.timers["sync"] = ResettableTimer(
+            timeout=FLUSH_SYNC_TIMEOUT,
+            callback=do_sync,
+        )
+
+    if len(args) == 1:
+        shared_state.fs_events.append(args[0])
+
+    shared_state.timers["sync"].start(shared_state=shared_state)

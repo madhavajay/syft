@@ -4,6 +4,7 @@ import importlib
 import os
 import subprocess
 import sys
+import threading
 import time
 import traceback
 import types
@@ -23,6 +24,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
+from watchdog.observers import Observer
 
 from syftbox.lib import ClientConfig, SharedState, validate_email
 
@@ -262,13 +265,13 @@ class DatasiteRequest(BaseModel):
 
 
 # Function to be scheduled
-def run_plugin(plugin_name):
+def run_plugin(plugin_name, *args, **kwargs):
     try:
         module = app.loaded_plugins[plugin_name].module
-        module.run(app.shared_state)
+        module.run(app.shared_state, *args, **kwargs)
     except Exception as e:
         traceback.print_exc()
-        print(e)
+        print("error", e)
 
 
 def start_plugin(plugin_name: str):
@@ -330,6 +333,35 @@ def parse_args():
     return parser.parse_args()
 
 
+def start_watchdog(app):
+    shared_state = app.shared_state
+    sync_folder = shared_state.client_config.sync_folder
+
+    stop_event = threading.Event()
+    app.stop_event = stop_event
+
+    class AnyFileSystemEventHandler(FileSystemEventHandler):
+        def on_any_event(self, event: FileSystemEvent) -> None:
+            run_plugin("sync", event)
+
+    event_handler = AnyFileSystemEventHandler()
+    observer = Observer()
+    observer.schedule(event_handler, sync_folder, recursive=True)
+    observer.start()
+
+    # Run observer in a thread to keep the process alive
+    try:
+        while not stop_event.is_set():
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("> Watchdog received KeyboardInterrupt")
+    finally:
+        print("> Stopping Watchdog...")
+        observer.stop()
+        observer.join()
+        print("> Watchdog stopped")
+
+
 async def lifespan(app: FastAPI):
     # Startup
     print("> Starting Client")
@@ -354,21 +386,34 @@ async def lifespan(app: FastAPI):
     app.running_plugins = {}
     app.loaded_plugins = load_plugins(client_config)
 
+    # Start the watchdog observer in a thread
+    if not hasattr(app, "watchdog_thread") or not app.watchdog_thread.is_alive():
+        print("> Starting Watchdog Thread")
+        watchdog_thread = threading.Thread(
+            target=start_watchdog, args=(app,), daemon=True
+        )
+        watchdog_thread.start()
+        app.watchdog_thread = watchdog_thread
+
     autorun_plugins = ["init", "create_datasite", "job_queue", "sync"]
     for plugin in autorun_plugins:
         start_plugin(plugin)
 
     yield  # This yields control to run the application
 
-    # Shutdown (if necessary)
-    print("Shutting down...")
+    print("> Shutting down...")
+    scheduler.shutdown()
+
+    if app.watchdog_thread.is_alive():
+        app.stop_event.set()
+        app.watchdog_thread.join()
 
 
 def stop_scheduler():
     # Remove the lock file if it exists
     if os.path.exists(app.job_file):
         os.remove(app.job_file)
-        print("Scheduler stopped and lock file removed.")
+        print("> Scheduler stopped and lock file removed.")
 
 
 app = FastAPI(lifespan=lifespan)

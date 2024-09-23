@@ -14,6 +14,7 @@ import subprocess
 import sys
 import sysconfig
 import textwrap
+import threading
 import types
 import zlib
 from collections.abc import Callable
@@ -110,20 +111,46 @@ class SyftPermission(Jsonable):
             write=[email],
         )
 
-    def save(self, path=None) -> bool:
+    def __eq__(self, other):
+        if not isinstance(other, SyftPermission):
+            return NotImplemented
+        return (
+            self.admin == other.admin
+            and self.read == other.read
+            and self.write == other.write
+            and self.filepath == other.filepath
+        )
+
+    def perm_path(self, path=None) -> str:
         if path is not None:
             self.filepath = path
 
         if self.filepath is None:
             raise Exception(f"Saving requites a path: {self}")
+
         if os.path.isdir(self.filepath):
             self.filepath = perm_file_path(self.filepath)
+        return self.filepath
 
+    def save(self, path=None) -> bool:
+        self.perm_path(path=path)
         if self.filepath.endswith(".syftperm"):
             super().save(self.filepath)
         else:
             raise Exception(f"Perm file must end in .syftperm. {self.filepath}")
         return True
+
+    def ensure(self, path=None) -> bool:
+        # make sure the contents matches otherwise write it
+        self.perm_path(path=path)
+        try:
+            prev_perm_file = SyftPermission.load(self.filepath)
+            if self == prev_perm_file:
+                # no need to write
+                return True
+        except Exception:
+            pass
+        return self.save(path)
 
     @classmethod
     def no_permission(self) -> Self:
@@ -644,11 +671,47 @@ class ClientConfig(Jsonable):
         return str(os.path.abspath(jobs))
 
 
+class ResettableTimer:
+    def __init__(self, timeout, callback, *args, **kwargs):
+        self.timeout = timeout
+        self.callback = callback
+        self.args = args
+        self.kwargs = kwargs
+        self.timer = None
+        self.lock = threading.Lock()
+
+    def _run_callback(self):
+        with self.lock:
+            self.timer = None
+        self.callback(*self.args, **self.kwargs)
+
+    def start(self, *args, **kwargs):
+        with self.lock:
+            if self.timer:
+                self.timer.cancel()
+
+            # If new arguments are passed in start, they will overwrite the initial ones
+            if args or kwargs:
+                self.args = args
+                self.kwargs = kwargs
+
+            self.timer = threading.Timer(self.timeout, self._run_callback)
+            self.timer.start()
+
+    def cancel(self):
+        with self.lock:
+            if self.timer:
+                self.timer.cancel()
+                self.timer = None
+
+
 class SharedState:
     def __init__(self, client_config: ClientConfig):
         self.data = {}
         self.lock = Lock()
         self.client_config = client_config
+        self.timers: dict[str:ResettableTimer] = {}
+        self.fs_events = []
 
     @property
     def sync_folder(self) -> str:
@@ -2240,13 +2303,13 @@ class Pipeline(Jsonable):
         )
         os.makedirs(write_back_approved_path, exist_ok=True)
         public_write = SyftPermission.mine_with_public_write(client_config.email)
-        public_write.save(perm_file_path(write_back_approved_path))
+        public_write.ensure(perm_file_path(write_back_approved_path))
         write_back_denied_path = (
             client_config.datasite_path + "/" + "jobs/outbox/3_denied"
         )
         os.makedirs(write_back_denied_path, exist_ok=True)
         public_write = SyftPermission.mine_with_public_write(client_config.email)
-        public_write.save(perm_file_path(write_back_denied_path))
+        public_write.ensure(perm_file_path(write_back_denied_path))
 
         path = client_config.datasite_path + "/" + "jobs/inbox"
         os.makedirs(path, exist_ok=True)
@@ -2387,7 +2450,7 @@ class Pipeline(Jsonable):
             if rule.permission:
                 step_path = self.path + "/" + step
                 perm_file = perm_file_path(step_path)
-                rule.permission.save(perm_file)
+                rule.permission.ensure(perm_file)
 
     def progress_pipeline(self, client_config):
         states = ["pending", "running", "complete", "error"]

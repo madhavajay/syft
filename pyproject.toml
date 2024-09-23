@@ -17,6 +17,7 @@ dependencies = [
     "pandas>=2.2.2",
     "setuptools>=75.1.0",
     "postmarker>=1.0",
+    "watchdog>=5.0.2",
 ]
 
 [build-system]
