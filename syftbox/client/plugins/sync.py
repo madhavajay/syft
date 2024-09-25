@@ -1,5 +1,7 @@
 import os
 import traceback
+from collections import defaultdict
+from datetime import datetime
 from threading import Event
 
 import requests
@@ -8,7 +10,9 @@ from syftbox.lib import (
     DirState,
     FileChange,
     FileChangeKind,
+    FileInfo,
     PermissionTree,
+    ResettableTimer,
     bintostr,
     get_datasites,
     hash_dir,
@@ -20,18 +24,60 @@ STAGING = "staging"
 IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER, STAGING]
 
 
+# Recursive function to add folder structure
+def add_to_folder_tree(leaf, parts):
+    if not parts:
+        return
+    part = parts[0]
+    if part not in leaf:
+        leaf[part] = defaultdict(dict)
+    add_to_folder_tree(leaf[part], parts[1:])
+
+
+# Function to remove empty folders, working from deepest to shallowest
+def remove_empty_folders(leaf, current_path, root_dir):
+    # List all keys and attempt to remove empty subfolders first
+    for folder in list(leaf.keys()):
+        folder_path = os.path.join(current_path, folder)
+
+        # If the folder contains subfolders, recursively check them
+        if isinstance(leaf[folder], dict):
+            remove_empty_folders(leaf[folder], folder_path, root_dir)
+
+            # Now that we've processed the subfolders, check if it's empty on the filesystem
+            full_path = root_dir + "/" + folder_path
+            if os.path.isdir(full_path) and not os.listdir(full_path):
+                os.rmdir(full_path)  # Remove the empty folder from the file system
+                del leaf[folder]  # Remove it from the folder tree as well
+            else:
+                pass
+
+
 # write operations
 def diff_dirstate(old, new):
     sync_folder = old.sync_folder
     old_sub_path = old.sub_path
     try:
         changes = []
-        for afile, file_hash in new.tree.items():
+        for afile, file_info in new.tree.items():
             kind = None
             if afile in old.tree.keys():
-                if old.tree[afile] != file_hash:
+                old_file_info = old.tree[afile]
+                if (
+                    old_file_info.file_hash != file_info.file_hash
+                    and file_info.last_modified >= old_file_info.last_modified
+                ):
                     # update
                     kind = FileChangeKind.WRITE
+                else:
+                    pass
+                    # print(
+                    #     old_sub_path,
+                    #     afile,
+                    #     f"> 🔥 File hash eq=={old_file_info.file_hash == file_info.file_hash} "
+                    #     f"or timestamp newer: {file_info.last_modified >= old_file_info.last_modified} "
+                    #     f"dropping sync down {file_info}",
+                    # )
             else:
                 # create
                 kind = FileChangeKind.CREATE
@@ -41,23 +87,33 @@ def diff_dirstate(old, new):
                     kind=kind,
                     parent_path=old_sub_path,
                     sub_path=afile,
-                    file_hash=file_hash,
+                    file_hash=file_info.file_hash,
+                    last_modified=file_info.last_modified,
                     sync_folder=sync_folder,
                 )
                 changes.append(change)
 
-        for afile, file_hash in old.tree.items():
+        for afile, file_info in old.tree.items():
             if afile not in new.tree.keys():
                 # delete
-                kind = FileChangeKind.DELETE
-                change = FileChange(
-                    kind=kind,
-                    parent_path=old.sub_path,
-                    sub_path=afile,
-                    file_hash=file_hash,
-                    sync_folder=sync_folder,
-                )
-                changes.append(change)
+                now = datetime.now().timestamp()
+                # TODO we need to overhaul this to prevent these kinds of edge cases
+                SECS_SINCE_CHANGE = 5
+                if now >= (file_info.last_modified + SECS_SINCE_CHANGE):
+                    kind = FileChangeKind.DELETE
+                    change = FileChange(
+                        kind=kind,
+                        parent_path=old.sub_path,
+                        sub_path=afile,
+                        file_hash=file_info.file_hash,
+                        last_modified=file_info.last_modified,
+                        sync_folder=sync_folder,
+                    )
+                    changes.append(change)
+                else:
+                    print(
+                        f"🔥 Skipping delete {file_info}. File change is < 3 seconds ago"
+                    )
         return changes
     except Exception as e:
         print("Error in diff_dirstate", str(e))
@@ -66,10 +122,10 @@ def diff_dirstate(old, new):
 
 def prune_invalid_changes(new, valid_changes) -> DirState:
     new_tree = {}
-    for file, file_hash in new.tree.items():
+    for file, file_info in new.tree.items():
         internal_path = new.sub_path + "/" + file
         if internal_path in valid_changes:
-            new_tree[file] = file_hash
+            new_tree[file] = file_info
 
     return DirState(
         tree=new_tree,
@@ -81,10 +137,10 @@ def prune_invalid_changes(new, valid_changes) -> DirState:
 
 def delete_files(new, deleted_files) -> DirState:
     new_tree = {}
-    for file, file_hash in new.tree.items():
+    for file, file_info in new.tree.items():
         internal_path = new.sub_path + "/" + file
         if internal_path not in deleted_files:
-            new_tree[file] = file_hash
+            new_tree[file] = file_info
 
     return DirState(
         tree=new_tree,
@@ -120,19 +176,17 @@ def filter_changes(
             if (
                 user_email in perm_file_at_path.write
                 or "GLOBAL" in perm_file_at_path.write
-            ) and perm_file_at_path.read != [
-                user_email,
-            ]:  # skip upload if only we have read perms.
+            ) or user_email in perm_file_at_path.admin:
                 valid_changes.append(change)
                 valid_change_files.append(change.sub_path)
                 continue
-            # todo we need to handle this properly
-            if perm_file_at_path.read == [user_email]:
-                if change.internal_path.endswith("_.syftperm"):
-                    # include changes for syft_perm file even if only we have read perms.
-                    valid_changes.append(change)
-                    valid_change_files.append(change.sub_path)
-                    continue
+            # # todo we need to handle this properly
+            # if perm_file_at_path.admin == [user_email]:
+            #     if change.internal_path.endswith("_.syftperm"):
+            #         # include changes for syft_perm file even if only we have read perms.
+            #         valid_changes.append(change)
+            #         valid_change_files.append(change.sub_path)
+            #         continue
 
         invalid_changes.append(change)
     return valid_changes, valid_change_files, invalid_changes
@@ -161,7 +215,10 @@ def push_changes(client_config, changes):
             change_result["kind"] = FileChangeKind(change_result["kind"])
             ok_change = FileChange(**change_result)
             if response.status_code == 200:
-                written_changes.append(ok_change)
+                if "accepted" in write_response and write_response["accepted"]:
+                    written_changes.append(ok_change)
+                else:
+                    print("> 🔥 Rejected change", ok_change)
             else:
                 print(
                     f"> {client_config.email} FAILED /write {change.kind} {change.internal_path}",
@@ -239,6 +296,10 @@ def get_remote_state(client_config, sub_path: str):
         state_response = response.json()
         if response.status_code == 200:
             dir_state = DirState(**state_response["dir_state"])
+            fix_tree = {}
+            for key, value in dir_state.tree.items():
+                fix_tree[key] = FileInfo(**value)
+            dir_state.tree = fix_tree
             return dir_state
         print(f"> {client_config.email} FAILED /dir_state: {sub_path}")
         return None
@@ -288,6 +349,10 @@ def sync_up(client_config):
         try:
             # it might not exist yet
             old_dir_state = DirState.load(dir_filename)
+            fix_tree = {}
+            for key, value in old_dir_state.tree.items():
+                fix_tree[key] = FileInfo(**value)
+            old_dir_state.tree = fix_tree
         except Exception:
             pass
 
@@ -301,11 +366,10 @@ def sync_up(client_config):
 
         # get the new dir state
         new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
-
         changes = diff_dirstate(old_dir_state, new_dir_state)
+
         if len(changes) == 0:
             continue
-
         val, val_files, inval = filter_changes(client_config.email, changes, perm_tree)
 
         # send val changes
@@ -359,16 +423,16 @@ def sync_down(client_config) -> int:
 
         dir_filename = f"{change_log_folder}/{datasite}.json"
 
-        datasite_path = os.path.join(client_config.sync_folder, datasite)
+        # datasite_path = os.path.join(client_config.sync_folder, datasite)
 
-        perm_tree = PermissionTree.from_path(datasite_path)
+        # perm_tree = PermissionTree.from_path(datasite_path)
 
         # get the new dir state
         new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
         remote_dir_state = get_remote_state(client_config, datasite)
         if not remote_dir_state:
             print(f"No remote state for dir: {datasite}")
-            return None
+            continue
 
         changes = diff_dirstate(new_dir_state, remote_dir_state)
 
@@ -397,18 +461,22 @@ def sync_down(client_config) -> int:
         for change in changes:
             change.sync_folder = client_config.sync_folder
             if change.kind_delete:
-                perm_file_at_path = perm_tree.permission_for_path(change.sub_path)
-                if perm_file_at_path.read != [client_config.email]:
-                    # the only reason we're wanting to delete this is because
-                    # we skipped sending it to the server. and the raeson we
-                    # skipped sending it to the server is because it's a file that
-                    # only we can read, and so we don't want to share it with the
-                    # server... who we might not trust. Aka... this is a private file/folder
-                    # only for us.
-                    continue
+                # perm_file_at_path = perm_tree.permission_for_path(change.sub_path)
+                # if client_config.email in perm_file_at_path.admin:
+                #     continue
                 result = change.delete()
                 if result:
                     deleted_files.append(change.internal_path)
+
+        # remove empty folders
+        folder_tree = defaultdict(dict)
+        # Process each file and build the folder structure
+        for item in deleted_files:
+            folders = os.path.dirname(item).split("/")
+            add_to_folder_tree(folder_tree, folders)
+
+        # Remove empty folders, starting from the root directory
+        remove_empty_folders(folder_tree, "/", root_dir=client_config.sync_folder)
 
         synced_dir_state = prune_invalid_changes(new_dir_state, changed_files)
 
@@ -436,7 +504,13 @@ def sync_down(client_config) -> int:
     return n_changes
 
 
-def run(shared_state):
+SYNC_UP_ENABLED = True
+SYNC_DOWN_ENABLED = True
+
+
+def do_sync(shared_state):
+    event_length = len(shared_state.fs_events)
+    shared_state.fs_events = []
     try:
         if not stop_event.is_set():
             num_changes = 0
@@ -448,17 +522,49 @@ def run(shared_state):
                     print("failed to get_datasites", e)
 
                 try:
-                    num_changes += sync_up(shared_state.client_config)
+                    if SYNC_UP_ENABLED:
+                        num_changes += sync_up(shared_state.client_config)
+                    else:
+                        print("❌ Sync Up Disabled")
                 except Exception as e:
                     traceback.print_exc()
                     print("failed to sync up", e)
 
                 try:
-                    num_changes += sync_down(shared_state.client_config)
+                    if SYNC_DOWN_ENABLED:
+                        num_changes += sync_down(shared_state.client_config)
+                    else:
+                        print("❌ Sync Down Disabled")
                 except Exception as e:
                     traceback.print_exc()
                     print("failed to sync down", e)
             if num_changes == 0:
-                print("✅ Synced")
+                if event_length:
+                    print(f"✅ Synced {event_length} File Events")
+                else:
+                    print("✅ Synced due to Timer")
     except Exception as e:
         print("Failed to run plugin", e)
+
+
+FLUSH_SYNC_TIMEOUT = 0.5
+DEFAULT_SCHEDULE = 10000
+
+
+def run(shared_state, *args, **kwargs):
+    if len(args) == 1:
+        event = args[0]
+
+        # ignore certain files / folders
+        if hasattr(event, "src_path"):
+            if CLIENT_CHANGELOG_FOLDER in event.src_path:
+                return
+        shared_state.fs_events.append(event)
+
+    if "sync" not in shared_state.timers:
+        shared_state.timers["sync"] = ResettableTimer(
+            timeout=FLUSH_SYNC_TIMEOUT,
+            callback=do_sync,
+        )
+
+    shared_state.timers["sync"].start(shared_state=shared_state)
