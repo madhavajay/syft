@@ -1,5 +1,6 @@
 import ast
 import base64
+import hashlib
 import json
 import os
 import re
@@ -81,3 +82,16 @@ def image_to_base64(image_path):
     with open(image_path, "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
         return f"data:image/png;base64,{encoded_string}"
+
+
+def compute_file_hash(filepath, hash_algorithm="sha256"):
+    # Choose the hash algorithm
+    hash_func = getattr(hashlib, hash_algorithm)()
+
+    # Read file in binary mode and update hash in chunks
+    with open(filepath, "rb") as file:
+        while chunk := file.read(8192):
+            hash_func.update(chunk)
+
+    # Return the hex representation of the hash
+    return hash_func.hexdigest()

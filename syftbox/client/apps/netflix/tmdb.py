@@ -145,7 +145,7 @@ def get_tmdb_details_by_imdb_id(imdb_id, api_key):
     url = f"https://api.themoviedb.org/3/find/{imdb_id}"
     params = {"api_key": api_key, "external_source": "imdb_id"}
 
-    print(f"Querying imdb_id: {imdb_id}", url)
+    print(f"> Querying tmdb for imdb_id: {imdb_id}")
     response = requests.get(url, params=params)
 
     if response.status_code == 200:
