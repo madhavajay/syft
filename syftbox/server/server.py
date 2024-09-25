@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from typing_extensions import Any
 
 from syftbox.lib import (
@@ -160,6 +160,17 @@ ascii_art = r"""
 @app.get("/", response_class=PlainTextResponse)
 async def get_ascii_art():
     return ascii_art
+
+
+@app.get("/datasites/{datasite:path}", response_class=PlainTextResponse)
+async def browse_datasite(datasite):
+    datasites = get_datasites(SNAPSHOT_FOLDER)
+    if datasite in datasites:
+        datasite_path = os.path.join(SNAPSHOT_FOLDER, datasite)
+        with open(f"{datasite_path}/public/index.html", "r") as file:
+            html_content = file.read()
+        return HTMLResponse(content=html_content, status_code=200)
+    return f"No Datasite {datasite} exists"
 
 
 @app.post("/register")
