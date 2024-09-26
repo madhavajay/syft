@@ -44,6 +44,8 @@ DEFAULT_CONFIG_PATH = "./client_config.json"
 ASSETS_FOLDER = current_dir.parent / "assets"
 ICON_FOLDER = ASSETS_FOLDER / "icon"
 
+WATCHDOG_IGNORE = ["apps"]
+
 
 @dataclass
 class Plugin:
@@ -342,6 +344,10 @@ def start_watchdog(app):
 
     class AnyFileSystemEventHandler(FileSystemEventHandler):
         def on_any_event(self, event: FileSystemEvent) -> None:
+            for ignore in WATCHDOG_IGNORE:
+                full_path = shared_state.client_config.sync_folder + "/" + ignore
+                if event.src_path.startswith(full_path):
+                    return
             run_plugin("sync", event)
 
     event_handler = AnyFileSystemEventHandler()
@@ -395,7 +401,8 @@ async def lifespan(app: FastAPI):
         watchdog_thread.start()
         app.watchdog_thread = watchdog_thread
 
-    autorun_plugins = ["init", "create_datasite", "job_queue", "sync"]
+    autorun_plugins = ["init", "create_datasite", "job_queue", "sync", "apps"]
+    # autorun_plugins = ["init", "create_datasite", "sync", "apps"]
     for plugin in autorun_plugins:
         start_plugin(plugin)
 
