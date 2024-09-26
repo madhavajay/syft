@@ -26,15 +26,24 @@ def main():
     os.makedirs("./temp", exist_ok=True)
     os.makedirs("./output", exist_ok=True)
 
+    input_file = "./inputs/NetflixViewingHistory.csv"
+    if not os.path.exists(input_file):
+        print(f"Error: Netflix file {input_file} required.")
+        return
+
     # Parse the arguments
     args = parser.parse_args()
 
     # If the API key is not provided via args, ask for it interactively
     tmdb_api_key = args.tmdb_api_key
-    if not tmdb_api_key:
+    if tmdb_api_key is None or tmdb_api_key == "":
         tmdb_api_key = os.environ.get("TMDB_API_KEY", None)
         if not tmdb_api_key:
             tmdb_api_key = input("Please enter your TMDB API key: ")
+
+    if tmdb_api_key is None or tmdb_api_key == "":
+        print("Error: TMDB_API_KEY required")
+        return
 
     print(f"Your TMDB API key is: {tmdb_api_key}")
 
@@ -44,18 +53,20 @@ def main():
             print(f"Can't find missing imdb id file at: {args.missing_imdb_file}")
         missing_file = args.missing_imdb_file
 
-    input_file = "./inputs/NetflixViewingHistory.csv"
-    if not os.path.exists(input_file):
-        print(f"Netflix file: {input_file} required.")
-        return
-    file_hash = compute_file_hash(input_file)
+    input_hash = compute_file_hash(input_file)
+    output_path = "output/index.html"
+    output_hash = None
+    if os.path.exists(output_path):
+        output_hash = compute_file_hash(output_path)
     last_run = load_cache("last_run.json")
     if (
         "input_hash" in last_run
-        and last_run["input_hash"] == file_hash
+        and "output_hash" in last_run
+        and last_run["input_hash"] == input_hash
+        and last_run["output_hash"] == output_hash
         and not args.force
     ):
-        print(f"Already generated html for {input_file} with hash: {file_hash}")
+        print(f"Already generated html for {input_file} with hash: {input_hash}")
         return
 
     preprocess_netflix()
@@ -63,7 +74,9 @@ def main():
     add_imdb_data()
     make_page()
 
-    last_run["input_hash"] = file_hash
+    last_run = {"input_hash": input_hash}
+    if os.path.exists(output_path):
+        last_run["output_hash"] = compute_file_hash(output_path)
     save_cache(last_run, "last_run.json")
 
 

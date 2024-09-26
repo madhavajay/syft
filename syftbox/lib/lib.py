@@ -578,7 +578,7 @@ class DatasiteManifest(Jsonable):
     @classmethod
     def load_from_datasite(cls, path: str) -> DatasiteManifest | None:
         datasite_path = Path(os.path.abspath(path))
-        manifest_path = datasite_path / "manifest" / "manifest.json"
+        manifest_path = datasite_path / "public" / "manifest" / "manifest.json"
         try:
             manifest = DatasiteManifest.load(manifest_path)
             return manifest
@@ -641,7 +641,7 @@ class ClientConfig(Jsonable):
 
     @property
     def manifest_path(self) -> Path:
-        return os.path.join(self.datasite_path, "manifest/manifest.json")
+        return os.path.join(self.datasite_path, "public/manifest/manifest.json")
 
     @property
     def manifest(self) -> DatasiteManifest:
@@ -1330,17 +1330,17 @@ class TabularDataset(Jsonable):
     def readme_template(self) -> str:
         private = f"\nPrivate data: {self.has_private}\n" if self.has_private else ""
         readme = f"""
-        # {self.name}
-        {private}
-        Schema: {self.schema}
+# {self.name}
+{private}
+Schema: {self.schema}
 
-        ## Import Syntax
-        client_config.use()
-        {self.import_string}
+## Import Syntax
+client_config.use()
+{self.import_string}
 
-        ## Python Loader Example
-        df = pd.read_csv(sy_path({self.syft_link}))
-        """
+## Python Loader Example
+df = pd.read_csv(sy_path({self.syft_link}))
+"""
         return textwrap.dedent(readme)
 
     def load(self) -> Any:
@@ -1393,7 +1393,8 @@ class TabularDataset(Jsonable):
         return to_safe_function_name(self.name)
 
     def write_files(self, manifest) -> bool:
-        dataset_dir = manifest.root_dir / "datasets" / self.clean_name
+        dataset_dir = manifest.root_dir / "public" / "datasets" / self.clean_name
+        os.makedirs(dataset_dir, exist_ok=True)
         manifest.create_public_folder(dataset_dir)
         # write readme
         readme_link = dataset_dir / "README.md"
@@ -1612,7 +1613,9 @@ class Code(Jsonable):
         return to_safe_function_name(self.name)
 
     def write_files(self, manifest) -> bool:
-        code_dir = Path(manifest.root_dir / "code" / self.clean_name)
+        code_dir = Path(manifest.root_dir / "public" / "code" / self.clean_name)
+        os.makedirs(code_dir, exist_ok=True)
+
         manifest.create_public_folder(code_dir)
 
         # write code
@@ -2004,10 +2007,10 @@ def find_and_run_script(task_path, extra_args):
                 command, cwd=task_path, check=True, capture_output=True, text=True
             )
 
-            print("✅ Script run.sh executed successfully.")
+            # print("✅ Script run.sh executed successfully.")
             return result
         except Exception as e:
-            print(e)
+            print("Error running shell script", e)
     else:
         raise FileNotFoundError(f"run.sh not found in {task_path}")
 

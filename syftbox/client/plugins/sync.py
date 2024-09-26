@@ -20,8 +20,9 @@ from syftbox.lib import (
 )
 
 CLIENT_CHANGELOG_FOLDER = "syft_changelog"
+CLIENT_APPS = "apps"
 STAGING = "staging"
-IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER, STAGING]
+IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER, STAGING, CLIENT_APPS]
 
 
 # Recursive function to add folder structure
@@ -268,7 +269,7 @@ def list_datasites(client_config):
     datasites = []
     try:
         response = requests.get(
-            f"{client_config.server_url}/datasites",
+            f"{client_config.server_url}/list_datasites",
         )
         read_response = response.json()
         remote_datasites = read_response["datasites"]
@@ -276,9 +277,9 @@ def list_datasites(client_config):
         if response.status_code == 200:
             datasites = remote_datasites
         else:
-            print(f"> {client_config.email} FAILED /datasites")
+            print(f"> {client_config.email} FAILED /list_datasites")
     except Exception as e:
-        print("Failed to call /datasites on the server", str(e))
+        print("Failed to call /list_datasites on the server", str(e))
     return datasites
 
 
