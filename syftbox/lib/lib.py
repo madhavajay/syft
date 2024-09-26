@@ -1393,7 +1393,7 @@ df = pd.read_csv(sy_path({self.syft_link}))
         return to_safe_function_name(self.name)
 
     def write_files(self, manifest) -> bool:
-        dataset_dir = manifest.root_dir / "public" / "datasets" / self.clean_name
+        dataset_dir = manifest.root_dir / "datasets" / self.clean_name
         os.makedirs(dataset_dir, exist_ok=True)
         manifest.create_public_folder(dataset_dir)
         # write readme
@@ -1613,7 +1613,7 @@ class Code(Jsonable):
         return to_safe_function_name(self.name)
 
     def write_files(self, manifest) -> bool:
-        code_dir = Path(manifest.root_dir / "public" / "code" / self.clean_name)
+        code_dir = Path(manifest.root_dir / "code" / self.clean_name)
         os.makedirs(code_dir, exist_ok=True)
 
         manifest.create_public_folder(code_dir)
