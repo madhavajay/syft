@@ -1,6 +1,7 @@
 import argparse
 import os
 
+from dataset import run as make_dataset
 from imdb import run as add_imdb_data
 from netflix import run as preprocess_netflix
 from page import run as make_page
@@ -72,6 +73,7 @@ def main():
     preprocess_netflix()
     get_tmdb_data(tmdb_api_key, missing_file)
     add_imdb_data()
+    make_dataset()
     make_page()
 
     last_run = {"input_hash": input_hash}

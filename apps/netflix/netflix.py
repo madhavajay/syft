@@ -19,3 +19,7 @@ def run():
 
     except Exception as e:
         print("Failed to run netflix.py", e)
+
+
+if __name__ == "__main__":
+    run()

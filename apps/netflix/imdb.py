@@ -77,3 +77,7 @@ def run():
 
         print(traceback.print_exc())
         print("Failed to run imdb.py", e)
+
+
+if __name__ == "__main__":
+    run()
