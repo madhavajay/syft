@@ -134,4 +134,8 @@ def run():
         import traceback
 
         print(traceback.print_exc())
-        print("Failed to run html.py", e)
+        print("Failed to run page.py", e)
+
+
+if __name__ == "__main__":
+    run()

@@ -706,7 +706,9 @@ class ClientConfig(Jsonable):
 
         return CodeResults(all_code)
 
-    def resolve_link(self, link: SyftLink) -> Path:
+    def resolve_link(self, link: SyftLink | str) -> Path:
+        if isinstance(link, str):
+            link = SyftLink.from_url(link)
         return Path(os.path.join(os.path.abspath(self.sync_folder), link.sync_path))
 
     def use(self):
@@ -1339,7 +1341,7 @@ client_config.use()
 {self.import_string}
 
 ## Python Loader Example
-df = pd.read_csv(sy_path({self.syft_link}))
+df = pd.read_csv(sy_path("{self.syft_link}"))
 """
         return textwrap.dedent(readme)
 
@@ -1685,12 +1687,30 @@ class Code(Jsonable):
         if "format" not in output:
             output["format"] = "json"
 
-        their_email = list(inputs.values())[0].syft_link.datasite
-        if "permission" not in output:
-            perm = SyftPermission.theirs_with_my_read_write(
-                their_email=their_email, my_email=client_config.email
-            )
-            output["permission"] = perm
+        values = list(inputs.values())
+
+        first_value = values[0]
+
+        if isinstance(first_value, list):
+            emails = set([client_config.email])
+            for dataset in first_value:
+                their_email = dataset.syft_link.datasite
+                emails.add(their_email)
+
+            if "permission" not in output:
+                perm = SyftPermission(
+                    admin=list(emails),
+                    read=list(emails),
+                    write=list(emails),
+                )
+                output["permission"] = perm
+        else:
+            their_email = first_value.syft_link.datasite
+            if "permission" not in output:
+                perm = SyftPermission.theirs_with_my_read_write(
+                    their_email=their_email, my_email=client_config.email
+                )
+                output["permission"] = perm
 
         # create folders
         init_flow(client_config, path, self.name, inputs, output, template)
@@ -1773,6 +1793,29 @@ uv run main.py $( [ "$1" = "--private" ] && echo '--private' )
 """
 
 
+def write_symlink(client_config, inp_path, value, count=None):
+    if isinstance(value, TabularDataset):
+        syft_link = value.syft_link
+        local_path = client_config.resolve_link(syft_link)
+        filename = os.path.basename(str(syft_link))
+        if count is not None:
+            parts = filename.split(".")
+            start = parts[:-1]
+            extension = parts[-1]
+            extension = f"_{count}.{extension}"
+            filename = ".".join(start) + extension
+
+        inp_link_path = inp_path / filename
+        if not os.path.exists(inp_link_path):
+            os.symlink(local_path, inp_link_path)
+        if value.has_private:
+            local_path_private = str(local_path) + ".private"
+            if os.path.exists(local_path_private):
+                inp_link_path_private = str(inp_link_path) + ".private"
+                if not os.path.exists(inp_link_path_private):
+                    os.symlink(local_path_private, inp_link_path_private)
+
+
 def init_flow(
     client_config,
     path,
@@ -1787,20 +1830,13 @@ def init_flow(
     for inp, value in inputs.items():
         inp_path = flow_dir / "inputs" / inp
         os.makedirs(inp_path, exist_ok=True)
-
-        if isinstance(value, TabularDataset):
-            syft_link = value.syft_link
-            local_path = client_config.resolve_link(syft_link)
-            filename = os.path.basename(str(syft_link))
-            inp_link_path = inp_path / filename
-            if not os.path.exists(inp_link_path):
-                os.symlink(local_path, inp_link_path)
-            if value.has_private:
-                local_path_private = str(local_path) + ".private"
-                if os.path.exists(local_path_private):
-                    inp_link_path_private = str(inp_link_path) + ".private"
-                    if not os.path.exists(inp_link_path_private):
-                        os.symlink(local_path_private, inp_link_path_private)
+        if isinstance(value, list):
+            count = 0
+            for v in value:
+                write_symlink(client_config, inp_path, v, count)
+                count += 1
+        else:
+            write_symlink(client_config, inp_path, value)
 
     # create output
     out_format = output["format"]
@@ -1995,6 +2031,8 @@ class TaskManifest(Jsonable):
 
 def find_and_run_script(task_path, extra_args):
     script_path = os.path.join(task_path, "run.sh")
+    env = os.environ.copy()  # Copy the current environment
+
     # Check if the script exists
     if os.path.isfile(script_path):
         # Set execution bit (+x)
@@ -2004,7 +2042,12 @@ def find_and_run_script(task_path, extra_args):
         command = [script_path] + extra_args
         try:
             result = subprocess.run(
-                command, cwd=task_path, check=True, capture_output=True, text=True
+                command,
+                cwd=task_path,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
             )
 
             # print("✅ Script run.sh executed successfully.")
@@ -2020,7 +2063,7 @@ class PipelineActionRun(PipelineAction):
     exit_code: int | None = None
 
     def run(self, client_config, state, task_path):
-        extra_args = ["--private"]
+        extra_args = ["--private", f"--datasite={client_config.email}"]
         try:
             result = find_and_run_script(task_path, extra_args)
             if hasattr(result, "returncode"):

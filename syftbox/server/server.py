@@ -325,7 +325,7 @@ async def write(request: Request):
     except Exception as e:
         print("Exception writing", e)
         return JSONResponse(
-            {"status": "error", "change": change.to_dict()},
+            {"status": "error", "error": str(e)},
             status_code=400,
         )
 

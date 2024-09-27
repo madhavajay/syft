@@ -575,9 +575,28 @@ async def file_operation(
         )
 
 
+def get_syftbox_src_path():
+    import importlib.util
+
+    module_name = "syftbox"
+    spec = importlib.util.find_spec(module_name)
+    return spec.origin
+
+
 def main() -> None:
     args = parse_args()
     client_config = load_or_create_config(args)
+
+    os.environ["SYFTBOX_DATASITE"] = client_config.email
+    os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = client_config.config_path
+
+    print("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
+    print("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
+
+    # add the source to PYTHONPATH so sub processes can import the library
+    os.environ["PYTHONPATH"] = (
+        os.environ.get("PYTHONPATH", "") + ":" + get_syftbox_src_path()
+    )
 
     debug = True
     uvicorn.run(

@@ -172,3 +172,6 @@ syftbox.egg-info
 keys/**
 scheduler.lock
 jobs.sqlite
+notebooks/crypto
+netflix_data/*
+backup/*
