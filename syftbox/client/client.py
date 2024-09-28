@@ -329,7 +329,7 @@ def parse_args():
     parser.add_argument(
         "--server",
         type=str,
-        default="http://localhost:5001",
+        default="http://20.168.10.234:8080", 
         help="Server",
     )
     return parser.parse_args()
