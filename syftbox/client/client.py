@@ -115,6 +115,8 @@ def load_or_create_config(args) -> ClientConfig:
         pass
 
     try:
+        if not os.path.exists(os.path.dirname(DEFAULT_CONFIG_PATH)):
+            os.mkdir(os.path.dirname(DEFAULT_CONFIG_PATH))
         client_config = ClientConfig.load(DEFAULT_CONFIG_PATH)
     except Exception:
         pass
