@@ -98,6 +98,9 @@ class Jsonable:
         return None
 
     def save(self, filepath: str) -> None:
+
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
         d = self.to_dict()
         with open(filepath, "w") as f:
             f.write(json.dumps(d))
