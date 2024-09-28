@@ -148,7 +148,7 @@ def load_or_create_config(args) -> ClientConfig:
     if not os.path.exists(client_config.sync_folder):
         os.makedirs(client_config.sync_folder, exist_ok=True)
 
-    copy_icon_file(ICON_FOLDER, client_config.sync_folder)
+    # copy_icon_file(ICON_FOLDER, client_config.sync_folder)
 
     if args.email:
         client_config.email = args.email
