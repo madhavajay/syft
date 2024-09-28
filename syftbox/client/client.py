@@ -8,7 +8,6 @@ import threading
 import time
 import traceback
 import types
-from typing import Optional
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,10 +40,9 @@ sys.path.insert(0, os.path.dirname(PLUGINS_DIR))
 
 DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
 DEFAULT_PORT = 8082
-DEFAULT_CONFIG_PATH = "~/.syftbox/client_config.json"
+DEFAULT_CONFIG_PATH = "./client_config.json"
 ASSETS_FOLDER = current_dir.parent / "assets"
 ICON_FOLDER = ASSETS_FOLDER / "icon"
-DEFAULT_SERVER = "http://20.168.10.234:8080"
 
 WATCHDOG_IGNORE = ["apps"]
 
@@ -112,13 +110,8 @@ def load_or_create_config(args) -> ClientConfig:
     client_config = None
     try:
         client_config = ClientConfig.load(args.config_path)
-    except Exception as e:
-        print(e)
+    except Exception:
         pass
-
-    path = os.path.expanduser(DEFAULT_CONFIG_PATH)    
-    client_config = ClientConfig.load(path)
-         
 
     if client_config is None and args.config_path:
         config_path = os.path.abspath(os.path.expanduser(args.config_path))
@@ -141,14 +134,8 @@ def load_or_create_config(args) -> ClientConfig:
         sync_folder = os.path.abspath(os.path.expanduser(sync_folder))
         client_config.sync_folder = sync_folder
 
-    if not args.server:
-        args.server = get_user_input(
-            "What server URL do you want to use?",
-            DEFAULT_SERVER,
-        )
-    else:
-        print("ARGS.SERVER:" + str(args.server))
-    client_config.server_url = args.server
+    if args.server:
+        client_config.server_url = args.server
 
     if not os.path.exists(client_config.sync_folder):
         os.makedirs(client_config.sync_folder, exist_ok=True)
@@ -179,7 +166,7 @@ def load_or_create_config(args) -> ClientConfig:
     return client_config
 
 
-def get_user_input(prompt, default: Optional[str] = None):
+def get_user_input(prompt, default: str | None = None):
     if default:
         prompt = f"{prompt} (default: {default}): "
     user_input = input(prompt).strip()
@@ -342,7 +329,7 @@ def parse_args():
     parser.add_argument(
         "--server",
         type=str,
-        default="http://20.168.10.234:8080",
+        default="http://localhost:5001",
         help="Server",
     )
     return parser.parse_args()
@@ -598,11 +585,18 @@ def get_syftbox_src_path():
 
 def main() -> None:
     args = parse_args()
-
     client_config = load_or_create_config(args)
 
     os.environ["SYFTBOX_DATASITE"] = client_config.email
     os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = client_config.config_path
+
+    print("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
+    print("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
+
+    # add the source to PYTHONPATH so sub processes can import the library
+    os.environ["PYTHONPATH"] = (
+        os.environ.get("PYTHONPATH", "") + ":" + get_syftbox_src_path()
+    )
 
     debug = True
     uvicorn.run(

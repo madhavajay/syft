@@ -6,8 +6,6 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
-
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -107,7 +105,7 @@ class Users:
     def save(self):
         save_dict(self.users, USER_FILE_PATH)
 
-    def get_user(self, email: str) -> Optional[User]:
+    def get_user(self, email: str) -> User | None:
         if email not in self.users:
             return None
         return self.users[email]
