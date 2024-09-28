@@ -7,23 +7,39 @@
        |___/
 ```
 
-# Setup
+# Quickstart Client Developer Installation
 
+### Step 0: Open your terminal to the root of this Github repository 
+
+Begin by opening your terminal and navigating to the root directory of this github repository (so when you run 'ls' it should show folders like "syftbox", "server", "tests", etc.). Then run the commands in steps 1-4:
+
+### Step 1: Install Homebrew
 ```
-pip install uv
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-# Build Wheel
+### Step 2: Install uv (using homebrew — which is better for this than pip)
+```
+brew install uv
+```
 
+### Step 3: Install a virtual environment using uv
 ```
-./build.sh
+uv venv
 ```
 
-# Install Wheel
+### Step 4: Install a relative version of uv.
+```
+uv pip install -e .
+```
 
+### Step 5: Run the client
 ```
-./install.sh
+syftbox client
 ```
+
+
+# Alternative Options
 
 # Run Client
 
