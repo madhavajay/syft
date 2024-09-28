@@ -601,10 +601,7 @@ def main() -> None:
     print("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
     print("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
 
-    # # add the source to PYTHONPATH so sub processes can import the library
-    # os.environ["PYTHONPATH"] = (
-    #     os.environ.get("PYTHONPATH", "") + ":" + get_syftbox_src_path()
-    # )
+    print(client_config)    
 
     debug = True
     uvicorn.run(
