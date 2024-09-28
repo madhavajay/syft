@@ -41,13 +41,13 @@ syftbox client
 
 # Alternative Options
 
-# Run Client
+### Run Client
 
 ```
 syftbox client --config_path=./config.json --sync_folder=~/Desktop/SyftBox --email=your@email.org --port=8082  --server=http://20.168.10.234:8080
 ```
 
-# Deploy
+### Deploy
 
 This builds the latest source to a wheel and deploys and restarts the server:
 http://20.168.10.234:8080
@@ -56,7 +56,7 @@ http://20.168.10.234:8080
 ./deploy.sh
 ```
 
-# Dev Mode
+### Dev Mode
 
 Run the server and clients locally in editable mode with:
 Server:
