@@ -432,7 +432,7 @@ def sync_down(client_config) -> int:
         new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
         remote_dir_state = get_remote_state(client_config, datasite)
         if not remote_dir_state:
-            print(f"No remote state for dir: {datasite}")
+            # print(f"No remote state for dir: {datasite}")
             continue
 
         changes = diff_dirstate(new_dir_state, remote_dir_state)

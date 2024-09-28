@@ -10,6 +10,7 @@ import traceback
 import types
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import uvicorn
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -40,7 +41,7 @@ sys.path.insert(0, os.path.dirname(PLUGINS_DIR))
 
 DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
 DEFAULT_PORT = 8082
-DEFAULT_CONFIG_PATH = "./client_config.json"
+DEFAULT_CONFIG_PATH = os.path.expanduser("~/.syftbox/client_config.json")
 ASSETS_FOLDER = current_dir.parent / "assets"
 ICON_FOLDER = ASSETS_FOLDER / "icon"
 
@@ -113,6 +114,11 @@ def load_or_create_config(args) -> ClientConfig:
     except Exception:
         pass
 
+    try:
+        client_config = ClientConfig.load(DEFAULT_CONFIG_PATH)
+    except Exception:
+        pass
+
     if client_config is None and args.config_path:
         config_path = os.path.abspath(os.path.expanduser(args.config_path))
         client_config = ClientConfig(config_path=config_path)
@@ -166,7 +172,7 @@ def load_or_create_config(args) -> ClientConfig:
     return client_config
 
 
-def get_user_input(prompt, default: str | None = None):
+def get_user_input(prompt, default: Optional[str] = None):
     if default:
         prompt = f"{prompt} (default: {default}): "
     user_input = input(prompt).strip()
@@ -593,10 +599,10 @@ def main() -> None:
     print("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
     print("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
 
-    # add the source to PYTHONPATH so sub processes can import the library
-    os.environ["PYTHONPATH"] = (
-        os.environ.get("PYTHONPATH", "") + ":" + get_syftbox_src_path()
-    )
+    # # add the source to PYTHONPATH so sub processes can import the library
+    # os.environ["PYTHONPATH"] = (
+    #     os.environ.get("PYTHONPATH", "") + ":" + get_syftbox_src_path()
+    # )
 
     debug = True
     uvicorn.run(
