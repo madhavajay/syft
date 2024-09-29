@@ -53,7 +53,7 @@ This builds the latest source to a wheel and deploys and restarts the server:
 http://20.168.10.234:8080
 
 ```
-./deploy.sh
+./scripts/deploy.sh
 ```
 
 ### Dev Mode
@@ -62,17 +62,17 @@ Run the server and clients locally in editable mode with:
 Server:
 
 ```
-./server.sh
+./scripts/server.sh
 ```
 
 Client1:
 
 ```
-./madhava.sh
+./scripts/madhava.sh
 ```
 
 Client2:
 
 ```
-./andrew.sh
+./scripts/andrew.sh
 ```
