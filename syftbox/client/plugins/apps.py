@@ -14,11 +14,30 @@ logger = logging.getLogger(__name__)
 DEFAULT_SCHEDULE = 10000
 DESCRIPTION = "Runs Apps"
 
+DEFAULT_APPS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'default_apps'))
+
+def copy_default_apps(apps_path):
+    if not os.path.exists(DEFAULT_APPS_PATH):
+        print(f"Default apps directory not found: {DEFAULT_APPS_PATH}")
+        return
+
+    for app in os.listdir(DEFAULT_APPS_PATH):
+        src_app_path = os.path.join(DEFAULT_APPS_PATH, app)
+        dst_app_path = os.path.join(apps_path, app)
+        
+        if os.path.isdir(src_app_path):
+            if os.path.exists(dst_app_path):
+                shutil.rmtree(dst_app_path)
+            shutil.copytree(src_app_path, dst_app_path)
+            print(f"Copied default app: {app}")
 
 def run_apps(client_config):
     # create the directory
     apps_path = client_config.sync_folder + "/" + "apps"
     os.makedirs(apps_path, exist_ok=True)
+
+    # Copy default apps if they don't exist
+    copy_default_apps(apps_path)
 
     # add the first perm file
     file_path = perm_file_path(apps_path)
@@ -50,14 +69,6 @@ def output_published(app_output, published_output) -> bool:
 def run_app(client_config, path):
     app_name = os.path.basename(path)
 
-    output_file = "output/index.html"
-    os.makedirs(path + "/" + "output", exist_ok=True)
-    output_file_path = path + "/" + output_file
-
-    destination = "public/apps/netflix/index.html"
-    destination_path = client_config.datasite_path + "/" + destination
-
-    # extra_args = ["--force"]
     extra_args = []
     try:
         print(f"👟 Running {app_name} app", end="")
@@ -73,15 +84,6 @@ def run_app(client_config, path):
                 print(f"Error running: {app_name}", result.stdout, result.stderr)
     except Exception as e:
         print(f"Failed to run. {e}")
-
-    if not output_published(output_file_path, destination_path):
-        if os.path.exists(output_file_path):
-            base_dir = os.path.dirname(destination_path)
-            os.makedirs(base_dir, exist_ok=True)
-            shutil.copy2(output_file_path, destination_path)
-            print(
-                f"> {app_name} published to: {client_config.server_url}/datasites/apps/netflix/{client_config.email}"
-            )
 
 
 def run(shared_state):
