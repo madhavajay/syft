@@ -1,14 +1,18 @@
 import json
 import os
 
-f = open("../../andrew@openmined.org/app_pipelines/adder/inputs/data.json",'r')
-data = json.load(f)
-f.close()
+input_file_path = "../../andrew@openmined.org/app_pipelines/adder/inputs/data.json"
+output_file_path = "../../andrew@openmined.org/app_pipelines/adder/done/data.json"
 
-data['datum'] += 1
+if os.path.exists(input_file_path):
+    with open(input_file_path, 'r') as f:
+        data = json.load(f)
 
-f = open("../../andrew@openmined.org/app_pipelines/adder/done/data.json",'w')
-f.write(json.dumps(data))
-f.close()
+    data['datum'] += 1
 
-os.remove("../../andrew@openmined.org/app_pipelines/adder/inputs/data.json")
+    with open(output_file_path, 'w') as f:
+        json.dump(data, f)
+
+    os.remove(input_file_path)
+else:
+    print(f"Input file {input_file_path} does not exist.")

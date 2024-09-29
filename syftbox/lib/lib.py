@@ -49,36 +49,6 @@ def is_primitive_json_serializable(obj):
         return True
     return False
 
-def find_and_run_script(task_path, extra_args):
-    script_path = os.path.join(task_path, "run.sh")
-    env = os.environ.copy()  # Copy the current environment
-
-    # Check if the script exists
-    if os.path.isfile(script_path):
-        # Set execution bit (+x)
-        os.chmod(script_path, os.stat(script_path).st_mode | 0o111)
-
-        # Run the script with extra command line arguments and capture the output
-        command = [script_path] + extra_args
-        try:
-            result = subprocess.run(
-                command,
-                cwd=task_path,
-                check=True,
-                capture_output=True,
-                text=True,
-                env=env,
-            )
-
-            # print("✅ Script run.sh executed successfully.")
-            return result
-        except Exception as e:
-            print("Error running shell script", e)
-    else:
-        raise FileNotFoundError(f"run.sh not found in {task_path}")
-
-
-
 def pack(obj) -> Any:
     if is_primitive_json_serializable(obj):
         return obj

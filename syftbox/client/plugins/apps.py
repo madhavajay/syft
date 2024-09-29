@@ -1,13 +1,49 @@
 import logging
 import os
 import shutil
+import subprocess
 
 from syftbox.lib import (
     SyftPermission,
-    find_and_run_script,
     get_file_hash,
     perm_file_path,
 )
+
+def find_and_run_script(task_path, extra_args):
+    script_path = os.path.join(task_path, "run.sh")
+    env = os.environ.copy()  # Copy the current environment
+
+    # Check if the script exists
+    if os.path.isfile(script_path):
+        # Set execution bit (+x)
+        os.chmod(script_path, os.stat(script_path).st_mode | 0o111)
+
+        # Check if the script has a shebang
+        with open(script_path, 'r') as script_file:
+            first_line = script_file.readline().strip()
+            has_shebang = first_line.startswith('#!')
+
+        # Prepare the command based on whether there's a shebang or not
+        command = [script_path] + extra_args if has_shebang else ["/bin/bash", script_path] + extra_args
+
+        try:
+            result = subprocess.run(
+                command,
+                cwd=task_path,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+
+            # print("✅ Script run.sh executed successfully.")
+            return result
+        except Exception as e:
+            print("Error running shell script", e)
+    else:
+        raise FileNotFoundError(f"run.sh not found in {task_path}")
+
+
 
 logger = logging.getLogger(__name__)
 
