@@ -252,14 +252,14 @@ def pull_changes(client_config, changes):
             ok_change = FileChange(**change_result)
 
             if ok_change.kind_write:
-                data = strtobin(read_response["data"])
+                if read_response.get("is_directory", False):
+                    data = None
+                else:
+                    data = strtobin(read_response["data"])
             elif change.kind_delete:
                 data = None
 
             if response.status_code == 200:
-                # print(
-                #     f"> {client_config.email} /read {change.kind} {change.internal_path}",
-                # )
                 remote_changes.append((ok_change, data))
             else:
                 print(
@@ -490,9 +490,13 @@ def sync_down(client_config) -> int:
         for change, data in results:
             change.sync_folder = client_config.sync_folder
             if change.kind_write:
-                result = change.write(data)
-                if result:
+                if data is None:  # This is an empty directory
+                    os.makedirs(change.full_path, exist_ok=True)
                     changed_files.append(change.internal_path)
+                else:
+                    result = change.write(data)
+                    if result:
+                        changed_files.append(change.internal_path)
 
         # delete local files dont need the server
         deleted_files = []
