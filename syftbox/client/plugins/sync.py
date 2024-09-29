@@ -202,9 +202,14 @@ def push_changes(client_config, changes):
                 "change": change.to_dict(),
             }
             if change.kind_write:
-                data["data"] = bintostr(change.read())
+                if os.path.isdir(change.full_path):
+                    # Handle directory
+                    data["is_directory"] = True
+                else:
+                    # Handle file
+                    data["data"] = bintostr(change.read())
             elif change.kind_delete:
-                # no data
+                # no data for delete operations
                 pass
 
             response = requests.post(
@@ -225,7 +230,7 @@ def push_changes(client_config, changes):
                     f"> {client_config.email} FAILED /write {change.kind} {change.internal_path}",
                 )
         except Exception as e:
-            print("Failed to call /write on the server", str(e))
+            print(f"Failed to call /write on the server for {change.internal_path}", str(e))
     return written_changes
 
 

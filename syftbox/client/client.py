@@ -111,14 +111,7 @@ def load_or_create_config(args) -> ClientConfig:
     client_config = None
     try:
         client_config = ClientConfig.load(args.config_path)
-    except Exception:
-        pass
-
-    try:
-        if not os.path.exists(os.path.dirname(DEFAULT_CONFIG_PATH)):
-            os.mkdir(os.path.dirname(DEFAULT_CONFIG_PATH))
-        client_config = ClientConfig.load(DEFAULT_CONFIG_PATH)
-    except Exception:
+    except Exception as e:
         pass
 
     if client_config is None and args.config_path:
@@ -126,7 +119,7 @@ def load_or_create_config(args) -> ClientConfig:
         client_config = ClientConfig(config_path=config_path)
 
     if client_config is None:
-        config_path = get_user_input("Path to config file?", DEFAULT_CONFIG_PATH)
+        # config_path = get_user_input("Path to config file?", DEFAULT_CONFIG_PATH)
         config_path = os.path.abspath(os.path.expanduser(config_path))
         client_config = ClientConfig(config_path=config_path)
 
@@ -330,7 +323,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Run the web application with plugins.",
     )
-    parser.add_argument("--config_path", type=str, help="config path")
+    parser.add_argument("--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path")
     parser.add_argument("--sync_folder", type=str, help="sync folder path")
     parser.add_argument("--email", type=str, help="email")
     parser.add_argument("--port", type=int, default=8080, help="Port number")
