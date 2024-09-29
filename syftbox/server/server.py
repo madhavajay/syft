@@ -297,8 +297,13 @@ async def write(request: Request):
         accepted = True
         if change.newer():
             if change.kind_write:
-                bin_data = strtobin(data["data"])
-                result = change.write(bin_data)
+                if data.get("is_directory", False):
+                    # Handle empty directory
+                    os.makedirs(change.full_path, exist_ok=True)
+                    result = True
+                else:
+                    bin_data = strtobin(data["data"])
+                    result = change.write(bin_data)
             elif change.kind_delete:
                 if change.hash_equal_or_none():
                     result = change.delete()
@@ -343,20 +348,24 @@ async def read(request: Request):
     change = FileChange(**change_dict)
     change.sync_folder = os.path.abspath(SNAPSHOT_FOLDER)
 
+    json_dict = {"change": change.to_dict()}
+
     if change.kind_write:
-        json_dict = {"change": change.to_dict()}
-        bin_data = change.read()
-        json_dict["data"] = bintostr(bin_data)
+        if os.path.isdir(change.full_path):
+            # Handle directory
+            json_dict["is_directory"] = True
+        else:
+            # Handle file
+            bin_data = change.read()
+            json_dict["data"] = bintostr(bin_data)
+    elif change.kind_delete:
+        # Handle delete operation if needed
+        pass
     else:
         raise Exception(f"Unknown type of change kind. {change.kind}")
 
-    if json_dict:
-        print(f"> {email} {change.kind}: {change.internal_path}")
-        return JSONResponse({"status": "success"} | json_dict, status_code=200)
-    return JSONResponse(
-        {"status": "error", "change": change.to_dict()},
-        status_code=400,
-    )
+    print(f"> {email} {change.kind}: {change.internal_path}")
+    return JSONResponse({"status": "success"} | json_dict, status_code=200)
 
 
 @app.post("/dir_state")
