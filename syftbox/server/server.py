@@ -170,12 +170,38 @@ ascii_art = r"""
  ___) | |_| |  _| |_| |_) | (_) >  <
 |____/ \__, |_|  \__|____/ \___/_/\_\
        |___/
+
+
+# MacOS and Linux
+Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# create a virtualenv somewhere
+uv venv .venv
+
+# install the wheel
+uv pip install http://20.168.10.234:8080/wheel/syftbox-0.1.0-py3-none-any.whl --reinstall
+
+# run the client
+uv run syftbox client
 """
 
 
 @app.get("/", response_class=PlainTextResponse)
 async def get_ascii_art():
     return ascii_art
+
+
+@app.get("/wheel/{path:path}", response_class=HTMLResponse)
+async def browse_datasite(request: Request, path: str):
+    if path == "":  # Check if path is empty (meaning "/datasites/")
+        return RedirectResponse(url="/")
+
+    filename = path.split("/")[0]
+    if filename.endswith(".whl"):
+        wheel_path = os.path.expanduser("~/syftbox-0.1.0-py3-none-any.whl")
+        return FileResponse(wheel_path, media_type="application/octet-stream")
+    return filename
 
 
 def get_file_list(directory="."):

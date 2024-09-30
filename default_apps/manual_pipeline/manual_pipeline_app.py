@@ -1,4 +1,3 @@
-
 @dataclass
 class SyftLink(Jsonable):
     @classmethod
@@ -271,8 +270,6 @@ def create_datasite_import_path(datasite: str) -> str:
     return import_path
 
 
-
-
 @dataclass
 class DatasiteManifest(Jsonable):
     datasite: str
@@ -293,9 +290,6 @@ class DatasiteManifest(Jsonable):
 
     class Dataset:
         sync_path: str
-
-
-
 
 
 def extract_leftmost_email(text: str) -> str:
@@ -1228,7 +1222,6 @@ class TaskManifest(Jsonable):
     result_datasite: str
     write_back_approved_path: str
     write_back_denied_path: str
-
 
 
 @dataclass

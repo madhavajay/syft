@@ -1,36 +1,20 @@
 from __future__ import annotations
 
-import ast
 import base64
-import copy
 import hashlib
-import inspect
 import json
 import os
-import pkgutil
 import re
-import shutil
-import subprocess
-import sys
-import sysconfig
-import textwrap
 import threading
-import types
 import zlib
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from importlib.abc import Loader, MetaPathFinder
-from importlib.util import spec_from_loader
 from pathlib import Path
 from threading import Lock
 from typing import Any
-from urllib.parse import urlparse
 
-import markdown
-import pandas as pd
-import pkg_resources
 import requests
 from typing_extensions import Self
 
@@ -48,6 +32,7 @@ def is_primitive_json_serializable(obj):
     if isinstance(obj, (str, int, float, bool, type(None))):
         return True
     return False
+
 
 def pack(obj) -> Any:
     if is_primitive_json_serializable(obj):
@@ -539,6 +524,7 @@ def filter_read_state(user_email: str, dir_state: DirState, perm_tree: Permissio
             filtered_tree[file_path] = file_info
     return filtered_tree
 
+
 class ResettableTimer:
     def __init__(self, timeout, callback, *args, **kwargs):
         self.timeout = timeout
@@ -659,6 +645,7 @@ def str_to_bool(bool_str: str | None) -> bool:
         result = True
     return result
 
+
 def validate_email(email: str) -> bool:
     # Define a regex pattern for a valid email
     email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
@@ -764,7 +751,6 @@ class ClientConfig(Jsonable):
         os.environ["SYFTBOX_CURRENT_CLIENT"] = self.config_path
         os.environ["SYFTBOX_SYNC_DIR"] = self.sync_folder
         print(f"> Setting Sync Dir to: {self.sync_folder}")
-
 
     @classmethod
     def create_manifest(cls, path: str, email: str):

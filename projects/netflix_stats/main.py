@@ -106,7 +106,6 @@ def netflix_stats(datasite, df):
 
     import numpy as np
     import pandas as pd
-
     from Pyfhel import Pyfhel
     from Pyfhel.PyCtxt import PyCtxt
 
