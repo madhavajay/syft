@@ -24,7 +24,7 @@ def claim_datasite(client_config):
             perm_file.save(file_path)
         except Exception as e:
             print("Failed to create perm file", e)
-    
+
     public_path = client_config.datasite_path + "/" + "public"
     os.makedirs(public_path, exist_ok=True)
     public_file_path = perm_file_path(public_path)

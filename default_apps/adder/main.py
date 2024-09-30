@@ -1,7 +1,7 @@
 import json
 import os
-from syftbox.lib import ClientConfig
 
+from syftbox.lib import ClientConfig
 
 config_path = os.environ.get("SYFTBOX_CLIENT_CONFIG_PATH", None)
 client_config = ClientConfig.load(config_path)
@@ -15,12 +15,12 @@ input_file_path = f"{input_folder}/data.json"
 output_file_path = f"{output_folder}/data.json"
 
 if os.path.exists(input_file_path):
-    with open(input_file_path, 'r') as f:
+    with open(input_file_path, "r") as f:
         data = json.load(f)
 
-    data['datum'] += 1
+    data["datum"] += 1
 
-    with open(output_file_path, 'w') as f:
+    with open(output_file_path, "w") as f:
         json.dump(data, f)
 
     os.remove(input_file_path)

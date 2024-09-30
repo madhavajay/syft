@@ -9,9 +9,11 @@ from page import run as make_page
 from tmdb import run as get_tmdb_data
 from utils import compute_file_hash, load_cache, save_cache
 
+
 def publish_page(output_path):
     try:
         from syftbox.lib import ClientConfig
+
         config_path = os.environ.get("SYFTBOX_CLIENT_CONFIG_PATH", None)
         client_config = ClientConfig.load(config_path)
 
@@ -26,9 +28,11 @@ def publish_page(output_path):
         )
     except Exception as e:
         import traceback
+
         print(traceback.format_exc())
         print("Couldnt publish", e)
         pass
+
 
 def main():
     # Create the argument parser

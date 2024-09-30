@@ -1,8 +1,8 @@
 import argparse
 import atexit
-import platform
 import importlib
 import os
+import platform
 import subprocess
 import sys
 import threading
@@ -115,7 +115,7 @@ def load_or_create_config(args) -> ClientConfig:
     client_config = None
     try:
         client_config = ClientConfig.load(args.config_path)
-    except Exception as e:
+    except Exception:
         pass
 
     if client_config is None and args.config_path:

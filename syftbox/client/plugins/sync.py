@@ -3,9 +3,9 @@ import traceback
 from collections import defaultdict
 from datetime import datetime
 from threading import Event
-from watchdog.events import DirModifiedEvent
 
 import requests
+from watchdog.events import DirModifiedEvent
 
 from syftbox.lib import (
     DirState,
@@ -231,7 +231,10 @@ def push_changes(client_config, changes):
                     f"> {client_config.email} FAILED /write {change.kind} {change.internal_path}",
                 )
         except Exception as e:
-            print(f"Failed to call /write on the server for {change.internal_path}", str(e))
+            print(
+                f"Failed to call /write on the server for {change.internal_path}",
+                str(e),
+            )
     return written_changes
 
 
@@ -336,14 +339,14 @@ def ascii_for_change(changes) -> str:
 def handle_empty_folders(client_config, datasite):
     changes = []
     datasite_path = os.path.join(client_config.sync_folder, datasite)
-    
+
     for root, dirs, files in os.walk(datasite_path):
         if not files and not dirs:
             # This is an empty folder
             relative_path = os.path.relpath(root, datasite_path)
-            if relative_path == '.':
+            if relative_path == ".":
                 continue  # Skip the root folder
-            
+
             change = FileChange(
                 kind=FileChangeKind.CREATE,
                 parent_path=datasite,
@@ -353,7 +356,7 @@ def handle_empty_folders(client_config, datasite):
                 sync_folder=client_config.sync_folder,
             )
             changes.append(change)
-    
+
     return changes
 
 
@@ -398,7 +401,7 @@ def sync_up(client_config):
         # get the new dir state
         new_dir_state = hash_dir(client_config.sync_folder, datasite, IGNORE_FOLDERS)
         changes = diff_dirstate(old_dir_state, new_dir_state)
-        
+
         # Add handling for empty folders
         empty_folder_changes = handle_empty_folders(client_config, datasite)
         changes.extend(empty_folder_changes)
@@ -470,7 +473,7 @@ def sync_down(client_config) -> int:
             continue
 
         changes = diff_dirstate(new_dir_state, remote_dir_state)
-        
+
         # Add handling for empty folders
         empty_folder_changes = handle_empty_folders(client_config, datasite)
         changes.extend(empty_folder_changes)
@@ -602,7 +605,7 @@ def run(shared_state, *args, **kwargs):
             if CLIENT_CHANGELOG_FOLDER in event.src_path:
                 return
 
-        # ignore these events for now on linux            
+        # ignore these events for now on linux
         # FileOpenedEvent
         # FileClosedNoWriteEvent
         # DirModifiedEvent

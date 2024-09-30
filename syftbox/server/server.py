@@ -191,6 +191,7 @@ uv run syftbox client
 async def get_ascii_art():
     return ascii_art
 
+
 @app.get("/wheel/{path:path}", response_class=HTMLResponse)
 async def browse_datasite(request: Request, path: str):
     if path == "":  # Check if path is empty (meaning "/datasites/")
