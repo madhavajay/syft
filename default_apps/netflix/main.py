@@ -24,7 +24,7 @@ def publish_page(output_path):
 
         shutil.copy2(output_path, destination_path + "/" + file_name)
         print(
-            f"> Netflix app published to: {client_config.server_url}/datasites/apps/netflix/{client_config.email}"
+            f"> Netflix app published to: {client_config.server_url}/datasites/{client_config.email}/apps/netflix/"
         )
     except Exception as e:
         import traceback
