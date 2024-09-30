@@ -9,6 +9,7 @@ from syftbox.lib import (
     perm_file_path,
 )
 
+
 def find_and_run_script(task_path, extra_args):
     script_path = os.path.join(task_path, "run.sh")
     env = os.environ.copy()  # Copy the current environment
@@ -19,12 +20,16 @@ def find_and_run_script(task_path, extra_args):
         os.chmod(script_path, os.stat(script_path).st_mode | 0o111)
 
         # Check if the script has a shebang
-        with open(script_path, 'r') as script_file:
+        with open(script_path, "r") as script_file:
             first_line = script_file.readline().strip()
-            has_shebang = first_line.startswith('#!')
+            has_shebang = first_line.startswith("#!")
 
         # Prepare the command based on whether there's a shebang or not
-        command = [script_path] + extra_args if has_shebang else ["/bin/bash", script_path] + extra_args
+        command = (
+            [script_path] + extra_args
+            if has_shebang
+            else ["/bin/bash", script_path] + extra_args
+        )
 
         try:
             result = subprocess.run(
@@ -44,13 +49,15 @@ def find_and_run_script(task_path, extra_args):
         raise FileNotFoundError(f"run.sh not found in {task_path}")
 
 
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_SCHEDULE = 10000
 DESCRIPTION = "Runs Apps"
 
-DEFAULT_APPS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'default_apps'))
+DEFAULT_APPS_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "default_apps")
+)
+
 
 def copy_default_apps(apps_path):
     if not os.path.exists(DEFAULT_APPS_PATH):
@@ -60,12 +67,15 @@ def copy_default_apps(apps_path):
     for app in os.listdir(DEFAULT_APPS_PATH):
         src_app_path = os.path.join(DEFAULT_APPS_PATH, app)
         dst_app_path = os.path.join(apps_path, app)
-        
+
         if os.path.isdir(src_app_path):
             if os.path.exists(dst_app_path):
-                shutil.rmtree(dst_app_path)
-            shutil.copytree(src_app_path, dst_app_path)
+                print(f"App already installed at: {dst_app_path}")
+                # shutil.rmtree(dst_app_path)
+            else:
+                shutil.copytree(src_app_path, dst_app_path)
             print(f"Copied default app: {app}")
+
 
 def run_apps(client_config):
     # create the directory

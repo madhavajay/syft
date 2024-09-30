@@ -1,5 +1,6 @@
 import argparse
 import atexit
+import platform
 import importlib
 import os
 import subprocess
@@ -108,6 +109,9 @@ def copy_icon_file(icon_folder: str, dest_folder: str) -> None:
 
 
 def load_or_create_config(args) -> ClientConfig:
+    syft_config_dir = os.path.abspath(os.path.expanduser("~/.syftbox"))
+    os.makedirs(syft_config_dir, exist_ok=True)
+
     client_config = None
     try:
         client_config = ClientConfig.load(args.config_path)
@@ -141,7 +145,8 @@ def load_or_create_config(args) -> ClientConfig:
     if not os.path.exists(client_config.sync_folder):
         os.makedirs(client_config.sync_folder, exist_ok=True)
 
-    # copy_icon_file(ICON_FOLDER, client_config.sync_folder)
+    if platform.system() == "Darwin":
+        copy_icon_file(ICON_FOLDER, client_config.sync_folder)
 
     if args.email:
         client_config.email = args.email
@@ -323,14 +328,16 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Run the web application with plugins.",
     )
-    parser.add_argument("--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path")
+    parser.add_argument(
+        "--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path"
+    )
     parser.add_argument("--sync_folder", type=str, help="sync folder path")
     parser.add_argument("--email", type=str, help="email")
     parser.add_argument("--port", type=int, default=8080, help="Port number")
     parser.add_argument(
         "--server",
         type=str,
-        default="http://20.168.10.234:8080", 
+        default="http://20.168.10.234:8080",
         help="Server",
     )
     return parser.parse_args()
@@ -593,8 +600,6 @@ def main() -> None:
 
     print("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
     print("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
-
-    print(client_config)    
 
     debug = True
     uvicorn.run(

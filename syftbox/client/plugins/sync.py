@@ -3,6 +3,7 @@ import traceback
 from collections import defaultdict
 from datetime import datetime
 from threading import Event
+from watchdog.events import DirModifiedEvent
 
 import requests
 
@@ -596,11 +597,21 @@ DEFAULT_SCHEDULE = 10000
 def run(shared_state, *args, **kwargs):
     if len(args) == 1:
         event = args[0]
-
         # ignore certain files / folders
         if hasattr(event, "src_path"):
             if CLIENT_CHANGELOG_FOLDER in event.src_path:
                 return
+
+        # ignore these events for now on linux            
+        # FileOpenedEvent
+        # FileClosedNoWriteEvent
+        # DirModifiedEvent
+        if event.event_type in ["opened", "closed_no_write"]:
+            return
+
+        if isinstance(event, DirModifiedEvent):
+            return
+
         shared_state.fs_events.append(event)
 
     if "sync" not in shared_state.timers:

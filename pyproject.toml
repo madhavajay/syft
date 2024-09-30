@@ -30,7 +30,7 @@ include-package-data = true # Include package data
 
 
 [tool.setuptools.package-data]
-syftbox = ["*.css", ".js", ".html", ".zip"]
+syftbox = ["*.css", ".js", ".html", ".zip", ".sh"]
 
 [project.scripts]
 syftbox = "syftbox.main:main"

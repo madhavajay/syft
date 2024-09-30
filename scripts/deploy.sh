@@ -1,9 +1,9 @@
 #!/bin/bash
 
-source ./build.sh
-source ./ssh.sh
+source ./scripts/build.sh
+source ./scripts/ssh.sh
 
-LOCAL_FILE="dist/syftbox-0.1.0-py3-none-any.whl"
+LOCAL_FILE="./dist/syftbox-0.1.0-py3-none-any.whl"
 REMOTE_PATH="~"
 
 # Use scp to transfer the file to the remote server

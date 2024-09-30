@@ -24,6 +24,19 @@ def claim_datasite(client_config):
             perm_file.save(file_path)
         except Exception as e:
             print("Failed to create perm file", e)
+    
+    public_path = client_config.datasite_path + "/" + "public"
+    os.makedirs(public_path, exist_ok=True)
+    public_file_path = perm_file_path(public_path)
+    if os.path.exists(public_file_path):
+        public_perm_file = SyftPermission.load(public_file_path)
+    else:
+        print(f"> {client_config.email} Creating Public Permfile")
+        try:
+            public_perm_file = SyftPermission.mine_with_public_read(client_config.email)
+            public_perm_file.save(public_file_path)
+        except Exception as e:
+            print("Failed to create perm file", e)
 
 
 def run(shared_state):
