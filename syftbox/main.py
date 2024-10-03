@@ -1,6 +1,7 @@
 import argparse
 import sys
 
+from syftbox.app_manager.manager import main as app_manager_main
 from syftbox.client.client import main as client_main
 from syftbox.server.server import main as server_main
 
@@ -15,6 +16,9 @@ def main():
     # Define the server command
     subparsers.add_parser("server", help="Run the Syftbox server")
 
+    # Define the install
+    subparsers.add_parser("install", help="Install a new app in your syftbox.")
+
     args, remaining_args = parser.parse_known_args()
 
     if args.command == "client":
@@ -25,6 +29,9 @@ def main():
         # Modify sys.argv to exclude the subcommand
         sys.argv = [sys.argv[0]] + remaining_args
         server_main()
+    elif args.command == "install":
+        sys.argv = [sys.argv[0]] + remaining_args
+        app_manager_main()
     else:
         parser.print_help()
 
