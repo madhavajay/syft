@@ -48,7 +48,7 @@ run-client name port="auto" server="http://localhost:5001":
     set -eou pipefail
 
     # generate a local email from name, but if it looks like an email, then use it as is
-    EMAIL="{{ name }}@syftbox.local"
+    EMAIL="{{ name }}@openmined.org"
     if [[ "{{ name }}" == *@*.* ]]; then EMAIL="{{ name }}"; fi
 
     # if port is auto, then generate a random port between 8000-8090, else use the provided port
