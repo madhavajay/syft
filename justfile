@@ -91,15 +91,19 @@ deploy keyfile remote="azureuser@20.168.10.234": build
 
     echo -e "Deploying {{ _cyan }}$LOCAL_WHEEL{{ _nc }} to {{ _green }}{{ remote }}:$REMOTE_WHEEL{{ _nc }}"
 
+    # change permissions to comply with ssh/scp
+    chmod 600 {{ keyfile }}
+
     # Use scp to transfer the file to the remote server
     scp -i {{ keyfile }} "$LOCAL_WHEEL" "{{ remote }}:$REMOTE_DIR"
 
     # install pip package
-    ssh -i {{ keyfile }} {{ remote }} 'pip install --break-system-packages $REMOTE_WHEEL --force'
+    ssh -i {{ keyfile }} {{ remote }} "pip install --break-system-packages $REMOTE_WHEEL --force"
 
     # restart service
-    ssh -i {{ keyfile }} {{ remote }} 'sudo systemctl daemon-reload'
-    ssh -i {{ keyfile }} {{ remote }} 'sudo systemctl restart syftbox'
+    # TODO - syftbox service was created manually on 20.168.10.234
+    ssh -i {{ keyfile }} {{ remote }} "sudo systemctl daemon-reload"
+    ssh -i {{ keyfile }} {{ remote }} "sudo systemctl restart syftbox"
 
     echo -e "{{ _green }}Deploy successful!{{ _nc }}"
 
