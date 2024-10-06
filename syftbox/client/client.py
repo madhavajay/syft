@@ -3,7 +3,6 @@ import atexit
 import importlib
 import os
 import platform
-import subprocess
 import sys
 import time
 import traceback
@@ -31,6 +30,7 @@ from syftbox.client.fsevents import (
     FileSystemEvent,
     FSWatchdog,
 )
+from syftbox.client.utils import macos
 from syftbox.lib import ClientConfig, SharedState, validate_email
 
 current_dir = Path(__file__).parent
@@ -57,57 +57,6 @@ class Plugin:
     module: types.ModuleType
     schedule: int
     description: str
-
-
-# if you knew the pain of this function
-def find_icon_file(src_folder: str) -> Path:
-    src_path = Path(src_folder)
-
-    # Function to search for Icon\r file
-    def search_icon_file():
-        if os.path.exists(src_folder):
-            for file_path in src_path.iterdir():
-                if "Icon" in file_path.name and "\r" in file_path.name:
-                    return file_path
-        return None
-
-    # First attempt to find the Icon\r file
-    icon_file = search_icon_file()
-    if icon_file:
-        return icon_file
-
-    # If Icon\r is not found, search for icon.zip and unzip it
-    zip_file = ASSETS_FOLDER / "icon.zip"
-
-    if zip_file.exists():
-        try:
-            # cant use other zip tools as they don't unpack it correctly
-            subprocess.run(
-                ["ditto", "-xk", str(zip_file), str(src_path.parent)],
-                check=True,
-            )
-
-            # Try to find the Icon\r file again after extraction
-            icon_file = search_icon_file()
-            if icon_file:
-                return icon_file
-        except subprocess.CalledProcessError:
-            raise RuntimeError("Failed to unzip icon.zip using macOS CLI tool.")
-
-    # If still not found, raise an error
-    raise FileNotFoundError(
-        "Icon file with a carriage return not found, and icon.zip did not contain it.",
-    )
-
-
-def copy_icon_file(icon_folder: str, dest_folder: str) -> None:
-    src_icon_path = find_icon_file(icon_folder)
-    if not os.path.isdir(dest_folder):
-        raise FileNotFoundError(f"Destination folder '{dest_folder}' does not exist.")
-
-    # shutil wont work with these special icon files
-    subprocess.run(["cp", "-p", src_icon_path, dest_folder], check=True)
-    subprocess.run(["SetFile", "-a", "C", dest_folder], check=True)
 
 
 def load_or_create_config(args) -> ClientConfig:
@@ -148,7 +97,7 @@ def load_or_create_config(args) -> ClientConfig:
         os.makedirs(client_config.sync_folder, exist_ok=True)
 
     if platform.system() == "Darwin":
-        copy_icon_file(ICON_FOLDER, client_config.sync_folder)
+        macos.copy_icon_file(ICON_FOLDER, client_config.sync_folder)
 
     if args.email:
         client_config.email = args.email
@@ -250,14 +199,6 @@ def generate_key_pair() -> tuple[bytes, bytes]:
 
 def is_valid_datasite_name(name):
     return name.isalnum() or all(c.isalnum() or c in ("-", "_") for c in name)
-
-
-@dataclass
-class Plugin:
-    name: str
-    module: types.ModuleType
-    schedule: int
-    description: str
 
 
 # API Models
