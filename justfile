@@ -117,6 +117,7 @@ reset:
 
 [group('utils')]
 run-jupyter jupyter_args="":
-    uv venv --allow-existing
-    uv pip install jupyter jupyterlab ipykernel -e ".[dev]"
-    uv run jupyter lab --notebook-dir=./notebooks {{ jupyter_args }}
+    uv run \
+        --with "jupyterlab" \
+        --with-editable ".[dev]" \
+        jupyter lab --notebook-dir=./notebooks {{ jupyter_args }}
