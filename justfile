@@ -23,6 +23,7 @@ _nc := '\033[0m'
 
 alias rs := run-server
 alias rc := run-client
+alias rj := run-jupyter
 alias b := build
 alias d := deploy
 
@@ -113,3 +114,9 @@ ssh keyfile remote="azureuser@20.168.10.234":
 reset:
     # 'users' is the old directory
     rm -rf ./users ./.clients ./data ./dist *.whl
+
+[group('utils')]
+run-jupyter jupyter_args="":
+    uv venv --allow-existing
+    uv pip install jupyter jupyterlab ipykernel -e ".[dev]"
+    uv run jupyter lab --notebook-dir=./notebooks {{ jupyter_args }}
