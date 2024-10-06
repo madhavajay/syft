@@ -19,6 +19,14 @@ _yellow := '\033[1;33m'
 _nc := '\033[0m'
 
 # ---------------------------------------------------------------------------------------------------------------------
+# Aliases
+
+alias rs := run-server
+alias rc := run-client
+alias b := build
+alias d := deploy
+
+# ---------------------------------------------------------------------------------------------------------------------
 
 @default:
     just --list
@@ -26,12 +34,14 @@ _nc := '\033[0m'
 # ---------------------------------------------------------------------------------------------------------------------
 
 # Run a local syftbox server on port 5001
-[group('local')]
+[group('server')]
 run-server port="5001" uvicorn_args="":
     uv run uvicorn syftbox.server.server:app --reload --reload-dir ./syftbox --port {{ port }} {{ uvicorn_args }}
 
+# ---------------------------------------------------------------------------------------------------------------------
+
 # Run a local syftbox client on any available port between 8080-9000
-[group('local')]
+[group('client')]
 run-client name port="auto" server="http://localhost:5001":
     #!/bin/bash
     set -eou pipefail
