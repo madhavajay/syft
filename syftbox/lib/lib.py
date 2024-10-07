@@ -558,10 +558,13 @@ class ResettableTimer:
                 self.timer = None
 
 
+# can't pickle thread locks, keep it here
+STATE_LOCK = Lock()
+
+
 class SharedState:
     def __init__(self, client_config: ClientConfig):
         self.data = {}
-        self.lock = Lock()
         self.client_config = client_config
         self.timers: dict[str:ResettableTimer] = {}
         self.fs_events = []
@@ -571,13 +574,13 @@ class SharedState:
         return self.client_config.sync_folder
 
     def get(self, key, default=None):
-        with self.lock:
+        with STATE_LOCK:
             if key == "my_datasites":
                 return self._get_datasites()
             return self.data.get(key, default)
 
     def set(self, key, value):
-        with self.lock:
+        with STATE_LOCK:
             self.data[key] = value
 
     def _get_datasites(self):

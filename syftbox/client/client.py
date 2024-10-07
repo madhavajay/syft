@@ -1,13 +1,7 @@
 import argparse
-import atexit
-import importlib
 import os
 import platform
-import sys
 import time
-import traceback
-import types
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -30,33 +24,22 @@ from syftbox.client.fsevents import (
     FileSystemEvent,
     FSWatchdog,
 )
+from syftbox.client.plugin import PluginManager, PluginResult, PluginStatus
 from syftbox.client.utils import macos
 from syftbox.lib import ClientConfig, SharedState, validate_email
 
-current_dir = Path(__file__).parent
-# Initialize FastAPI app and scheduler
-
-templates = Jinja2Templates(directory="templates")
-
-
-PLUGINS_DIR = current_dir / "plugins"
-sys.path.insert(0, os.path.dirname(PLUGINS_DIR))
+CURRENT_DIR = Path(__file__).parent
 
 DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
 DEFAULT_PORT = 8082
 DEFAULT_CONFIG_PATH = os.path.expanduser("~/.syftbox/client_config.json")
-ASSETS_FOLDER = current_dir.parent / "assets"
+
+ASSETS_FOLDER = CURRENT_DIR.parent / "assets"
 ICON_FOLDER = ASSETS_FOLDER / "icon"
 
 WATCHDOG_IGNORE = ["apps"]
 
-
-@dataclass
-class Plugin:
-    name: str
-    module: types.ModuleType
-    schedule: int
-    description: str
+templates = Jinja2Templates(directory=CURRENT_DIR / "templates")
 
 
 def load_or_create_config(args) -> ClientConfig:
@@ -140,42 +123,6 @@ def process_folder_input(user_input, default_path):
     return os.path.expanduser(user_input)
 
 
-def initialize_shared_state(client_config: ClientConfig) -> SharedState:
-    shared_state = SharedState(client_config=client_config)
-    return shared_state
-
-
-def load_plugins(client_config: ClientConfig) -> dict[str, Plugin]:
-    loaded_plugins = {}
-    if os.path.exists(PLUGINS_DIR) and os.path.isdir(PLUGINS_DIR):
-        for item in os.listdir(PLUGINS_DIR):
-            if item.endswith(".py") and not item.startswith("__"):
-                plugin_name = item[:-3]
-                try:
-                    module = importlib.import_module(f"plugins.{plugin_name}")
-                    schedule = getattr(
-                        module,
-                        "DEFAULT_SCHEDULE",
-                        5000,
-                    )  # Default to 5000ms if not specified
-                    description = getattr(
-                        module,
-                        "DESCRIPTION",
-                        "No description available.",
-                    )
-                    plugin = Plugin(
-                        name=plugin_name,
-                        module=module,
-                        schedule=schedule,
-                        description=description,
-                    )
-                    loaded_plugins[plugin_name] = plugin
-                except Exception as e:
-                    print(e)
-
-    return loaded_plugins
-
-
 def generate_key_pair() -> tuple[bytes, bytes]:
     private_key = rsa.generate_private_key(
         public_exponent=65537,
@@ -215,57 +162,6 @@ class DatasiteRequest(BaseModel):
     name: str
 
 
-# Function to be scheduled
-def run_plugin(plugin_name, *args, **kwargs):
-    try:
-        module = app.loaded_plugins[plugin_name].module
-        module.run(app.shared_state, *args, **kwargs)
-    except Exception as e:
-        traceback.print_exc()
-        print("error", e)
-
-
-def start_plugin(plugin_name: str):
-    if plugin_name not in app.loaded_plugins:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Plugin {plugin_name} is not loaded",
-        )
-
-    if plugin_name in app.running_plugins:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Plugin {plugin_name} is already running",
-        )
-
-    try:
-        plugin = app.loaded_plugins[plugin_name]
-
-        existing_job = app.scheduler.get_job(plugin_name)
-        if existing_job is None:
-            job = app.scheduler.add_job(
-                func=run_plugin,
-                trigger="interval",
-                seconds=plugin.schedule / 1000,
-                id=plugin_name,
-                args=[plugin_name],
-            )
-            app.running_plugins[plugin_name] = {
-                "job": job,
-                "start_time": time.time(),
-                "schedule": plugin.schedule,
-            }
-            return {"message": f"Plugin {plugin_name} started successfully"}
-        else:
-            print(f"Job {existing_job}, already added")
-            return {"message": f"Plugin {plugin_name} already started"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to start plugin {plugin_name}: {e!s}",
-        )
-
-
 # Parsing arguments and initializing shared state
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -286,14 +182,47 @@ def parse_args():
     return parser.parse_args()
 
 
-def start_watchdog(app) -> FSWatchdog:
-    def sync_on_event(event: FileSystemEvent):
-        run_plugin("sync", event)
+def start_plugin_manager(job_file: Path, shared_state: SharedState) -> PluginManager:
+    # Clear the lock file on the first run if it exists
+    if job_file.exists():
+        job_file.unlink()
+        print(f"> Cleared existing job file: {job_file}")
 
-    watch_dir = Path(app.shared_state.client_config.sync_folder)
+    # Start the scheduler
+    scheduler = BackgroundScheduler(
+        jobstores=dict(default=SQLAlchemyJobStore(url=f"sqlite:///{job_file}"))
+    )
+
+    plugin_manager = PluginManager(
+        shared_state=shared_state,
+        scheduler=scheduler,
+    )
+    plugin_manager.load()
+    results = plugin_manager.schedule_many(["init", "create_datasite", "sync", "apps"])
+    for result in results:
+        if result.status != PluginStatus.SUCCESS:
+            print("Failed to schedule plugin:", result.__dict__)
+
+    return plugin_manager
+
+
+def stop_plugin_manager(job_file: Path, plugin_manager: PluginManager):
+    plugin_manager.stop()
+    # Remove the lock file if it exists
+    if job_file.exists():
+        job_file.unlink()
+        print("> Scheduler stopped and lock file removed.")
+
+
+def start_watchdog(watch_dir: Path, plugin: PluginManager) -> FSWatchdog:
+    def sync_on_event(event: FileSystemEvent):
+        plugin.run("sync", event)
+
     event_handler = AnyFileSystemEventHandler(
         watch_dir,
-        callbacks=[sync_on_event],
+        callbacks=[
+            sync_on_event,
+        ],
         ignored=WATCHDOG_IGNORE,
     )
     watchdog = FSWatchdog(watch_dir, event_handler)
@@ -306,48 +235,27 @@ async def lifespan(app: FastAPI):
     print("> Starting Client")
     args = parse_args()
     client_config = load_or_create_config(args)
-    app.shared_state = SharedState(client_config=client_config)
+    job_file = Path(client_config.config_path.replace(".json", ".sql"))
 
-    # Clear the lock file on the first run if it exists
-    job_file = client_config.config_path.replace(".json", ".sql")
-    app.job_file = job_file
-    if os.path.exists(job_file):
-        os.remove(job_file)
-        print(f"> Cleared existing job file: {job_file}")
+    shared_state = SharedState(client_config=client_config)
+    plugins = start_plugin_manager(job_file, shared_state)
+    watchdog = start_watchdog(Path(client_config.sync_folder), plugins)
 
-    # Start the scheduler
-    jobstores = {"default": SQLAlchemyJobStore(url=f"sqlite:///{job_file}")}
-    scheduler = BackgroundScheduler(jobstores=jobstores)
-    scheduler.start()
-    atexit.register(stop_scheduler)
-
-    app.scheduler = scheduler
-    app.running_plugins = {}
-    app.loaded_plugins = load_plugins(client_config)
-    app.watchdog = start_watchdog(app)
-
-    autorun_plugins = ["init", "create_datasite", "sync", "apps"]
-    # autorun_plugins = ["init", "create_datasite", "sync", "apps"]
-    for plugin in autorun_plugins:
-        start_plugin(plugin)
+    app.shared_state = shared_state
+    app.plugins = plugins
+    app.watchdog = watchdog
 
     yield  # This yields control to run the application
 
     print("> Shutting down...")
-    scheduler.shutdown()
-    app.watchdog.stop()
-
-
-def stop_scheduler():
-    # Remove the lock file if it exists
-    if os.path.exists(app.job_file):
-        os.remove(app.job_file)
-        print("> Scheduler stopped and lock file removed.")
+    watchdog.stop()
+    plugins.stop()
+    job_file.unlink(missing_ok=True)
 
 
 app = FastAPI(lifespan=lifespan)
 
-app.mount("/static", StaticFiles(directory=current_dir / "static"), name="static")
+app.mount("/static", StaticFiles(directory=CURRENT_DIR / "static"), name="static")
 
 
 # Add CORS middleware
@@ -397,53 +305,49 @@ def list_plugins():
         {
             "name": plugin_name,
             "default_schedule": plugin.schedule,
-            "is_running": plugin_name in app.running_plugins,
+            "running": plugin_name in app.plugins.running,
             "description": plugin.description,
         }
-        for plugin_name, plugin in app.loaded_plugins.items()
+        for plugin_name, plugin in app.plugins.loaded.items()
     ]
     return {"plugins": plugins}
 
 
 @app.post("/launch")
 def launch_plugin(request: PluginRequest):
-    return start_plugin(request.plugin_name)
+    result: PluginResult = app.plugins.schedule(request.plugin_name)
+    if result.status == PluginStatus.SUCCESS:
+        return {"plugin": request.plugin_name, "message": result.message}
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{result.message} - {result.data}",
+        )
 
 
 @app.get("/running")
 def list_running_plugins():
     running = {
         name: {
-            "is_running": data["job"].next_run_time is not None,
-            "run_time": time.time() - data["start_time"],
-            "schedule": data["schedule"],
+            "running": data.job.next_run_time is not None,
+            "uptime": time.time() - data.start_time,
+            "schedule": data.schedule,
         }
-        for name, data in app.running_plugins.items()
+        for name, data in app.plugins.running.items()
     }
     return {"running_plugins": running}
 
 
 @app.post("/kill")
 def kill_plugin(request: PluginRequest):
-    plugin_name = request.plugin_name
-
-    if plugin_name not in app.running_plugins:
+    result: PluginResult = app.plugins.unschedule(request.plugin_name)
+    if result.status == PluginStatus.SUCCESS:
+        return {"plugin": request.plugin_name, "message": result.message}
+    else:
         raise HTTPException(
             status_code=400,
-            detail=f"Plugin {plugin_name} is not running",
-        )
-
-    try:
-        app.scheduler.remove_job(plugin_name)
-        plugin_module = app.loaded_plugins[plugin_name].module
-        if hasattr(plugin_module, "stop"):
-            plugin_module.stop()
-        del app.running_plugins[plugin_name]
-        return {"message": f"Plugin {plugin_name} stopped successfully"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to stop plugin {plugin_name}: {e!s}",
+            detail=f"{result.message} - {result.data}",
         )
 
 

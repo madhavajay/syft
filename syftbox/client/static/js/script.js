@@ -28,7 +28,7 @@ function updatePluginList() {
                 <button onclick="launchPlugin('${
                   plugin.name
                 }', this.previousElementSibling.value)">
-                    ${plugin.is_running ? "Restart" : "Launch"}
+                    ${plugin.running ? "Restart" : "Launch"}
                 </button>
             </div>
         `;
@@ -49,8 +49,8 @@ function loadRunningPlugins() {
         div.innerHTML = `
                     <span>${plugin}</span>
                     <span>Running: ${
-                      data.is_running
-                    }, Time: ${data.run_time.toFixed(2)}s, Schedule: ${
+                      data.running
+                    }, Uptime: ${data.uptime.toFixed(2)}s, Schedule: ${
                       data.schedule
                     }ms</span>
                     <button onclick="killPlugin('${plugin}')">Kill</button>
@@ -58,7 +58,7 @@ function loadRunningPlugins() {
         runningList.appendChild(div);
       });
       availablePlugins.forEach((plugin) => {
-        plugin.is_running = plugin.name in running;
+        plugin.running = plugin.name in running;
       });
       updatePluginList();
     })
