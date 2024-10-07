@@ -43,12 +43,11 @@ class AnyFileSystemEventHandler(FileSystemEventHandler):
     ):
         self.watch_dir = watch_dir
         self.callbacks = callbacks
-        self.ignored = ignored
+        self.ignored = [Path(self.watch_dir, ignore) for ignore in ignored]
 
     def on_any_event(self, event: FileSystemEvent) -> None:
         for ignore in self.ignored:
-            full_path = self.watch_dir + "/" + ignore
-            if event.src_path.startswith(full_path):
+            if event.src_path.startswith(str(ignore)):
                 return
 
         for cb in self.callbacks:
