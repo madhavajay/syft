@@ -58,11 +58,11 @@ jobs:
         run: |
           just bump-version ${{ inputs.bump_type }}
 
-      - name: Build the New Vesrion
+      - name: Build syftbox
         run: |
           just build
 
-      - name: Push to https://pypi.org/
+      - name: Push to pypi
         if: ${{ inputs.test_bump == false }}
         run: |
           twine upload -u __token__ -p ${{ secrets.OM_SYFTBOX_PYPI_TOKEN }} dist/*
