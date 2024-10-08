@@ -1,9 +1,6 @@
 name: CD - SyftBox
 
 on:
-  schedule:
-    - cron: "0 12 * * 0" # At 12:00 UTC on every Sunday
-
   workflow_dispatch:
     inputs:
       none:
@@ -19,27 +16,12 @@ concurrency:
 jobs:
   deploy-syftbox:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # For tag and release notes.
 
     steps:
-      - name: Permission to home directory
-        run: |
-          sudo chown -R $USER:$USER $HOME
-
       - name: Checkout SyftBox repo with github token
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.SYFTBOX_BOT_COMMIT_TOKEN }}
-
-      # free 10GB of space
-      - name: Remove unnecessary files
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          docker image prune --all --force
-          docker builder prune --all --force
-          docker system prune --all --force
 
       - name: Set up Python
         uses: actions/setup-python@v5
