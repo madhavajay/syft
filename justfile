@@ -107,23 +107,28 @@ deploy keyfile remote="azureuser@20.168.10.234": build
 
     echo -e "{{ _green }}Deploy successful!{{ _nc }}"
 
+# Bump version, commit and tag
 [group('build')]
-bumpver level="patch":
+bump-version level="patch":
     #!/bin/bash
+    # We need to uv.lock before we can commit the whole thing in the repo.
+    # DO not bump the version on the uv.lock file, else other packages with same version might get updated
+
     set -eou pipefail
 
+    # sync everything
     uv sync --extra dev
 
     # get the current and new version
-    CURRENT_VERSION=$(uv run bump2version --dry-run --list {{ level }} | grep current_version | cut -d'=' -f2)
-    NEW_VERSION=$(uv run bump2version --dry-run --list {{ level }} | grep new_version | cut -d'=' -f2)
-
+    BUMPVERS_CHANGES=$(uv run bump2version --dry-run --allow-dirty --list {{ level }})
+    CURRENT_VERSION=$(echo "$BUMPVERS_CHANGES" | grep current_version | cut -d'=' -f2)
+    NEW_VERSION=$(echo "$BUMPVERS_CHANGES" | grep new_version | cut -d'=' -f2)
     echo "Bumping version from $CURRENT_VERSION to $NEW_VERSION"
 
     # first bump version
     uv run bump2version {{ level }}
 
-    # get an updated lock file
+    # update uv.lock file to reflect new package version
     uv lock
 
     # commit the changes
