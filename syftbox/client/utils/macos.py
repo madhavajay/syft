@@ -1,8 +1,8 @@
 import subprocess
 from pathlib import Path
 
-ASSETS_FOLDER = Path(__file__).parents[1] / "assets"
-ICONS_PKG = ASSETS_FOLDER / "icons.zip"
+ASSETS_FOLDER = Path(__file__).parents[2] / "assets"
+ICONS_PKG = ASSETS_FOLDER / "icon.zip"
 
 
 # Function to search for Icon\r file
@@ -17,15 +17,13 @@ def search_icon_file(src_path: Path) -> Path:
 # if you knew the pain of this function
 def find_icon_file(src_path: Path) -> Path:
     # First attempt to find the Icon\r file
-    icon_file = search_icon_file()
+    icon_file = search_icon_file(src_path)
     if icon_file:
         return icon_file
 
     if not ICONS_PKG.exists():
         # If still not found, raise an error
-        raise FileNotFoundError(
-            "Icon file with a carriage return not found, and icon.zip did not contain it.",
-        )
+        raise FileNotFoundError(f"{ICONS_PKG} not found")
 
     try:
         # cant use other zip tools as they don't unpack it correctly
@@ -35,7 +33,7 @@ def find_icon_file(src_path: Path) -> Path:
         )
 
         # Try to find the Icon\r file again after extraction
-        icon_file = search_icon_file()
+        icon_file = search_icon_file(src_path)
         if icon_file:
             return icon_file
     except subprocess.CalledProcessError:
