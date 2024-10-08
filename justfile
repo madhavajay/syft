@@ -112,14 +112,16 @@ bumpver level="patch":
     #!/bin/bash
     set -eou pipefail
 
+    uv sync --extra dev
+
     # get the current and new version
-    CURRENT_VERSION=$(uv run --extra dev bump2version --dry-run --list {{ level }} | grep current_version | cut -d'=' -f2)
-    NEW_VERSION=$(uv run --extra dev bump2version --dry-run --list {{ level }} | grep new_version | cut -d'=' -f2)
+    CURRENT_VERSION=$(uv run bump2version --dry-run --list {{ level }} | grep current_version | cut -d'=' -f2)
+    NEW_VERSION=$(uv run bump2version --dry-run --list {{ level }} | grep new_version | cut -d'=' -f2)
 
     echo "Bumping version from $CURRENT_VERSION to $NEW_VERSION"
 
     # first bump version
-    uv run --extra dev bump2version {{ level }}
+    uv run bump2version {{ level }}
 
     # get an updated lock file
     uv lock
