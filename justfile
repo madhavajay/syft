@@ -116,8 +116,8 @@ bump-version level="patch":
 
     set -eou pipefail
 
-    # sync everything
-    uv sync --extra dev
+    # sync dev dependencies for bump2version
+    uv sync --frozen
 
     # get the current and new version
     BUMPVERS_CHANGES=$(uv run bump2version --dry-run --allow-dirty --list {{ level }})
