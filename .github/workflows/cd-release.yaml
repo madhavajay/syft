@@ -48,7 +48,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install uv==0.4.1 tox==4.18.0 tox-uv==1.11.2 setuptools wheel twine bump2version PyYAML
+          pip install uv==0.4.1
           uv --version
 
       - name: Install Just
@@ -66,7 +66,7 @@ jobs:
 
       - name: Push to https://pypi.org/
         run: |
-          twine upload -u __token__ -p ${{ secrets.OM_SYFT_PYPI_TOKEN }} dist/*
+          twine upload -u __token__ -p ${{ secrets.OM_SYFTBOX_PYPI_TOKEN }} dist/*
 
       - name: Push changes to SyftBox repo
         run : |
