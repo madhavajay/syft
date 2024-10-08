@@ -6,8 +6,12 @@ from syftbox.lib import ClientConfig
 config_path = os.environ.get("SYFTBOX_CLIENT_CONFIG_PATH", None)
 client_config = ClientConfig.load(config_path)
 
-input_folder = f"{client_config.sync_folder}/{client_config.email}/app_pipelines/adder/inputs/"
-output_folder = f"{client_config.sync_folder}/{client_config.email}/app_pipelines/adder/done/"
+input_folder = (
+    f"{client_config.sync_folder}/{client_config.email}/app_pipelines/adder/inputs/"
+)
+output_folder = (
+    f"{client_config.sync_folder}/{client_config.email}/app_pipelines/adder/done/"
+)
 os.makedirs(input_folder, exist_ok=True)
 os.makedirs(output_folder, exist_ok=True)
 
