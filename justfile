@@ -116,8 +116,8 @@ bump-version level="patch":
 
     set -eou pipefail
 
-    # sync everything
-    uv sync --extra dev
+    # sync dev dependencies for bump2version
+    uv sync --frozen
 
     # get the current and new version
     BUMPVERS_CHANGES=$(uv run bump2version --dry-run --allow-dirty --list {{ level }})
@@ -149,7 +149,5 @@ reset:
 
 [group('utils')]
 run-jupyter jupyter_args="":
-    uv run \
-        --with "jupyterlab" \
-        --with-editable ".[dev]" \
-        jupyter lab --notebook-dir=./notebooks {{ jupyter_args }}
+    uv run --frozen --with "jupyterlab" \
+        jupyter lab {{ jupyter_args }}
