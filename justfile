@@ -107,6 +107,27 @@ deploy keyfile remote="azureuser@20.168.10.234": build
 
     echo -e "{{ _green }}Deploy successful!{{ _nc }}"
 
+[group('build')]
+bumpver level="patch":
+    #!/bin/bash
+    set -eou pipefail
+
+    # get the current and new version
+    CURRENT_VERSION=$(uv run --extra dev bump2version --dry-run --list {{ level }} | grep current_version | cut -d'=' -f2)
+    NEW_VERSION=$(uv run --extra dev bump2version --dry-run --list {{ level }} | grep new_version | cut -d'=' -f2)
+
+    echo "Bumping version from $CURRENT_VERSION to $NEW_VERSION"
+
+    # first bump version
+    uv run --extra dev bump2version {{ level }}
+
+    # get an updated lock file
+    uv lock
+
+    # commit the changes
+    git commit -am "Bump version $CURRENT_VERSION -> $NEW_VERSION"
+    git tag -a $NEW_VERSION -m "Release $NEW_VERSION"
+
 # ---------------------------------------------------------------------------------------------------------------------
 
 [group('utils')]
