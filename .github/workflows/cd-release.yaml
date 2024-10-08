@@ -4,13 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       bump_type:
-        description: 'Version bump type'
+        description: "Version bump type"
         required: true
         type: choice
         options:
-        - patch
-        - minor
-        - major
+          - patch
+          - minor
+          - major
+        default: patch
 
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress
@@ -41,12 +42,12 @@ jobs:
       - name: Install Just
         uses: extractions/setup-just@v2
         with:
-          just-version: '1.36.0'
+          just-version: "1.36.0"
 
       - name: Bump the Version
         run: |
           just bump-version ${{ inputs.bump_type }}
-      
+
       - name: Build the New Vesrion
         run: |
           just build
@@ -56,7 +57,7 @@ jobs:
           twine upload -u __token__ -p ${{ secrets.OM_SYFTBOX_PYPI_TOKEN }} dist/*
 
       - name: Push changes to SyftBox repo
-        run : |
+        run: |
           git config user.name "${{ secrets.OM_BOT_NAME }}"
           git config user.email "${{ secrets.OM_BOT_EMAIL }}"
           git push origin main
