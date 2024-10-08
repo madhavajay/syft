@@ -23,7 +23,6 @@ repos:
       - id: debug-statements
         always_run: true
       - id: name-tests-test
-        exclude: ^(tests/mockplugins)
         always_run: true
       - id: requirements-txt-fixer
         always_run: true

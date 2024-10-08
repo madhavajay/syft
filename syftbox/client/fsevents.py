@@ -31,10 +31,7 @@ class FSWatchdog:
 
     def stop(self):
         self._observer.stop()
-        try:
-            self._observer.join(timeout=5)
-        except Exception:
-            pass
+        self._observer.join()
 
 
 class AnyFileSystemEventHandler(FileSystemEventHandler):
