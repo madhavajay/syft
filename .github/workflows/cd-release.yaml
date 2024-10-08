@@ -8,14 +8,18 @@ on:
   workflow_dispatch:
     inputs:
       bump_type:
-        description: "Version bump type"
-        required: true
+        description: 'Version bump type'
         type: choice
-        options:
-          - patch
-          - minor
-          - major
         default: patch
+        options:
+        - patch
+        - minor
+        - major
+
+      test_bump:
+        description: 'Perform a test bump version without pushing to pypi and repo'
+        type: boolean
+        default: false  # TODO: change to false
 
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress
@@ -62,10 +66,12 @@ jobs:
         run: |
           just build
 
-      # - name: Push to https://pypi.org/
-      #   run: |
-      #     twine upload -u __token__ -p ${{ secrets.OM_SYFTBOX_PYPI_TOKEN }} dist/*
+      - name: Push to https://pypi.org/
+        if: ${{ inputs.test_bump == false }}
+        run: |
+          echo twine upload -u __token__ -p ${{ secrets.OM_SYFTBOX_PYPI_TOKEN }} dist/*
 
-      # - name: Push changes to SyftBox repo
-      #   run: |
-      #     git push origin main
+      - name: Push changes to SyftBox repo
+        if: ${{ inputs.test_bump == false }}
+        run: |
+          echo git push origin main
