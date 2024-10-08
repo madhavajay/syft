@@ -2,8 +2,8 @@ name: CD - SyftBox
 
 on:
   # use this to test run it on the pr
-  # pull_request:
-  #   branches: ["*"]
+  pull_request:
+    branches: ["*"]
 
   workflow_dispatch:
     inputs:
