@@ -23,7 +23,7 @@ dependencies = [
 [project.optional-dependencies]
 # add using `uv add --optional <group> <pip package>`
 # will be referenced in the built wheel
-jupyter = ["ipykernel>=6.29.5", "jupyterlab>=4.2.5"]
+
 
 [project.scripts]
 syftbox = "syftbox.main:main"

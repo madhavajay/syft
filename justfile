@@ -149,7 +149,5 @@ reset:
 
 [group('utils')]
 run-jupyter jupyter_args="":
-    uv run \
-        --with "jupyterlab" \
-        --with-editable ".[dev]" \
-        jupyter lab --notebook-dir=./notebooks {{ jupyter_args }}
+    uv run --frozen --with "jupyterlab" \
+        jupyter lab {{ jupyter_args }}
