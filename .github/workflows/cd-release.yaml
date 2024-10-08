@@ -3,9 +3,14 @@ name: CD - SyftBox
 on:
   workflow_dispatch:
     inputs:
-      none:
-        description: "Run SyftBox CD workflow"
-        required: false
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
 
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress
@@ -40,7 +45,7 @@ jobs:
 
       - name: Bump the Version
         run: |
-          just bump-version patch
+          just bump-version ${{ inputs.bump_type }}
       
       - name: Build the New Vesrion
         run: |
