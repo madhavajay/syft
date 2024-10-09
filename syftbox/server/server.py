@@ -176,8 +176,8 @@ ascii_art = rf"""
 Install uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# create a virtualenv somewhere
-uv venv .venv
+# create a virtualenv `.venv` in current working dir
+uv venv
 
 # Install SyftBox
 uv pip install -U syftbox
