@@ -179,7 +179,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # create a virtualenv somewhere
 uv venv .venv
 
-# install the wheel
+# Install SyftBox
 uv pip install -U syftbox
 
 # run the client
