@@ -6,7 +6,7 @@ on:
       version:
         description: "SyftBox Version to deploy"
         type: string
-        default: latest
+        default: 0.1.2
 
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress
@@ -37,4 +37,4 @@ jobs:
 
       - name: Deploy SyftBox Server
         run: |
-            just deploy ~/.ssh/syftbox.pem ${{ inputs.version }}
+            just deploy-pypi ~/.ssh/syftbox.pem ${{ inputs.version }}
