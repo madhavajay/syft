@@ -76,50 +76,57 @@ build:
     rm -rf dist
     uv build
 
-[group('build')]
-fetch-syftbox-version version="latest":
-    #!/bin/bash
-    set -euo pipefail
-
-    # If version is latest, then fetch the latest version from PyPI
-    # else, check if the version exists on PyPI
-    if [ "{{ version }}" = "latest" ]; then
-        echo "Fetching the latest version of syftbox from PyPI..."
-        curl -sSf "https://pypi.org/pypi/syftbox/json" | jq -r ".info.version" || { echo "Failed to fetch the latest version." >&2; exit 1; }
-    else
-        echo "Checking if syftbox version {{ version }} exists on PyPI..."
-        if curl -sSf -o /dev/null "https://pypi.org/pypi/syftbox/{{ version }}/json"; then
-            echo "{{ version }}"
-        else
-            echo "syftbox version {{ version }} does not exist." >&2
-            exit 1
-        fi
-    fi
-
 
 # Build & Deploy syftbox to a remote server using SSH
 [group('build')]
-deploy keyfile version="latest" remote="azureuser@20.168.10.234":
+deploy keyfile remote="azureuser@20.168.10.234": build
+    #!/bin/bash
+    set -eou pipefail
+
+    # there will be only one wheel file in the dist directory, but you never know...
+    LOCAL_WHEEL=$(ls dist/*.whl | grep syftbox | head -n 1)
+
+    # Remote paths to copy the wheel to
+    REMOTE_DIR="~"
+    REMOTE_WHEEL="$REMOTE_DIR/$(basename $LOCAL_WHEEL)"
+
+    echo -e "Deploying {{ _cyan }}$LOCAL_WHEEL{{ _nc }} to {{ _green }}{{ remote }}:$REMOTE_WHEEL{{ _nc }}"
+
+    # change permissions to comply with ssh/scp
+    chmod 600 {{ keyfile }}
+
+    # Use scp to transfer the file to the remote server
+    scp -i {{ keyfile }} "$LOCAL_WHEEL" "{{ remote }}:$REMOTE_DIR"
+
+    # install pip package
+    ssh -i {{ keyfile }} {{ remote }} "pip install --break-system-packages $REMOTE_WHEEL --force"
+
+    # restart service
+    # TODO - syftbox service was created manually on 20.168.10.234
+    ssh -i {{ keyfile }} {{ remote }} "sudo systemctl daemon-reload"
+    ssh -i {{ keyfile }} {{ remote }} "sudo systemctl restart syftbox"
+    echo -e "{{ _green }}Deploy successful!{{ _nc }}"
+
+# Deploy syftbox from pypi to a remote server using SSH
+[group('build')]
+deploy-pypi keyfile version remote="azureuser@20.168.10.234":
     #!/bin/bash
     set -eou pipefail
 
     # change permissions to comply with ssh/scp
     chmod 600 {{ keyfile }}
 
-    # Sanity Check the syft box version
-    REMOTE_VERSION=$(just fetch-syftbox-version {{ version }} | tail -n 1)
-
-    echo -e "Deploying syftbox version $REMOTE_VERSION to {{ remote }}..."
+    echo -e "Deploying syftbox version {{ version }} to {{ remote }}..."
 
     # install pip package
-    ssh -i {{ keyfile }} {{ remote }} "pip install syftbox==$REMOTE_VERSION --break-system-packages  --force"
+    ssh -i {{ keyfile }} {{ remote }} "pip install syftbox=={{ version }} --break-system-packages  --force"
 
     # restart service
     # TODO - syftbox service was created manually on 20.168.10.234
     ssh -i {{ keyfile }} {{ remote }} "sudo systemctl daemon-reload"
     ssh -i {{ keyfile }} {{ remote }} "sudo systemctl restart syftbox"
 
-    echo -e "{{ _green }}Deploy successful!{{ _nc }}"
+    echo -e "{{ _green }}Syftbox version: {{ version }} deployed to {{ remote }}{{ _nc }}"
 
 # Bump version, commit and tag
 [group('build')]
