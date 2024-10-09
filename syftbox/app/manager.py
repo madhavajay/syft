@@ -5,16 +5,26 @@ import sys
 from collections import namedtuple
 
 from ..lib import ClientConfig
-from .app_install import install
+from .install import install
 
 base_path = os.path.expanduser("~/.syftbox/")
 config_path = os.environ.get(
-    "SYFTBOX_CLIENT_CONFIG_PATH", os.path.expanduser("~/.syftbox/client_config.json")
+    "SYFTBOX_CLIENT_CONFIG_PATH", None # os.path.expanduser("~/.syftbox/config.json")
 )
 
 
 def list_app(client_config: ClientConfig) -> None:
     print("Listing apps")
+
+
+def get_config_path() -> str:
+    config_path = os.environ.get(
+        "SYFTBOX_CLIENT_CONFIG_PATH", None
+    )
+    if config_path is None:
+        config_path = str(input("Path to your syftbox config.json file: "))
+        os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = config_path
+    return config_path
 
 
 def uninstall_app(client_config: ClientConfig) -> None:
@@ -30,6 +40,7 @@ def upgrade_app(client_config: ClientConfig) -> None:
 
 
 def main(parser, args_list) -> None:
+    config_path = get_config_path()
     client_config = ClientConfig.load(config_path)
 
     Commands = namedtuple("Commands", ["description", "execute"])
