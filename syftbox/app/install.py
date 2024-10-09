@@ -7,13 +7,34 @@ import subprocess
 import platform
 from types import SimpleNamespace
 from typing import Tuple
+from typing import Any
 from .utils import get_config_path
 from ..lib import ClientConfig
 
 TEMP_PATH = "/tmp/apps/"
 
 
-def is_git_installed():
+def is_git_installed() -> bool:
+    """
+    Checks if Git is installed on the system.
+
+    Returns:
+        bool: `True` if Git is installed, `False` otherwise.
+
+    Functionality:
+        - Runs the `git --version` command to check if Git is installed.
+        - If the command runs successfully, returns `True`.
+        - If the command fails (e.g., Git is not installed), returns `False`.
+
+    Example:
+        ```python
+        if is_git_installed():
+            print("Git is installed on this system.")
+        else:
+            print("Git is not installed. Please install Git to proceed.")
+        ```
+        This will print a message indicating whether Git is installed or not.
+    """
     try:
         subprocess.run(
             ["git", "--version"],
@@ -26,7 +47,35 @@ def is_git_installed():
         return False
 
 
-def sanitize_git_path(path):
+def sanitize_git_path(path: str) -> str:
+    """
+    Validates and sanitizes a Git repository path, ensuring it matches the required format.
+
+    Args:
+        path (str): The Git repository path to validate.
+
+    Returns:
+        str: The sanitized Git repository path if it matches the valid pattern.
+
+    Raises:
+        ValueError: If the provided path does not match the expected format for a Git repository.
+
+    Functionality:
+        - Uses a regular expression pattern to ensure that the given path follows the format `owner/repository`.
+        - If the path matches the pattern, returns it as a valid Git path.
+        - If the path does not match the pattern, raises a `ValueError` with a descriptive message.
+
+    Example:
+        Suppose you have a GitHub path like `OpenMined/logged_in` and want to validate it:
+        ```python
+        try:
+            sanitized_path = sanitize_git_path("OpenMined/logged_in")
+        except ValueError as e:
+            print(e)
+        ```
+        If the path is valid, `sanitized_path` will contain the validated GitHub path. If it is not valid, the error message
+        "Invalid Git repository path format. (eg: OpenMined/logged_in)" will be printed.
+    """
     # Define a regex pattern for a valid GitHub path
     pattern = r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$"
 
@@ -39,14 +88,54 @@ def sanitize_git_path(path):
         )
 
 
-def delete_folder_if_exists(folder_path: str):
-    # Check if temp clone path already exists, if so, delete it.
+def delete_folder_if_exists(folder_path: str) -> None:
+    """
+    Deletes a folder if it exists at the specified path.
+
+    Args:
+        folder_path (str): The path to the folder to be deleted.
+
+    Returns:
+        None: This function does not return any value.
+
+    Functionality:
+        - Checks if the folder exists at the given path.
+        - If the folder exists and is a directory, deletes it and all of its contents using `shutil.rmtree()`.
+
+    Example:
+        Suppose you want to delete a folder located at `/tmp/old_clone` if it exists:
+        ```python
+        delete_folder_if_exists("/tmp/old_clone")
+        ```
+        This will delete the folder and all of its contents if it exists.
+    """
     if os.path.exists(folder_path) and os.path.isdir(folder_path):
         shutil.rmtree(folder_path)
 
 
-def is_repo_accessible(repo_url):
-    """Check if the Git repository is accessible."""
+def is_repo_accessible(repo_url: str) -> bool:
+    """
+    Checks if the specified Git repository is accessible.
+
+    Args:
+        repo_url (str): The URL of the Git repository to check.
+
+    Returns:
+        bool: `True` if the repository is accessible, `False` otherwise.
+
+    Functionality:
+        - Uses the `git ls-remote` command to check if the Git repository is accessible.
+        - If the command succeeds, returns `True`.
+        - If the command fails or times out, returns `False`.
+
+    Example:
+        Suppose you want to check if a repository located at `https://github.com/example/repo.git` is accessible.
+        You can call the function like this:
+        ```python
+        is_accessible = is_repo_accessible("https://github.com/example/repo.git")
+        ```
+        This will return `True` if the repository is accessible, or `False` if it is not.
+    """
     try:
         subprocess.run(
             ["git", "ls-remote", repo_url],
@@ -57,13 +146,48 @@ def is_repo_accessible(repo_url):
             timeout=2,
         )
         return True
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         return False
     except subprocess.TimeoutExpired:
         return False
 
 
 def clone_repository(sanitized_git_path: str) -> str:
+    """
+    Clones a Git repository from GitHub to a temporary directory.
+
+    Args:
+        sanitized_git_path (str): The Git repository path in the format `owner/repository`.
+
+    Returns:
+        str: The path to the cloned repository.
+
+    Raises:
+        Exception: If Git is not installed on the system.
+        ValueError: If the provided repository path is not accessible.
+        CalledProcessError: If there is an error during the cloning process.
+
+    Functionality:
+        - Checks if Git is installed on the system by calling `is_git_installed()`.
+        - Forms the GitHub repository URL from the provided `sanitized_git_path`.
+        - Checks if the repository is accessible by calling `is_repo_accessible()`.
+        - Clones the repository to a temporary directory (`/tmp`).
+        - Deletes any existing folder in `/tmp` with the same name before cloning.
+        - If cloning is successful, returns the path to the cloned repository.
+        - If any error occurs during cloning, raises the corresponding exception.
+
+    Example:
+        Suppose you want to clone a repository located at `OpenMined/PySyft` to a temporary directory.
+        You can call the function like this:
+        ```python
+        try:
+            clone_path = clone_repository("OpenMined/PySyft")
+            print(f"Repository cloned to: {clone_path}")
+        except Exception as e:
+            print(e)
+        ```
+        This will clone the repository to `/tmp/PySyft` if successful, or print an error message if any issues occur.
+    """
     if not is_git_installed():
         raise Exception(
             "git cli isn't installed. Please, follow the instructions"
@@ -94,7 +218,43 @@ def clone_repository(sanitized_git_path: str) -> str:
         raise e
 
 
-def dict_to_namespace(data):
+def dict_to_namespace(data: Any) -> Any:
+    """
+    Converts a dictionary (or nested dictionary) to a SimpleNamespace object.
+
+    Args:
+        data (dict or list): The data to convert. Can be a dictionary, list of dictionaries, or other types.
+
+    Returns:
+        SimpleNamespace or list: A SimpleNamespace object representing the dictionary data,
+                                or a list of SimpleNamespace objects if the input is a list.
+                                If the input is not a dictionary or list, returns the input as-is.
+
+    Functionality:
+        - Recursively converts dictionaries to SimpleNamespace objects.
+        - If the data is a list, each item in the list is recursively converted.
+        - If the data is neither a dictionary nor a list, returns the data unchanged.
+
+    Example:
+        Suppose you have a dictionary with nested data:
+        ```python
+        data = {
+            "user": {
+                "name": "Alice",
+                "age": 30,
+                "address": {
+                    "city": "Wonderland",
+                    "zipcode": "12345"
+                }
+            },
+            "active": True
+        }
+        namespace_data = dict_to_namespace(data)
+        print(namespace_data.user.name)  # Output: Alice
+        print(namespace_data.user.address.city)  # Output: Wonderland
+        ```
+        This will allow you to access dictionary values using dot notation like attributes.
+    """
     if isinstance(data, dict):
         return SimpleNamespace(
             **{key: dict_to_namespace(value) for key, value in data.items()}
@@ -105,7 +265,48 @@ def dict_to_namespace(data):
         return data
 
 
-def load_config(path: str):
+def load_config(path: str) -> SimpleNamespace:
+    """
+    Loads a JSON configuration file and converts it to a SimpleNamespace object.
+
+    Args:
+        path (str): The file path to the JSON configuration file.
+
+    Returns:
+        SimpleNamespace: A SimpleNamespace object representing the configuration data.
+
+    Raises:
+        ValueError: If the file does not exist, is not in JSON format, or does not contain a dictionary.
+
+    Functionality:
+        - Checks if the provided file path exists. If not, raises a `ValueError` indicating the file is not found.
+        - Opens and reads the JSON file. If the file cannot be decoded or does not contain a dictionary, raises a `ValueError`.
+        - Converts the loaded dictionary to a SimpleNamespace object for easy attribute-based access.
+
+    Example:
+        Suppose you have a JSON configuration file at `/path/to/config.json` with the following content:
+        ```json
+        {
+            "version": "0.1.0",
+            "app": {
+                "version": "1.0"
+                "env": {
+                    "TEST_ENV": "testing",
+                },
+            },
+        }
+        ```
+        You can load the configuration and access its fields using dot notation:
+        ```python
+        try:
+            config = load_config("/path/to/config.json")
+            print(config.app.version)  # Output: MyApp
+            print(config.app.env.TEST_ENV)  # Output: True
+        except ValueError as e:
+            print(e)
+        ```
+        This will load the configuration and allow access to its values using attribute access.
+    """
     if not os.path.exists(path):
         raise ValueError("Couln't find the json config file for this path.")
     try:
@@ -122,8 +323,34 @@ def load_config(path: str):
 def create_symbolic_link(
     client_config: ClientConfig, app_path: str, sanitized_path: str
 ):
+    """
+    Creates a symbolic link from the application directory in the Syftbox directory to the user's sync folder.
+
+    Args:
+        client_config (ClientConfig): The configuration object for the client, which contains the sync folder path.
+        app_path (str): The actual path of the application directory.
+        sanitized_path (str): The sanitized Git repository path in the format `owner/repository`.
+
+    Returns:
+        None: This function does not return any value.
+
+    Functionality:
+        - Constructs the symbolic link path within the user's sync folder (`apps` folder).
+        - If a symlink already exists at the target location, deletes it to avoid conflicts.
+        - Creates a new symbolic link pointing from the sync folder to the application directory.
+
+    Example:
+        Suppose you want to create a symbolic link for an application located at `/home/user/.syftbox/apps/PySyft`:
+        ```python
+        create_symbolic_link(
+            client_config=client_config,
+            app_path="/home/user/.syftbox/apps/PySyft",
+            sanitized_path="OpenMined/PySyft"
+        )
+        ```
+        This will create a symbolic link at `<sync_folder>/apps/PySyft` pointing to the application directory.
+    """
     # TODO: Create a Symlink function
-    # - Handles if symlink already exists
     # - Handles if path doesn't exists.
     target_symlink_path = (
         f"{str(client_config.sync_folder)}/apps/{sanitized_path.split('/')[-1]}"
@@ -135,21 +362,68 @@ def create_symbolic_link(
     os.symlink(app_path, target_symlink_path)
 
 
-def move_repository_to_syftbox(tmp_clone_path: str, sanitized_path: str):
+def move_repository_to_syftbox(tmp_clone_path: str, sanitized_path: str) -> str:
+    """
+    Moves a cloned Git repository to the Syftbox directory.
+
+    Args:
+        tmp_clone_path (str): The file path to the temporarily cloned Git repository.
+        sanitized_path (str): The sanitized Git repository path in the format `owner/repository`.
+
+    Returns:
+        str: The final destination path of the moved repository.
+
+    Functionality:
+        - Constructs the destination path within the Syftbox configuration directory (`apps` folder).
+        - Deletes any existing folder at the destination path to avoid conflicts.
+        - Moves the repository from the temporary clone path to the destination path.
+        - Returns the new path of the moved repository.
+
+    Example:
+        Suppose you have cloned a repository to a temporary path `/tmp/syftbox` and want to move it to the Syftbox directory:
+        ```python
+        output_path = move_repository_to_syftbox("/tmp/PySyft", "OpenMined/PySyft")
+        print(output_path)  # Output: /path/to/config/apps/PySyft
+        ```
+        This will move the cloned repository to the Syftbox `apps` directory and return the final destination path.
+    """
     output_path = f"{get_config_path()}/apps/{sanitized_path.split('/')[-1]}"
-    # Check and delete if there's already the same repository
-    # name in ~/.syftbox/apps directory.
     delete_folder_if_exists(output_path)
     shutil.move(tmp_clone_path, output_path)
     return output_path
 
 
-def run_pre_install(config):
-    if len(getattr(config.app, "pre_install", [])) == 0:
+def run_pre_install(app_config: SimpleNamespace):
+    """
+    Runs pre-installation commands specified in the application configuration.
+
+    Args:
+        app_config (SimpleNamespace): The configuration object for the application, which is expected to have an `app`
+                                      attribute with a `pre_install` attribute containing a list of commands to run.
+
+    Returns:
+        None: This function does not return any value.
+
+    Functionality:
+        - Checks if the `pre_install` attribute exists and contains commands in the application configuration.
+        - If the `pre_install` attribute is empty or does not exist, the function returns without executing any command.
+        - If there are pre-installation commands, runs them using `subprocess.run()`.
+
+    Example:
+        Suppose you have an application configuration that specifies a pre-installation command to install dependencies:
+        ```python
+        app_config = SimpleNamespace(
+            app=SimpleNamespace(pre_install=["echo", "Installing dependencies..."])
+        )
+        run_pre_install(app_config)
+        ```
+        This will run the specified pre-installation command using `subprocess.run()`.
+    """
+    if len(getattr(app_config.app, "pre_install", [])) == 0:
         return
 
     subprocess.run(
-        config.app.pre_install,
+        app_config.app.pre_install,
         check=True,
         text=True,
         stdout=subprocess.PIPE,
@@ -157,12 +431,37 @@ def run_pre_install(config):
     )
 
 
-def run_post_install(config):
-    if len(getattr(config.app, "post_install", [])) == 0:
+def run_post_install(app_config: SimpleNamespace):
+    """
+    Runs post-installation commands specified in the application configuration.
+
+    Args:
+        app_config (SimpleNamespace): The configuration object for the application, which is expected to have an `app`
+                                      attribute with a `post_install` attribute containing a list of commands to run.
+
+    Returns:
+        None: This function does not return any value.
+
+    Functionality:
+        - Checks if the `post_install` attribute exists and contains commands in the application configuration.
+        - If the `post_install` attribute is empty or does not exist, the function returns without executing any command.
+        - If there are post-installation commands, runs them using `subprocess.run()`.
+
+    Example:
+        Suppose you have an application configuration that specifies a post-installation command to perform cleanup:
+        ```python
+        app_config = SimpleNamespace(
+            app=SimpleNamespace(post_install=["echo", "Performing post-installation cleanup..."])
+        )
+        run_post_install(app_config)
+        ```
+        This will run the specified post-installation command using `subprocess.run()`.
+    """
+    if len(getattr(app_config.app, "post_install", [])) == 0:
         return
 
     subprocess.run(
-        config.app.post_install,
+        app_config.app.post_install,
         check=True,
         text=True,
         stdout=subprocess.PIPE,
@@ -171,6 +470,36 @@ def run_post_install(config):
 
 
 def check_os_compatibility(app_config) -> None:
+    """
+    Checks whether the current operating system is compatible with the application based on the configuration.
+
+    Args:
+        app_config: The configuration object for the application, which is expected to have an `app` attribute
+                    with a `platforms` attribute containing a list of supported operating systems.
+
+    Returns:
+        None: This function does not return any value.
+
+    Raises:
+        OSError: If the current operating system is not supported by the application.
+
+    Functionality:
+        - Uses the `platform.system()` function to determine the current operating system.
+        - Checks the application's configuration (`app_config`) for a list of supported operating systems.
+        - If no platforms are defined in the configuration, the function simply returns without doing anything.
+        - If the current operating system is not in the list of supported platforms, raises an `OSError`.
+
+    Example:
+        Suppose you have an application configuration that specifies supported platforms as `['Windows', 'Linux']`.
+        The function will determine the current operating system and raise an `OSError` if it is not supported:
+        ```python
+        try:
+            check_os_compatibility(app_config)
+        except OSError as e:
+            print(e)
+        ```
+        If the current OS is not in the supported platforms list, the message "Your OS isn't supported by this app." will be printed.
+    """
     os_name = platform.system().lower()
     supported_os = getattr(app_config.app, "platforms", [])
 
@@ -187,7 +516,32 @@ def check_os_compatibility(app_config) -> None:
         raise OSError("Your OS isn't supported by this app.")
 
 
-def get_current_commit(app_path):
+def get_current_commit(app_path: str) -> str:
+    """
+    Retrieves the current commit hash for a Git repository located at the specified path.
+
+    Args:
+        app_path (str): The file path to the Git repository.
+
+    Returns:
+        str: The current commit hash of the repository if the command is successful.
+             If an error occurs, returns an error message describing the failure.
+
+    Functionality:
+        - Uses the `git rev-parse HEAD` command to get the current commit hash.
+        - If the command succeeds, returns the commit hash as a string.
+        - If the command fails (e.g., if the provided path is not a valid Git repository),
+          returns an error message detailing what went wrong.
+
+    Example:
+        Suppose you have a Git repository at `/path/to/repo` and want to retrieve its current commit hash.
+        You can call the function like this:
+        ```python
+        commit_hash = get_current_commit("/path/to/repo")
+        ```
+        This will return the commit hash if the repository exists and the command runs successfully,
+        or an error message if there is an issue with the command.
+    """
     try:
         # Navigate to the repository path and get the current commit hash
         commit_hash = (
@@ -203,6 +557,38 @@ def get_current_commit(app_path):
 
 
 def update_app_config_file(app_path: str, sanitized_git_path: str, app_config) -> None:
+    """
+    Updates the `app.json` configuration file with the current commit and version information of an application.
+
+    Args:
+        app_path (str): The file path of the application.
+        sanitized_git_path (str): The sanitized path representing the Git repository.
+        app_config: The configuration object for the application, which is expected to have an `app` attribute
+                    with a `version` attribute, if available.
+
+    Returns:
+        None: This function modifies the `app.json` configuration file in place and returns nothing.
+
+    Functionality:
+        - Normalizes the provided application path.
+        - Determines the configuration directory by navigating two levels up from the application path.
+        - Checks if an `app.json` file exists in the configuration directory.
+            - If it exists, loads its contents into a dictionary.
+            - If it does not exist, creates an empty dictionary for new configuration entries.
+        - Retrieves the current commit information of the application using the `get_current_commit` function.
+        - If the application version is available from the `app_config` object, includes it in the configuration.
+        - Updates the `app.json` configuration file with the new commit and version information under the key
+          specified by `sanitized_git_path`.
+        - Writes the updated configuration back to the `app.json` file with indentation for readability.
+
+    Example:
+        Suppose you have an application located at `/path/to/app` and you want to update the `app.json` file
+        with the latest commit and version. You can call the function like this:
+        ```python
+        update_app_config_file("/path/to/app", "my_sanitized_git_path", app_config)
+        ```
+        This will update or create entries in `app.json` for the given Git path, storing commit and version details.
+    """
     normalized_app_path = os.path.normpath(app_path)
 
     conf_path = os.path.dirname(os.path.dirname(normalized_app_path))
@@ -227,6 +613,45 @@ def update_app_config_file(app_path: str, sanitized_git_path: str, app_config) -
 
 
 def install(client_config: ClientConfig) -> None | Tuple[str, Exception]:
+    """
+    Installs an application by cloning the repository, checking compatibility, and running installation scripts.
+
+    Args:
+        client_config (ClientConfig): The configuration object for the client, which is used during the installation process.
+
+    Returns:
+        None: If the installation is successful.
+        Tuple[str, Exception]: If an error occurs during any installation step, returns a tuple with the step description and the exception raised.
+
+    Functionality:
+        - Parses command-line arguments to get the Git repository to install.
+        - Performs a series of steps to install the application, including:
+            1. Sanitizing the Git repository path.
+            2. Cloning the repository to a temporary directory.
+            3. Loading the application's configuration (`config.json`).
+            4. Checking platform compatibility.
+            5. Moving the repository to the Syftbox directory.
+            6. Creating a symbolic link on the user's desktop.
+            7. Running pre-installation commands.
+            8. Running post-installation commands.
+            9. Updating the `apps.json` file to include the installed application.
+        - If any step fails, returns the step description and the exception raised.
+
+    Example:
+        Suppose you have a client configuration and want to install an application from a repository:
+        ```python
+        try:
+            result = install(client_config)
+            if result is not None:
+                step, error = result
+                print(f"Error during step '{step}': {error}")
+            else:
+                print("Installation completed successfully.")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+        ```
+        This will install the application, and if an error occurs, it will indicate the step where the failure happened.
+    """
     parser = argparse.ArgumentParser(description="Run FastAPI server")
 
     parser.add_argument("repository", type=str, help="App repository")
