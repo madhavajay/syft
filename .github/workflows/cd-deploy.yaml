@@ -6,7 +6,7 @@ on:
       version:
         description: "SyftBox Version to deploy"
         type: string
-        default: 0.1.2
+        default: 0.1.3
 
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress
