@@ -76,11 +76,13 @@ build:
     rm -rf dist
     uv build
 
-[group('utils')]
+[group('build')]
 fetch-syftbox-version version="latest":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    # If version is latest, then fetch the latest version from PyPI
+    # else, check if the version exists on PyPI
     if [ "{{ version }}" = "latest" ]; then
         echo "Fetching the latest version of syftbox from PyPI..."
         curl -sSf "https://pypi.org/pypi/syftbox/json" | jq -r ".info.version" || { echo "Failed to fetch the latest version." >&2; exit 1; }
@@ -96,7 +98,7 @@ fetch-syftbox-version version="latest":
 
 
 # Build & Deploy syftbox to a remote server using SSH
-[group('utils')]
+[group('build')]
 deploy keyfile version="latest" remote="azureuser@20.168.10.234":
     #!/bin/bash
     set -eou pipefail
