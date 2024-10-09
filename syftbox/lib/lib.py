@@ -82,7 +82,7 @@ class Jsonable:
 
     def save(self, filepath: str) -> None:
         d = self.to_dict()
-        with open(filepath, "w") as f:
+        with open(Path(filepath).expanduser(), "w") as f:
             f.write(json.dumps(d))
 
 

@@ -516,16 +516,29 @@ def main() -> None:
     print("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
 
     debug = True
-    uvicorn.run(
-        "syftbox.client.client:app"
-        if debug
-        else app,  # Use import string in debug mode
-        host="0.0.0.0",
-        port=client_config.port,
-        log_level="debug" if debug else "info",
-        reload=debug,  # Enable hot reloading only in debug mode
-        reload_dirs="./syftbox",
-    )
+    port = client_config.port
+    max_attempts = 10  # Maximum number of port attempts
+
+    for attempt in range(max_attempts):
+        try:
+            print(f"Attempting to start server on port {port}")
+            uvicorn.run(
+                "syftbox.client.client:app" if debug else app,
+                host="0.0.0.0",
+                port=port,
+                log_level="debug" if debug else "info",
+                reload=debug,
+                reload_dirs="./syftbox",
+            )
+            break  # If successful, exit the loop
+        except SystemExit as e:
+            if e.code != 1:  # If it's not the "Address already in use" error
+                raise
+            print(f"Failed to start server on port {port}. Trying next port.")
+            port += 1
+
+    print(f"Unable to find an available port after {max_attempts} attempts.")
+    sys.exit(1)
 
 
 if __name__ == "__main__":
