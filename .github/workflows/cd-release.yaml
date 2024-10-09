@@ -70,4 +70,4 @@ jobs:
       - name: Push changes to SyftBox repo
         if: ${{ inputs.test_bump == false }}
         run: |
-          git push origin main
+          git push origin
