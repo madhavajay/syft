@@ -127,12 +127,11 @@ upload-dev keyfile remote="azureuser@20.168.10.234": build
     scp -i {{ keyfile }} "$LOCAL_WHEEL" "{{ remote }}:$REMOTE_DIR"
 
     # install pip package
-    ssh -i {{ keyfile }} {{ remote }} "pip install --break-system-packages $REMOTE_WHEEL --force"
+    ssh -i {{ keyfile }} {{ remote }} "uv venv && uv pip install $REMOTE_WHEEL"
 
     # restart service
     # TODO - syftbox service was created manually on 20.168.10.234
-    ssh -i {{ keyfile }} {{ remote }} "sudo systemctl daemon-reload"
-    ssh -i {{ keyfile }} {{ remote }} "sudo systemctl restart syftbox"
+    ssh -i {{ keyfile }} {{ remote }} "sudo systemctl daemon-reload && sudo systemctl restart syftbox"
     echo -e "{{ _green }}Deployed SyftBox local wheel to {{ remote }}{{ _nc }}"
 
 # Deploy syftbox from pypi to a remote server using SSH
@@ -147,11 +146,10 @@ upload-pip version keyfile remote="azureuser@20.168.10.234":
     echo -e "Deploying syftbox version {{ version }} to {{ remote }}..."
 
     # install pip package
-    ssh -i {{ keyfile }} {{ remote }} "pip install syftbox=={{ version }} --break-system-packages  --force"
+    ssh -i {{ keyfile }} {{ remote }} "uv venv && uv pip install syftbox=={{ version }}"
 
     # restart service
-    ssh -i {{ keyfile }} {{ remote }} "sudo systemctl daemon-reload"
-    ssh -i {{ keyfile }} {{ remote }} "sudo systemctl restart syftbox"
+    ssh -i {{ keyfile }} {{ remote }} "sudo systemctl daemon-reload && sudo systemctl restart syftbox"
 
     echo -e "{{ _green }}Deployed SyftBox {{ version }} to {{ remote }}{{ _nc }}"
 
