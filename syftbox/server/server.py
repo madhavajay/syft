@@ -20,6 +20,7 @@ from fastapi.responses import (
 from jinja2 import Template
 from typing_extensions import Any
 
+from syftbox import __version__
 from syftbox.lib import (
     FileChange,
     FileChangeKind,
@@ -161,15 +162,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-
 # Define the ASCII art
-ascii_art = r"""
+ascii_art = rf"""
  ____         __ _   ____
 / ___| _   _ / _| |_| __ )  _____  __
 \___ \| | | | |_| __|  _ \ / _ \ \/ /
  ___) | |_| |  _| |_| |_) | (_) >  <
 |____/ \__, |_|  \__|____/ \___/_/\_\
-       |___/
+       |___/        {__version__:>17}
 
 
 # MacOS and Linux
@@ -425,6 +425,13 @@ async def datasites(request: Request):
     if datasites:
         return JSONResponse({"status": "success"} | response_json, status_code=200)
     return JSONResponse({"status": "error"}, status_code=400)
+
+
+@app.get("/info")
+def info():
+    return {
+        "version": __version__,
+    }
 
 
 def main() -> None:
