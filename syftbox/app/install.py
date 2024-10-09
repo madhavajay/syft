@@ -34,13 +34,33 @@ def sanitize_git_path(path):
     if re.match(pattern, path):
         return path
     else:
-        raise ValueError("Invalid Git repository path format.")
+        raise ValueError(
+            "Invalid Git repository path format. (eg: OpenMined/logged_in)"
+        )
 
 
 def delete_folder_if_exists(folder_path: str):
     # Check if temp clone path already exists, if so, delete it.
     if os.path.exists(folder_path) and os.path.isdir(folder_path):
         shutil.rmtree(folder_path)
+
+
+def is_repo_accessible(repo_url):
+    """Check if the Git repository is accessible."""
+    try:
+        subprocess.run(
+            ["git", "ls-remote", repo_url],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            timeout=2,
+        )
+        return True
+    except subprocess.CalledProcessError as e:
+        return False
+    except subprocess.TimeoutExpired:
+        return False
 
 
 def clone_repository(sanitized_git_path: str) -> str:
@@ -50,8 +70,12 @@ def clone_repository(sanitized_git_path: str) -> str:
             + " to install git according to your OS. (eg. brew install git)"
         )
 
-    # Clone repository in /tmp
     repo_url = f"https://github.com/{sanitized_git_path}.git"
+    if not is_repo_accessible(repo_url):
+        raise ValueError(
+            "The provided repository path doesn't seems to be accessible. Please check it out."
+        )
+    # Clone repository in /tmp
     temp_clone_path = f"{TEMP_PATH}/{sanitized_git_path.split('/')[-1]}"
 
     # Delete if there's already an existent repository folder in /tmp path.
@@ -82,6 +106,20 @@ def dict_to_namespace(data):
         return data
 
 
+def load_config(path: str):
+    if not os.path.exists(path):
+        raise ValueError("Couln't find the json config file for this path.")
+    try:
+        error_msg = "File isn't in JSON format."
+        with open(path, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError("File isn't in JSON format.")
+    except json.JSONDecodeError:
+        raise ValueError("File isn't in JSON format.")
+    return dict_to_namespace(data)
+
+
 def create_symbolic_link(
     client_config: ClientConfig, app_path: str, sanitized_path: str
 ):
@@ -96,12 +134,6 @@ def create_symbolic_link(
     if os.path.islink(target_symlink_path):
         os.unlink(target_symlink_path)
     os.symlink(app_path, target_symlink_path)
-
-
-def load_config(path: str):
-    with open(path, "r") as f:
-        data = json.load(f)
-    return dict_to_namespace(data)
 
 
 def move_repository_to_syftbox(tmp_clone_path: str, sanitized_path: str):
@@ -139,10 +171,11 @@ def run_post_install(config):
     )
 
 
-def check_os_compatibility(app_config):
+def check_os_compatibility(app_config) -> None:
     os_name = platform.system().lower()
     supported_os = getattr(app_config.app, "platforms", [])
 
+    print("\n\n\nHere\n\n\n: ", supported_os, app_config)
     # If there's no platforms field in config.json, just ignore it.
     if len(supported_os) == 0:
         return
@@ -153,7 +186,7 @@ def check_os_compatibility(app_config):
             is_compatible = True
 
     if not is_compatible:
-        raise Exception("Your OS isn't supported by this app.")
+        raise OSError("Your OS isn't supported by this app.")
 
 
 def get_current_commit(app_path):
