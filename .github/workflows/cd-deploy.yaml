@@ -20,6 +20,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout SyftBox repo with github token
+        uses: actions/checkout@v4
+
       - name: Install Just
         uses: extractions/setup-just@v2
         with:
