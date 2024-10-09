@@ -36,7 +36,7 @@ from syftbox.lib import ClientConfig, SharedState, validate_email
 current_dir = Path(__file__).parent
 # Initialize FastAPI app and scheduler
 
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=str(current_dir / "templates"))
 
 
 PLUGINS_DIR = current_dir / "plugins"
