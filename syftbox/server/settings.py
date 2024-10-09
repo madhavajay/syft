@@ -5,6 +5,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ServerSettings(BaseSettings):
+    """
+    Reads the server settings from the environment variables, using the prefix SYFTBOX_.
+
+    example:
+    `export SYFTBOX_DATA_FOLDER=data/data_folder`
+    will set the server_settings.data_folder to `data/data_folder`
+
+    see: https://docs.pydantic.dev/latest/concepts/pydantic_settings/#parsing-environment-variable-values
+    """
+
     model_config = SettingsConfigDict(env_prefix="SYFTBOX_")
 
     data_folder: Path = Path("data")
