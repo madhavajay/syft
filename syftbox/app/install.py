@@ -91,7 +91,6 @@ def clone_repository(sanitized_git_path: str) -> str:
         )
         return temp_clone_path
     except subprocess.CalledProcessError as e:
-        print(f"Error cloning repository: {e}")
         raise e
 
 
@@ -175,7 +174,6 @@ def check_os_compatibility(app_config) -> None:
     os_name = platform.system().lower()
     supported_os = getattr(app_config.app, "platforms", [])
 
-    print("\n\n\nHere\n\n\n: ", supported_os, app_config)
     # If there's no platforms field in config.json, just ignore it.
     if len(supported_os) == 0:
         return
