@@ -18,6 +18,7 @@ dependencies = [
     "setuptools>=75.1.0",
     "postmarker>=1.0",
     "watchdog>=5.0.2",
+    "pydantic-settings>=2.5.2",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +38,7 @@ build-backend = "setuptools.build_meta"
 # this will be completely ignored in the built wheel
 dev-dependencies = [
     "bump2version>=1.0.1",
+    "pre-commit>=4.0.1",
     "pytest-cov>=5.0.0",
     "pytest-xdist[psutil]>=3.6.1",
     "pytest>=8.3.3",
