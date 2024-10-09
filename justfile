@@ -78,7 +78,7 @@ build:
 
 [group('build')]
 fetch-syftbox-version version="latest":
-    #!/usr/bin/env bash
+    #!/bin/bash
     set -euo pipefail
 
     # If version is latest, then fetch the latest version from PyPI
