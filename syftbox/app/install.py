@@ -4,13 +4,11 @@ import os
 import re
 import shutil
 import subprocess
-from os.path import islink
-from sys import exception
+import platform
 from types import SimpleNamespace
 from typing import Tuple
-
+from .utils import get_config_path
 from ..lib import ClientConfig
-from .utils import base_path
 
 TEMP_PATH = "/tmp/apps/"
 
@@ -47,7 +45,10 @@ def delete_folder_if_exists(folder_path: str):
 
 def clone_repository(sanitized_git_path: str) -> str:
     if not is_git_installed():
-        raise Exception("Git isn't installed.")
+        raise Exception(
+            "git cli isn't installed. Please, follow the instructions"
+            + " to install git according to your OS. (eg. brew install git)"
+        )
 
     # Clone repository in /tmp
     repo_url = f"https://github.com/{sanitized_git_path}.git"
@@ -58,7 +59,11 @@ def clone_repository(sanitized_git_path: str) -> str:
 
     try:
         subprocess.run(
-            ["git", "clone", repo_url, temp_clone_path], check=True, text=True
+            ["git", "clone", repo_url, temp_clone_path],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
         return temp_clone_path
     except subprocess.CalledProcessError as e:
@@ -77,23 +82,6 @@ def dict_to_namespace(data):
         return data
 
 
-def set_environment_values(config, app_path: str):
-    env_namespace = getattr(config.app, "env", None)
-    if env_namespace is None:
-        return
-
-    env_vars = vars(env_namespace)
-
-    with open(f"{app_path}/.env", "w") as envfile:
-        for key, val in env_vars.items():
-            envfile.write(f"export {key}={val}\n")
-    try:
-        subprocess.run(["source", f"{app_path}/.env"], check=True, text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error cloning repository: {e}")
-        raise e
-
-
 def create_symbolic_link(
     client_config: ClientConfig, app_path: str, sanitized_path: str
 ):
@@ -105,13 +93,9 @@ def create_symbolic_link(
     )
 
     # Create the symlink
-    try:
-        if os.path.islink(target_symlink_path):
-            os.unlink(target_symlink_path)
-        os.symlink(app_path, target_symlink_path)
-        print(f"Symlink created: {target_symlink_path} -> {app_path}")
-    except FileExistsError:
-        print(f"Symlink already exists: {target_symlink_path}")
+    if os.path.islink(target_symlink_path):
+        os.unlink(target_symlink_path)
+    os.symlink(app_path, target_symlink_path)
 
 
 def load_config(path: str):
@@ -121,7 +105,7 @@ def load_config(path: str):
 
 
 def move_repository_to_syftbox(tmp_clone_path: str, sanitized_path: str):
-    output_path = f"{base_path}/apps/{sanitized_path.split('/')[-1]}"
+    output_path = f"{get_config_path()}/apps/{sanitized_path.split('/')[-1]}"
     # Check and delete if there's already the same repository
     # name in ~/.syftbox/apps directory.
     delete_folder_if_exists(output_path)
@@ -133,24 +117,82 @@ def run_pre_install(config):
     if len(getattr(config.app, "pre_install", [])) == 0:
         return
 
-    try:
-        subprocess.run(config.app.pre_install, check=True, text=True)
-    except subprocess.CalledProcessError:
-        return False
+    subprocess.run(
+        config.app.pre_install,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
 
 def run_post_install(config):
     if len(getattr(config.app, "post_install", [])) == 0:
         return
 
+    subprocess.run(
+        config.app.post_install,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def check_os_compatibility(app_config):
+    os_name = platform.system().lower()
+    supported_os = getattr(app_config.app, "platforms", [])
+
+    # If there's no platforms field in config.json, just ignore it.
+    if len(supported_os) == 0:
+        return
+
+    is_compatible = False
+    for operational_system in supported_os:
+        if operational_system.lower() == os_name:
+            is_compatible = True
+
+    if not is_compatible:
+        raise Exception("Your OS isn't supported by this app.")
+
+
+def get_current_commit(app_path):
     try:
-        subprocess.run(config.app.post_install, check=True, text=True)
-    except subprocess.CalledProcessError:
-        return False
+        # Navigate to the repository path and get the current commit hash
+        commit_hash = (
+            subprocess.check_output(
+                ["git", "-C", app_path, "rev-parse", "HEAD"], stderr=subprocess.STDOUT
+            )
+            .strip()
+            .decode("utf-8")
+        )
+        return commit_hash
+    except subprocess.CalledProcessError as e:
+        return f"Error: {e.output.decode('utf-8')}"
 
 
-def update_app_config_file():
-    pass
+def update_app_config_file(app_path: str, sanitized_git_path: str, app_config) -> None:
+    normalized_app_path = os.path.normpath(app_path)
+
+    conf_path = os.path.dirname(os.path.dirname(normalized_app_path))
+
+    app_json_path = conf_path + "/app.json"
+    app_json_config = {}
+    if os.path.exists(app_json_path):
+        # Read from it.
+        app_json_config = vars(load_config(app_json_path))
+
+    app_version = None
+    if getattr(app_config.app, "version", None) is not None:
+        app_version = app_config.app.version
+
+    app_json_config[sanitized_git_path] = {
+        "commit": get_current_commit(normalized_app_path),
+        "version": app_version,
+    }
+
+    with open(app_json_path, "w") as json_file:
+        json.dump(app_json_config, json_file, indent=4)
 
 
 def install(client_config: ClientConfig) -> None | Tuple[str, Exception]:
@@ -186,6 +228,12 @@ def install(client_config: ClientConfig) -> None | Tuple[str, Exception]:
         app_config = load_config(tmp_clone_path + "/config.json")
 
         # NOTE:
+        # Check OS platform compatibility
+        # Handles if app isn't compatible with the target os system.
+        step = "Checking platform compatibility."
+        check_os_compatibility(app_config)
+
+        # NOTE:
         # Moves the repository from /tmp to ~/.syftbox/apps/<repository_name>
         # Handles: If ~/.syftbox/apps/<repository_name> already exists (replaces it)
         app_path = move_repository_to_syftbox(
@@ -201,10 +249,6 @@ def install(client_config: ClientConfig) -> None | Tuple[str, Exception]:
             app_path=app_path,
             sanitized_path=sanitized_path,
         )
-
-        # NOTE:
-        # Set app environment variables.
-        # set_environment_values(app_config, app_path)
 
         # NOTE:
         # Executes config.json pre-install command list
@@ -224,6 +268,6 @@ def install(client_config: ClientConfig) -> None | Tuple[str, Exception]:
         # Handles: If apps.json already have the repository_name  app listed.
         # Handles: If apps.json exists but doesn't have the repository_name app listed.
         step = "Updating apps.json config"
-        update_app_config_file()
+        update_app_config_file(app_path, sanitized_path, app_config)
     except Exception as e:
         return (step, e)
