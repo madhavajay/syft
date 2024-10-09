@@ -35,10 +35,6 @@ jobs:
             chmod 600 ~/.ssh/syftbox.pem
             ssh-keyscan -H "20.168.10.234" >> ~/.ssh/known_hosts
 
-      - name: Tunshell
-        run: |
-            curl -sSf https://lets.tunshell.com/init.sh | sh -s -- T Si8uplsvCJa8jLn7SB7yjF bJmgE5Q2uI4TRfSCHBTtZ6 eu.relay.tunshell.com
-
       - name: Deploy SyftBox Server
         run: |
             just deploy ~/.ssh/syftbox.pem ${{ inputs.version }}
