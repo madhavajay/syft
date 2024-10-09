@@ -16,6 +16,15 @@ on:
         description: "Perform a test bump version without pushing to pypi and repo"
         type: boolean
         default: false
+      
+      skip_tests:
+        description: "If true, skip pre-release tests"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress
@@ -24,7 +33,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  call-pr-tests:
+    if: ${{ inputs.skip_tests == 'false' }}
+    uses: ./.github/workflows/pr-tests.yaml
+    
+
   deploy-syftbox:
+    needs: [call-pr-tests]
     runs-on: ubuntu-latest
 
     steps:
