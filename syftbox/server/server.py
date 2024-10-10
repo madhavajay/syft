@@ -450,7 +450,7 @@ async def info():
     }
 
 
-def main() -> None:
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run FastAPI server")
     parser.add_argument(
         "--port",
@@ -463,18 +463,43 @@ def main() -> None:
         action="store_true",
         help="Run the server in debug mode with hot reloading",
     )
+    parser.add_argument(
+        "--ssl-keyfile",
+        type=str,
+        help="Path to SSL key file for HTTPS",
+    )
+    parser.add_argument(
+        "--ssl-keyfile-password",
+        type=str,
+        help="SSL key file password for HTTPS",
+    )
+    parser.add_argument(
+        "--ssl-certfile",
+        type=str,
+        help="Path to SSL certificate file for HTTPS",
+    )
 
     args = parser.parse_args()
+    return args
 
-    uvicorn.run(
-        "syftbox.server.server:app"
-        if args.debug
-        else app,  # Use import string in debug mode
-        host="0.0.0.0",
-        port=args.port,
-        log_level="debug" if args.debug else "info",
-        reload=args.debug,  # Enable hot reloading only in debug mode
+
+def main() -> None:
+    args = parse_args()
+    uvicorn_config = {
+        "app": "syftbox.server.server:app" if args.debug else app,
+        "host": "0.0.0.0",
+        "port": args.port,
+        "log_level": "debug" if args.debug else "info",
+        "reload": args.debug,
+    }
+
+    uvicorn_config["ssl_keyfile"] = args.ssl_keyfile if args.ssl_keyfile else None
+    uvicorn_config["ssl_certfile"] = args.ssl_certfile if args.ssl_certfile else None
+    uvicorn_config["ssl_keyfile_password"] = (
+        args.ssl_keyfile_password if args.ssl_keyfile_password else None
     )
+
+    uvicorn.run(**uvicorn_config)
 
 
 if __name__ == "__main__":
