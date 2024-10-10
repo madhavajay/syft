@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import Self
 
 from fastapi import Request
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing_extensions import Self
 
 
 class ServerSettings(BaseSettings):
