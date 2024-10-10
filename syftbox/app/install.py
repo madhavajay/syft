@@ -1,17 +1,17 @@
 import argparse
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
-import platform
+from pathlib import Path
+from tempfile import mkdtemp
 from types import SimpleNamespace
-from typing import Tuple
-from typing import Any
-from .utils import get_config_path
-from ..lib import ClientConfig
+from typing import Any, Tuple
 
-TEMP_PATH = "/tmp/apps/"
+from syftbox.app.utils import get_config_path
+from syftbox.lib.lib import ClientConfig
 
 
 def is_git_installed() -> bool:
@@ -200,7 +200,8 @@ def clone_repository(sanitized_git_path: str) -> str:
             "The provided repository path doesn't seems to be accessible. Please check it out."
         )
     # Clone repository in /tmp
-    temp_clone_path = f"{TEMP_PATH}/{sanitized_git_path.split('/')[-1]}"
+    tmp_path = mkdtemp(prefix="syftbox_app_")
+    temp_clone_path = Path(tmp_path, sanitized_git_path.split("/")[-1])
 
     # Delete if there's already an existent repository folder in /tmp path.
     delete_folder_if_exists(temp_clone_path)
@@ -314,9 +315,9 @@ def load_config(path: str) -> SimpleNamespace:
         with open(path, "r") as f:
             data = json.load(f)
         if not isinstance(data, dict):
-            raise ValueError("File isn't in JSON format.")
+            raise ValueError(error_msg)
     except json.JSONDecodeError:
-        raise ValueError("File isn't in JSON format.")
+        raise ValueError(error_msg)
     return dict_to_namespace(data)
 
 
