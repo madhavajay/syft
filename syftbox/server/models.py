@@ -61,12 +61,17 @@ class FileChange(SyftBaseModel):
 
         return False
 
-    def read(self) -> bytes:
+    def is_directory(self) -> bool:
+        return os.path.isdir(self.full_path)
+
+    def read(self) -> bytes | None:
         # if is_symlink(self.full_path):
         #     # write a text file with a syftlink
         #     data = convert_to_symlink(self.full_path).encode("utf-8")
         #     return data
         # else:
+        if self.is_directory():
+            return None
         with open(self.full_path, "rb") as f:
             return f.read()
 
@@ -139,6 +144,18 @@ class WriteResponse(BaseModel):
 class ListDatasitesResponse(BaseModel):
     datasites: list[str]
     status: str
+
+
+class ReadResponse(BaseModel):
+    change: FileChange
+    status: str
+    is_directory: bool = False
+    data: Optional[str] = None
+
+
+class ReadRequest(BaseModel):
+    email: str
+    change: FileChange
 
 
 def get_file_last_modified(file_path: str) -> float:

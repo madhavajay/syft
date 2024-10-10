@@ -31,9 +31,9 @@ from syftbox.lib import (
     strtobin,
 )
 from syftbox.server.models import (
-    FileChange,
-    FileChangeKind,
     ListDatasitesResponse,
+    ReadRequest,
+    ReadResponse,
     WriteRequest,
     WriteResponse,
 )
@@ -375,35 +375,21 @@ async def write(
         )
 
 
-@app.post("/read")
+@app.post("/read", response_model=ReadResponse)
 async def read(
-    request: Request, server_settings: ServerSettings = Depends(get_server_settings)
-):
-    data = await request.json()
-    email = data["email"]
-    change_dict = data["change"]
-    change_dict["kind"] = FileChangeKind(change_dict["kind"])
-    change = FileChange(**change_dict)
+    request: ReadRequest, server_settings: ServerSettings = Depends(get_server_settings)
+) -> ReadResponse:
+    email = request.email
+    change = request.change
     change.sync_folder = os.path.abspath(str(server_settings.snapshot_folder))
-
-    json_dict = {"change": change.model_dump()}
-
-    if change.kind_write:
-        if os.path.isdir(change.full_path):
-            # Handle directory
-            json_dict["is_directory"] = True
-        else:
-            # Handle file
-            bin_data = change.read()
-            json_dict["data"] = bintostr(bin_data)
-    elif change.kind_delete:
-        # Handle delete operation if needed
-        pass
-    else:
-        raise Exception(f"Unknown type of change kind. {change.kind}")
-
     print(f"> {email} {change.kind}: {change.internal_path}")
-    return JSONResponse({"status": "success"} | json_dict, status_code=200)
+    # TODO: handle permissions, create and delete
+    return ReadResponse(
+        status="success",
+        change=change,
+        data=bintostr(change.read()) if change.kind_write else None,
+        is_directory=change.is_directory(),
+    )
 
 
 @app.post("/dir_state")

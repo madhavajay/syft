@@ -8,6 +8,7 @@ from syftbox.server.server import app
 from syftbox.server.settings import ServerSettings
 
 TEST_DATASITE_NAME = "test_datasite@openmined.org"
+TEST_FILE = "test_file.txt"
 
 
 @pytest.fixture(scope="function")
@@ -22,6 +23,10 @@ def client(monkeypatch, tmp_path):
     datasite_name = TEST_DATASITE_NAME
     datasite = settings.snapshot_folder / datasite_name
     datasite.mkdir(parents=True)
+
+    datafile = datasite / TEST_FILE
+    datafile.touch()
+    datafile.write_bytes(b"Hello, World!")
 
     with TestClient(app) as client:
         yield client
@@ -65,3 +70,18 @@ def test_list_datasites(client: TestClient):
 
     response = client.get(f"/datasites/{TEST_DATASITE_NAME}/")
     assert response.status_code == 200
+
+
+def test_read_file(client: TestClient):
+    change = {
+        "kind": "write",
+        "parent_path": TEST_DATASITE_NAME,
+        "sub_path": "test_file.txt",
+        "file_hash": "some_hash",
+        "last_modified": time.time(),
+    }
+    response = client.post(
+        "/read", json={"email": TEST_DATASITE_NAME, "change": change}
+    )
+
+    response.raise_for_status()
