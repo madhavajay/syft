@@ -22,7 +22,6 @@ from typing_extensions import Any
 
 from syftbox import __version__
 from syftbox.lib import (
-    FileChange,
     Jsonable,
     PermissionTree,
     bintostr,
@@ -32,6 +31,7 @@ from syftbox.lib import (
     strtobin,
 )
 from syftbox.server.models import (
+    FileChange,
     FileChangeKind,
     ListDatasitesResponse,
     WriteRequest,

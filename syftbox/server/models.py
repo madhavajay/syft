@@ -1,10 +1,9 @@
+import hashlib
 import os
 from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel
-
-from syftbox.lib.lib import get_file_hash, get_file_last_modified
 
 
 class FileChangeKind(Enum):
@@ -134,3 +133,18 @@ class WriteResponse(BaseModel):
 class ListDatasitesResponse(BaseModel):
     datasites: list[str]
     status: str
+
+
+def get_file_last_modified(file_path: str) -> float:
+    return os.path.getmtime(file_path)
+
+
+def get_file_hash(file_path: str) -> str:
+    # if is_symlink(file_path):
+    #     # return the hash of the syftlink instead
+    #     sym_link_string = convert_to_symlink(file_path)
+    #     return hashlib.md5(sym_link_string.encode("utf-8")).hexdigest()
+    # else:
+    # TODO: we will run out of memory for very large files
+    with open(file_path, "rb") as file:
+        return hashlib.md5(file.read()).hexdigest()

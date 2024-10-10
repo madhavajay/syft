@@ -10,8 +10,6 @@ from watchdog.events import DirModifiedEvent
 
 from syftbox.lib import (
     DirState,
-    FileChange,
-    FileChangeKind,
     FileInfo,
     PermissionTree,
     ResettableTimer,
@@ -20,6 +18,7 @@ from syftbox.lib import (
     hash_dir,
     strtobin,
 )
+from syftbox.server.models import FileChange, FileChangeKind
 
 CLIENT_CHANGELOG_FOLDER = "syft_changelog"
 CLIENT_APPS = "apps"
@@ -100,7 +99,7 @@ def remove_empty_folders(leaf, current_path, root_dir):
 
 
 # write operations
-def diff_dirstate(old, new):
+def diff_dirstate(old: FileChange, new: FileChange):
     sync_folder = old.sync_folder
     old_sub_path = old.sub_path
     try:

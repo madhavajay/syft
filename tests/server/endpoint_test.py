@@ -11,8 +11,9 @@ TEST_DATASITE_NAME = "test_datasite@openmined.org"
 
 
 @pytest.fixture(scope="function")
-def client(snapshot_folder, monkeypatch, tmp_path):
+def client(monkeypatch, tmp_path):
     """Every client gets their own snapshot folder at `tmp_path`"""
+    snapshot_folder = tmp_path / TEST_DATASITE_NAME
     settings = ServerSettings.from_data_folder(snapshot_folder)
     monkeypatch.setenv("SYFTBOX_DATA_FOLDER", str(settings.data_folder))
     monkeypatch.setenv("SYFTBOX_SNAPSHOT_FOLDER", str(settings.snapshot_folder))
@@ -37,22 +38,16 @@ def test_register(client):
 
 
 def test_write_file(client: TestClient):
-    # Setup: Create a temporary directory for testing
-    # Test data
-    test_file = "test_file.txt"
-    test_content = bintostr(b"Hello, World!")
-    email = "test@example.com"
-
     request_data = {
-        "email": email,
+        "email": TEST_DATASITE_NAME,
         "change": {
             "kind": "write",
-            "parent_path": email,
-            "sub_path": test_file,
+            "parent_path": TEST_DATASITE_NAME,
+            "sub_path": "test_file.txt",
             "file_hash": "some_hash",
             "last_modified": time.time(),
         },
-        "data": test_content,
+        "data": bintostr(b"Hello, World!"),
     }
 
     # Send POST request to /write endpoint
@@ -65,6 +60,8 @@ def test_write_file(client: TestClient):
 def test_list_datasites(client: TestClient):
     response = client.get("/list_datasites")
     assert response.status_code == 200
+
+    assert len(response.json()["datasites"])
 
     response = client.get(f"/datasites/{TEST_DATASITE_NAME}/")
     assert response.status_code == 200
