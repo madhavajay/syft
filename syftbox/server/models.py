@@ -1,9 +1,8 @@
-from pydantic import BaseModel
+import os
 from enum import Enum
 from typing import Optional
 
-
-import os
+from pydantic import BaseModel
 
 from syftbox.lib.lib import get_file_hash, get_file_last_modified
 

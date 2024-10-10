@@ -1,10 +1,10 @@
 import time
+
 import pytest
 from fastapi.testclient import TestClient
+
 from syftbox.lib.lib import bintostr
 from syftbox.server.server import app
-import json
-
 from syftbox.server.settings import ServerSettings
 
 TEST_DATASITE_NAME = "test_datasite@openmined.org"
