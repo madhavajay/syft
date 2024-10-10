@@ -66,13 +66,13 @@ uv run syftbox/client/client.py
 ### Run Client
 
 ```
-syftbox client --config_path=./config.json --sync_folder=~/Desktop/SyftBox --email=your@email.org --port=8082  --server=http://20.168.10.234:8080
+syftbox client --config_path=./config.json --sync_folder=~/Desktop/SyftBox --email=your@email.org --port=8082  --server=http://syftbox.openmined.org:8080
 ```
 
 ### Deploy
 
 This builds the latest source to a wheel and deploys and restarts the server:
-http://20.168.10.234:8080
+http://syftbox.openmined.org:8080
 
 ```
 ./scripts/deploy.sh
