@@ -18,6 +18,7 @@ from syftbox.lib import (
     hash_dir,
     strtobin,
 )
+from syftbox.lib.lib import ClientConfig
 from syftbox.server.models import FileChange, FileChangeKind
 
 CLIENT_CHANGELOG_FOLDER = "syft_changelog"
@@ -99,7 +100,7 @@ def remove_empty_folders(leaf, current_path, root_dir):
 
 
 # write operations
-def diff_dirstate(old: FileChange, new: FileChange):
+def diff_dirstate(old: DirState, new: DirState):
     sync_folder = old.sync_folder
     old_sub_path = old.sub_path
     try:
@@ -237,13 +238,13 @@ def filter_changes(
     return valid_changes, valid_change_files, invalid_changes
 
 
-def push_changes(client_config, changes):
+def push_changes(client_config: ClientConfig, changes: list[FileChange]):
     written_changes = []
     for change in changes:
         try:
             data = {
                 "email": client_config.email,
-                "change": change.to_dict(),
+                "change": change.model_dump(),
             }
             if change.kind_write:
                 if os.path.isdir(change.full_path):

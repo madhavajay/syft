@@ -386,7 +386,7 @@ async def read(
     change = FileChange(**change_dict)
     change.sync_folder = os.path.abspath(str(server_settings.snapshot_folder))
 
-    json_dict = {"change": change.to_dict()}
+    json_dict = {"change": change.model_dump()}
 
     if change.kind_write:
         if os.path.isdir(change.full_path):
