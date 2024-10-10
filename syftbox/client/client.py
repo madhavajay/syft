@@ -1,5 +1,6 @@
 import argparse
 import atexit
+import contextlib
 import importlib
 import os
 import platform
@@ -8,8 +9,9 @@ import time
 import traceback
 import types
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import uvicorn
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -32,6 +34,17 @@ from syftbox.client.fsevents import (
 )
 from syftbox.client.utils import macos
 from syftbox.lib import ClientConfig, SharedState, validate_email
+
+
+class CustomFastAPI(FastAPI):
+    loaded_plugins: dict
+    running_plugins: dict
+    scheduler: Any
+    shared_state: dict
+    job_file: str
+    watchdog: Any
+    job_file: str
+
 
 current_dir = Path(__file__).parent
 # Initialize FastAPI app and scheduler
@@ -225,7 +238,7 @@ def run_plugin(plugin_name, *args, **kwargs):
         print("error", e)
 
 
-def start_plugin(plugin_name: str):
+def start_plugin(app: FastAPI, plugin_name: str):
     if plugin_name not in app.loaded_plugins:
         raise HTTPException(
             status_code=400,
@@ -301,11 +314,18 @@ def start_watchdog(app) -> FSWatchdog:
     return watchdog
 
 
-async def lifespan(app: FastAPI):
+@contextlib.asynccontextmanager
+async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None):
     # Startup
     print("> Starting Client")
-    args = parse_args()
-    client_config = load_or_create_config(args)
+
+    # client_config needs to be closed if it was created in this context
+    # if it is passed as lifespan arg (eg for testing) it should be managed by the caller instead.
+    close_client_config: bool = False
+    if client_config is None:
+        args = parse_args()
+        client_config = load_or_create_config(args)
+        close_client_config = True
     app.shared_state = SharedState(client_config=client_config)
 
     # Clear the lock file on the first run if it exists
@@ -319,33 +339,34 @@ async def lifespan(app: FastAPI):
     jobstores = {"default": SQLAlchemyJobStore(url=f"sqlite:///{job_file}")}
     scheduler = BackgroundScheduler(jobstores=jobstores)
     scheduler.start()
-    atexit.register(stop_scheduler)
+    atexit.register(partial(stop_scheduler, app))
 
     app.scheduler = scheduler
     app.running_plugins = {}
     app.loaded_plugins = load_plugins(client_config)
+    print("> Loaded plugins:", list(app.loaded_plugins.keys()))
     app.watchdog = start_watchdog(app)
 
-    autorun_plugins = ["init", "create_datasite", "sync", "apps"]
-    # autorun_plugins = ["init", "create_datasite", "sync", "apps"]
-    for plugin in autorun_plugins:
-        start_plugin(plugin)
+    for plugin in client_config.autorun_plugins:
+        start_plugin(app, plugin)
 
     yield  # This yields control to run the application
 
     print("> Shutting down...")
     scheduler.shutdown()
     app.watchdog.stop()
+    if close_client_config:
+        client_config.close()
 
 
-def stop_scheduler():
+def stop_scheduler(app: FastAPI):
     # Remove the lock file if it exists
     if os.path.exists(app.job_file):
         os.remove(app.job_file)
         print("> Scheduler stopped and lock file removed.")
 
 
-app = FastAPI(lifespan=lifespan)
+app: CustomFastAPI = FastAPI(lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=current_dir / "static"), name="static")
 
@@ -406,8 +427,8 @@ def list_plugins():
 
 
 @app.post("/launch")
-def launch_plugin(request: PluginRequest):
-    return start_plugin(request.plugin_name)
+def launch_plugin(plugin_request: PluginRequest, request: Request):
+    return start_plugin(request.app, plugin_request.plugin_name)
 
 
 @app.get("/running")
@@ -516,16 +537,28 @@ def main() -> None:
     print("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
 
     debug = True
-    uvicorn.run(
-        "syftbox.client.client:app"
-        if debug
-        else app,  # Use import string in debug mode
-        host="0.0.0.0",
-        port=client_config.port,
-        log_level="debug" if debug else "info",
-        reload=debug,  # Enable hot reloading only in debug mode
-        reload_dirs="./syftbox",
-    )
+    port = client_config.port
+    max_attempts = 10  # Maximum number of port attempts
+
+    for attempt in range(max_attempts):
+        try:
+            uvicorn.run(
+                "syftbox.client.client:app" if debug else app,
+                host="0.0.0.0",
+                port=port,
+                log_level="debug" if debug else "info",
+                reload=debug,
+                reload_dirs="./syftbox",
+            )
+            break  # If successful, exit the loop
+        except SystemExit as e:
+            if e.code != 1:  # If it's not the "Address already in use" error
+                raise
+            print(f"Failed to start server on port {port}. Trying next port.")
+            port = 0
+
+    print(f"Unable to find an available port after {max_attempts} attempts.")
+    sys.exit(1)
 
 
 if __name__ == "__main__":
