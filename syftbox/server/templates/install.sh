@@ -2,6 +2,12 @@
 
 set -e
 
+# --no-prompt => disables the run client prompt
+ASK_RUN_CLIENT=1
+
+# --run => disables the prompt & runs the client
+RUN_CLIENT=0
+
 red='\033[1;31m'
 yellow='\033[0;33m'
 cyan='\033[0;36m'
@@ -111,6 +117,12 @@ install_syftbox() {
 }
 
 pre_install() {
+    # ----- pre-install checks ----
+    # uv doesn't really need python,
+    # ... but incase we want we can toggle this on
+    # need_python
+
+    # if you see this message, you're good to go
     echo "
  ____         __ _   ____
 / ___| _   _ / _| |_| __ )  _____  __
@@ -119,15 +131,28 @@ pre_install() {
 |____/ \__, |_|  \__|____/ \___/_/\_\\
        |___/
 "
-
-    # ----- pre-install checks ----
-    # uv doesn't really need python,
-    # ... but incase we want we can toggle this on
-    # need_python
 }
 
-post_install() {
-    echo
+run_client() {
+    success "Starting SyftBox client..."
+    exec ~/.local/bin/syftbox client
+}
+
+prompt_run_client() {
+    # prompt if they want to start the client
+    prompt=$(echo "${yellow}Start the client now? [y/n]  ${reset}")
+    while [ "$start_client" != "y" ] && [ "$start_client" != "Y" ] && [ "$start_client" != "n" ] && [ "$start_client" != "N" ]
+    do
+        read -p "$prompt" start_client < /dev/tty
+    done
+
+    if [ "$start_client" = "y" ] || [ "$start_client" = "Y" ]
+    then run_client
+    fi
+}
+
+prompt_restart_shell() {
+    # default
     warn "RESTART your shell or RELOAD shell profile"
     echo "  \`source ~/.zshrc\`        (for zsh)"
     echo "  \`source ~/.bash_profile\` (for bash)"
@@ -137,7 +162,31 @@ post_install() {
     echo "  \`syftbox client\`"
 }
 
+post_install() {
+    echo
+
+    if [ $RUN_CLIENT -eq 1 ]
+    then run_client
+    elif [ $ASK_RUN_CLIENT -eq 1 ]
+    then prompt_run_client
+    else prompt_restart_shell
+    fi
+}
+
 do_install() {
+    for arg in "$@"; do
+        case "$arg" in
+            -r|--run|run)
+                RUN_CLIENT=1
+                ;;
+            -n|--no-prompt|no-prompt)
+                ASK_RUN_CLIENT=0
+                ;;
+            *)
+                ;;
+        esac
+    done
+
     pre_install
 
     info "Installing uv"
@@ -150,4 +199,4 @@ do_install() {
     post_install
 }
 
-do_install
+do_install "$@" || exit 1
