@@ -282,13 +282,13 @@ def push_changes(client_config: ClientConfig, changes: list[FileChange]):
     return written_changes
 
 
-def pull_changes(client_config, changes):
+def pull_changes(client_config, changes: list[FileChange]):
     remote_changes = []
     for change in changes:
         try:
             data = {
                 "email": client_config.email,
-                "change": change.to_dict(),
+                "change": change.model_dump(),
             }
             response = requests.post(
                 f"{client_config.server_url}/read",
@@ -404,7 +404,9 @@ def handle_empty_folders(client_config, datasite):
     return changes
 
 
-def filter_changes_ignore(pre_filter_changes, syft_ignore_files):
+def filter_changes_ignore(
+    pre_filter_changes: list[FileChange], syft_ignore_files
+) -> list[FileChange]:
     filtered_changes = []
     for change in pre_filter_changes:
         keep = True

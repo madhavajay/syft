@@ -6,6 +6,12 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class SyftBaseModel(BaseModel):
+    def to_dict(self) -> dict:
+        # used until we remote Jsonable from the code base
+        return self.model_dump()
+
+
 class FileChangeKind(Enum):
     CREATE: str = "create"
     # READ: str "read"
@@ -14,7 +20,7 @@ class FileChangeKind(Enum):
     DELETE: str = "delete"
 
 
-class FileChange(BaseModel):
+class FileChange(SyftBaseModel):
     kind: FileChangeKind
     parent_path: str
     sub_path: str

@@ -9,7 +9,7 @@ import traceback
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import uvicorn
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -32,6 +32,17 @@ from syftbox.client.fsevents import (
 )
 from syftbox.client.utils import macos
 from syftbox.lib import ClientConfig, SharedState, validate_email
+
+
+class CustomFastAPI(FastAPI):
+    loaded_plugins: dict
+    running_plugins: dict
+    scheduler: Any
+    shared_state: dict
+    job_file: str
+    watchdog: Any
+    job_file: str
+
 
 current_dir = Path(__file__).parent
 # Initialize FastAPI app and scheduler
@@ -301,7 +312,7 @@ def start_watchdog(app) -> FSWatchdog:
     return watchdog
 
 
-async def lifespan(app: FastAPI):
+async def lifespan(app: CustomFastAPI):
     # Startup
     print("> Starting Client")
     args = parse_args()
@@ -345,7 +356,7 @@ def stop_scheduler():
         print("> Scheduler stopped and lock file removed.")
 
 
-app = FastAPI(lifespan=lifespan)
+app: CustomFastAPI = FastAPI(lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=current_dir / "static"), name="static")
 
