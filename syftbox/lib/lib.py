@@ -102,7 +102,7 @@ class SyftPermission(Jsonable):
 
     @classmethod
     def datasite_default(cls, email: str) -> Self:
-        return SyftPermission(
+        return cls(
             admin=[email],
             read=[email],
             write=[email],
@@ -276,7 +276,10 @@ def ignore_file(directory: str, root: str, filename: str) -> bool:
     return False
 
 
-def get_datasites(sync_folder: str) -> list[str]:
+def get_datasites(sync_folder: str | Path) -> list[str]:
+    sync_folder = (
+        str(sync_folder.resolve()) if isinstance(sync_folder, Path) else sync_folder
+    )
     datasites = []
     folders = os.listdir(sync_folder)
     for folder in folders:

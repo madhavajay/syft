@@ -11,6 +11,11 @@ class SyftBaseModel(BaseModel):
         # used until we remote Jsonable from the code base
         return self.model_dump()
 
+    def save(self, path: str) -> bool:
+        with open(path, "w") as f:
+            f.write(self.model_dump_json())
+        return True
+
 
 class FileChangeKind(Enum):
     CREATE: str = "create"
@@ -177,7 +182,7 @@ class DirStateRequest(SyftBaseModel):
 
 class DirStateResponse(SyftBaseModel):
     sub_path: str
-    dir_state: dict
+    dir_state: DirState
     status: str
 
 
