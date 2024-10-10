@@ -280,7 +280,7 @@ def parse_args():
     parser.add_argument(
         "--server",
         type=str,
-        default="http://20.168.10.234:8080",
+        default="https://syftbox.openmined.org",
         help="Server",
     )
     return parser.parse_args()
