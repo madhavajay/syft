@@ -134,12 +134,14 @@ pre_install() {
 }
 
 run_client() {
+    echo
     success "Starting SyftBox client..."
     exec ~/.local/bin/syftbox client
 }
 
 prompt_run_client() {
     # prompt if they want to start the client
+    echo
     prompt=$(echo "${yellow}Start the client now? [y/n]  ${reset}")
     while [ "$start_client" != "y" ] && [ "$start_client" != "Y" ] && [ "$start_client" != "n" ] && [ "$start_client" != "N" ]
     do
@@ -148,11 +150,12 @@ prompt_run_client() {
 
     if [ "$start_client" = "y" ] || [ "$start_client" = "Y" ]
     then run_client
+    else prompt_restart_shell
     fi
 }
 
 prompt_restart_shell() {
-    # default
+    echo
     warn "RESTART your shell or RELOAD shell profile"
     echo "  \`source ~/.zshrc\`        (for zsh)"
     echo "  \`source ~/.bash_profile\` (for bash)"
@@ -163,8 +166,6 @@ prompt_restart_shell() {
 }
 
 post_install() {
-    echo
-
     if [ $RUN_CLIENT -eq 1 ]
     then run_client
     elif [ $ASK_RUN_CLIENT -eq 1 ]
