@@ -17,6 +17,8 @@ from typing import Any
 import requests
 from typing_extensions import Self
 
+from syftbox.server.models import FileChangeKind
+
 USER_GROUP_GLOBAL = "GLOBAL"
 
 ICON_FILE = "Icon"  # special
@@ -202,14 +204,6 @@ def bintostr(binary_data):
 
 def strtobin(encoded_data):
     return zlib.decompress(base64.b85decode(encoded_data.encode("utf-8")))
-
-
-class FileChangeKind(Enum):
-    CREATE: str = "create"
-    # READ: str "read"
-    WRITE: str = "write"
-    # append?
-    DELETE: str = "delete"
 
 
 @dataclass

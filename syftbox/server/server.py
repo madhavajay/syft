@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -23,7 +23,6 @@ from typing_extensions import Any
 from syftbox import __version__
 from syftbox.lib import (
     FileChange,
-    FileChangeKind,
     Jsonable,
     PermissionTree,
     bintostr,
@@ -31,6 +30,12 @@ from syftbox.lib import (
     get_datasites,
     hash_dir,
     strtobin,
+)
+from syftbox.server.models import (
+    FileChangeKind,
+    ListDatasitesResponse,
+    WriteRequest,
+    WriteResponse,
 )
 from syftbox.server.settings import ServerSettings, get_server_settings
 
@@ -192,7 +197,7 @@ async def get_ascii_art():
 
 
 @app.get("/wheel/{path:path}", response_class=HTMLResponse)
-async def get_wheel(request: Request, path: str):
+async def get_wheel(path: str):
     if path == "":  # Check if path is empty (meaning "/datasites/")
         return RedirectResponse(url="/")
 
@@ -317,28 +322,26 @@ async def register(request: Request, users: Users = Depends(get_users)):
     return JSONResponse({"status": "success", "token": token}, status_code=200)
 
 
-@app.post("/write")
+@app.post("/write", response_model=WriteResponse)
 async def write(
-    request: Request, server_settings: ServerSettings = Depends(get_server_settings)
-):
+    request: WriteRequest,
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> WriteResponse:
     try:
-        data = await request.json()
-        email = data["email"]
-        change_dict = data["change"]
-        change_dict["kind"] = FileChangeKind(change_dict["kind"])
-        change = FileChange(**change_dict)
+        email = request.email
+        change = request.change
 
         change.sync_folder = os.path.abspath(str(server_settings.snapshot_folder))
         result = True
         accepted = True
         if change.newer():
             if change.kind_write:
-                if data.get("is_directory", False):
+                if request.is_directory:
                     # Handle empty directory
                     os.makedirs(change.full_path, exist_ok=True)
                     result = True
                 else:
-                    bin_data = strtobin(data["data"])
+                    bin_data = strtobin(request.data)
                     result = change.write(bin_data)
             elif change.kind_delete:
                 if change.hash_equal_or_none():
@@ -354,24 +357,21 @@ async def write(
 
         if result:
             print(f"> {email} {change.kind}: {change.internal_path}")
-            json_payload = {
-                "status": "success",
-                "change": change.to_dict(),
-                "accepted": accepted,
-            }
-            return JSONResponse(
-                json_payload,
-                status_code=200,
+            return WriteResponse(
+                status="success",
+                change=change,
+                accepted=accepted,
             )
-        return JSONResponse(
-            {"status": "error", "change": change.to_dict()},
-            status_code=400,
-        )
+        return WriteResponse(
+            status="error",
+            change=change,
+            accepted=accepted,
+        ), 400
     except Exception as e:
         print("Exception writing", e)
-        return JSONResponse(
-            {"status": "error", "error": str(e)},
+        raise HTTPException(
             status_code=400,
+            detail=f"Exception writing {e}",
         )
 
 
@@ -434,14 +434,14 @@ async def dir_state(
 
 
 @app.get("/list_datasites")
-async def datasites(
-    request: Request, server_settings: ServerSettings = Depends(get_server_settings)
-):
+async def datasites(server_settings: ServerSettings = Depends(get_server_settings)):
     datasites = get_datasites(server_settings.snapshot_folder)
-    response_json = {"datasites": datasites}
     if datasites:
-        return JSONResponse({"status": "success"} | response_json, status_code=200)
-    return JSONResponse({"status": "error"}, status_code=400)
+        return ListDatasitesResponse(
+            datasites=datasites,
+            status="success",
+        )
+    raise HTTPException(status_code=400, detail={"status": "error"})
 
 
 @app.get("/info")
