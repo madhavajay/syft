@@ -146,32 +146,30 @@ class SyftPermission(Jsonable):
         return self.save(path)
 
     @classmethod
-    def no_permission(self) -> Self:
-        return SyftPermission(admin=[], read=[], write=[])
+    def no_permission(cls) -> Self:
+        return cls(admin=[], read=[], write=[])
 
     @classmethod
-    def mine_no_permission(self, email: str) -> Self:
-        return SyftPermission(admin=[email], read=[], write=[])
+    def mine_no_permission(cls, email: str) -> Self:
+        return cls(admin=[email], read=[], write=[])
 
     @classmethod
-    def mine_with_public_read(self, email: str) -> Self:
-        return SyftPermission(admin=[email], read=[email, "GLOBAL"], write=[email])
+    def mine_with_public_read(cls, email: str) -> Self:
+        return cls(admin=[email], read=[email, "GLOBAL"], write=[email])
 
     @classmethod
-    def mine_with_public_write(self, email: str) -> Self:
-        return SyftPermission(
-            admin=[email], read=[email, "GLOBAL"], write=[email, "GLOBAL"]
-        )
+    def mine_with_public_write(cls, email: str) -> Self:
+        return cls(admin=[email], read=[email, "GLOBAL"], write=[email, "GLOBAL"])
 
     @classmethod
-    def theirs_with_my_read(self, their_email, my_email: str) -> Self:
-        return SyftPermission(
+    def theirs_with_my_read(cls, their_email, my_email: str) -> Self:
+        return cls(
             admin=[their_email], read=[their_email, my_email], write=[their_email]
         )
 
     @classmethod
-    def theirs_with_my_read_write(self, their_email, my_email: str) -> Self:
-        return SyftPermission(
+    def theirs_with_my_read_write(cls, their_email, my_email: str) -> Self:
+        return cls(
             admin=[their_email],
             read=[their_email, my_email],
             write=[their_email, my_email],
@@ -333,9 +331,7 @@ class PermissionTree(Jsonable):
         if root_perm_path in perm_dict:
             root_perm = perm_dict[root_perm_path]
 
-        return PermissionTree(
-            root_perm=root_perm, tree=perm_dict, parent_path=parent_path
-        )
+        return cls(root_perm=root_perm, tree=perm_dict, parent_path=parent_path)
 
     @property
     def root_or_default(self) -> SyftPermission:
