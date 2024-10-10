@@ -119,6 +119,10 @@ def load_or_create_config(args) -> ClientConfig:
     if email_token:
         client_config.email_token = email_token
 
+    # Migrate Old Server URL to HTTPS
+    if client_config.server_url == "http://20.168.10.234:8080":
+        client_config.server_url = "https://syftbox.openmined.org"
+
     client_config.save(args.config_path)
     return client_config
 
