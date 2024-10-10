@@ -521,7 +521,7 @@ def main() -> None:
 
     for attempt in range(max_attempts):
         try:
-            print(f"Attempting to start server on port {port}")
+            print(f"Attempting to start server on port {port}...")
             uvicorn.run(
                 "syftbox.client.client:app" if debug else app,
                 host="0.0.0.0",
@@ -535,7 +535,7 @@ def main() -> None:
             if e.code != 1:  # If it's not the "Address already in use" error
                 raise
             print(f"Failed to start server on port {port}. Trying next port.")
-            port += 1
+            port = 0
 
     print(f"Unable to find an available port after {max_attempts} attempts.")
     sys.exit(1)
