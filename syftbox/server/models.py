@@ -158,6 +158,17 @@ class ReadRequest(BaseModel):
     change: FileChange
 
 
+class DirStateRequest(BaseModel):
+    email: str
+    sub_path: str
+
+
+class DirStateResponse(BaseModel):
+    sub_path: str
+    dir_state: dict
+    status: str
+
+
 def get_file_last_modified(file_path: str) -> float:
     return os.path.getmtime(file_path)
 

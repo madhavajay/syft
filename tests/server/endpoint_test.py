@@ -1,3 +1,4 @@
+import json
 import time
 
 import pytest
@@ -9,6 +10,12 @@ from syftbox.server.settings import ServerSettings
 
 TEST_DATASITE_NAME = "test_datasite@openmined.org"
 TEST_FILE = "test_file.txt"
+PERMFILE_FILE = "_.syftperm"
+PERMFILE_DICT = {
+    "admin": [TEST_DATASITE_NAME],
+    "read": ["GLOBAL"],
+    "write": [TEST_DATASITE_NAME],
+}
 
 
 @pytest.fixture(scope="function")
@@ -27,6 +34,10 @@ def client(monkeypatch, tmp_path):
     datafile = datasite / TEST_FILE
     datafile.touch()
     datafile.write_bytes(b"Hello, World!")
+
+    permfile = datasite / PERMFILE_FILE
+    permfile.touch()
+    permfile.write_text(json.dumps(PERMFILE_DICT))
 
     with TestClient(app) as client:
         yield client
@@ -76,7 +87,7 @@ def test_read_file(client: TestClient):
     change = {
         "kind": "write",
         "parent_path": TEST_DATASITE_NAME,
-        "sub_path": "test_file.txt",
+        "sub_path": TEST_FILE,
         "file_hash": "some_hash",
         "last_modified": time.time(),
     }
@@ -85,3 +96,13 @@ def test_read_file(client: TestClient):
     )
 
     response.raise_for_status()
+
+
+def test_dir_state(client: TestClient):
+    response = client.post(
+        "/dir_state", json={"email": TEST_DATASITE_NAME, "sub_path": "."}
+    )
+
+    response.raise_for_status()
+    tree = response.json()["dir_state"]["tree"]
+    assert "test_datasite@openmined.org/test_file.txt" in tree

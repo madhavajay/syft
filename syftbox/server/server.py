@@ -31,6 +31,8 @@ from syftbox.lib import (
     strtobin,
 )
 from syftbox.server.models import (
+    DirStateRequest,
+    DirStateResponse,
     ListDatasitesResponse,
     ReadRequest,
     ReadResponse,
@@ -392,14 +394,14 @@ async def read(
     )
 
 
-@app.post("/dir_state")
+@app.post("/dir_state", response_model=DirStateResponse)
 async def dir_state(
-    request: Request, server_settings: ServerSettings = Depends(get_server_settings)
-):
+    request: DirStateRequest,
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> DirStateResponse:
     try:
-        data = await request.json()
-        email = data["email"]
-        sub_path = data["sub_path"]
+        email = request.email
+        sub_path = request.sub_path
         snapshot_folder = str(server_settings.snapshot_folder)
         full_path = os.path.join(snapshot_folder, sub_path)
         remote_dir_state = hash_dir(snapshot_folder, sub_path)
@@ -411,16 +413,21 @@ async def dir_state(
         read_state = filter_read_state(email, remote_dir_state, perm_tree)
         remote_dir_state.tree = read_state
 
-        response_json = {"sub_path": sub_path, "dir_state": remote_dir_state.to_dict()}
         if remote_dir_state:
-            return JSONResponse({"status": "success"} | response_json, status_code=200)
-        return JSONResponse({"status": "error"}, status_code=400)
+            return DirStateResponse(
+                sub_path=sub_path,
+                dir_state=remote_dir_state.to_dict(),
+                status="success",
+            )
+        raise HTTPException(status_code=400, detail={"status": "error"})
     except Exception as e:
         print("Failed to run /dir_state", e)
 
 
-@app.get("/list_datasites")
-async def datasites(server_settings: ServerSettings = Depends(get_server_settings)):
+@app.get("/list_datasites", response_model=ListDatasitesResponse)
+async def datasites(
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> ListDatasitesResponse:
     datasites = get_datasites(server_settings.snapshot_folder)
     if datasites:
         return ListDatasitesResponse(
