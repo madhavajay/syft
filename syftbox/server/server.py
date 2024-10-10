@@ -179,18 +179,11 @@ ascii_art = rf"""
        |___/        {__version__:>17}
 
 
-# MacOS and Linux
-Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# Install Syftbox (MacOS and Linux)
+curl -LsSf https://syftboxstage.openmined.org/install.sh | sh
 
-# create a virtualenv `.venv` in current working dir
-uv venv
-
-# Install SyftBox
-uv pip install -U syftbox
-
-# run the client
-uv run syftbox client
+# Run the client
+syftbox client
 """
 
 
@@ -447,8 +440,14 @@ async def datasites(server_settings: ServerSettings = Depends(get_server_setting
     raise HTTPException(status_code=400, detail={"status": "error"})
 
 
+@app.get("/install.sh")
+async def install():
+    install_script = current_dir / "templates" / "install.sh"
+    return FileResponse(install_script, media_type="text/plain")
+
+
 @app.get("/info")
-def info():
+async def info():
     return {
         "version": __version__,
     }
