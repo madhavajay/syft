@@ -5,13 +5,10 @@ from datetime import datetime
 from threading import Event
 from typing import Tuple
 
-import requests
 from watchdog.events import DirModifiedEvent
 
 from syftbox.lib import (
     DirState,
-    FileChange,
-    FileChangeKind,
     FileInfo,
     PermissionTree,
     ResettableTimer,
@@ -20,6 +17,8 @@ from syftbox.lib import (
     hash_dir,
     strtobin,
 )
+from syftbox.lib.lib import ClientConfig
+from syftbox.server.models import FileChange, FileChangeKind
 
 CLIENT_CHANGELOG_FOLDER = "syft_changelog"
 CLIENT_APPS = "apps"
@@ -100,7 +99,7 @@ def remove_empty_folders(leaf, current_path, root_dir):
 
 
 # write operations
-def diff_dirstate(old, new):
+def diff_dirstate(old: DirState, new: DirState):
     sync_folder = old.sync_folder
     old_sub_path = old.sub_path
     try:
@@ -238,13 +237,13 @@ def filter_changes(
     return valid_changes, valid_change_files, invalid_changes
 
 
-def push_changes(client_config, changes):
+def push_changes(client_config: ClientConfig, changes: list[FileChange]):
     written_changes = []
     for change in changes:
         try:
             data = {
                 "email": client_config.email,
-                "change": change.to_dict(),
+                "change": change.model_dump(mode="json"),
             }
             if change.kind_write:
                 if os.path.isdir(change.full_path):
@@ -257,8 +256,8 @@ def push_changes(client_config, changes):
                 # no data for delete operations
                 pass
 
-            response = requests.post(
-                f"{client_config.server_url}/write",
+            response = client_config.server_client.post(
+                "/write",
                 json=data,
             )
             write_response = response.json()
@@ -282,16 +281,16 @@ def push_changes(client_config, changes):
     return written_changes
 
 
-def pull_changes(client_config, changes):
+def pull_changes(client_config, changes: list[FileChange]):
     remote_changes = []
     for change in changes:
         try:
             data = {
                 "email": client_config.email,
-                "change": change.to_dict(),
+                "change": change.model_dump(mode="json"),
             }
-            response = requests.post(
-                f"{client_config.server_url}/read",
+            response = client_config.server_client.post(
+                "/read",
                 json=data,
             )
             read_response = response.json()
@@ -318,11 +317,11 @@ def pull_changes(client_config, changes):
     return remote_changes
 
 
-def list_datasites(client_config):
+def list_datasites(client_config: ClientConfig):
     datasites = []
     try:
-        response = requests.get(
-            f"{client_config.server_url}/list_datasites",
+        response = client_config.server_client.get(
+            "/list_datasites",
         )
         read_response = response.json()
         remote_datasites = read_response["datasites"]
@@ -336,15 +335,15 @@ def list_datasites(client_config):
     return datasites
 
 
-def get_remote_state(client_config, sub_path: str):
+def get_remote_state(client_config: ClientConfig, sub_path: str):
     try:
         data = {
             "email": client_config.email,
             "sub_path": sub_path,
         }
 
-        response = requests.post(
-            f"{client_config.server_url}/dir_state",
+        response = client_config.server_client.post(
+            "/dir_state",
             json=data,
         )
         state_response = response.json()
@@ -404,7 +403,9 @@ def handle_empty_folders(client_config, datasite):
     return changes
 
 
-def filter_changes_ignore(pre_filter_changes, syft_ignore_files):
+def filter_changes_ignore(
+    pre_filter_changes: list[FileChange], syft_ignore_files
+) -> list[FileChange]:
     filtered_changes = []
     for change in pre_filter_changes:
         keep = True
