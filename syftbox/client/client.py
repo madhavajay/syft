@@ -521,7 +521,6 @@ def main() -> None:
 
     for attempt in range(max_attempts):
         try:
-            print(f"Attempting to start server on port {port}...")
             uvicorn.run(
                 "syftbox.client.client:app" if debug else app,
                 host="0.0.0.0",
