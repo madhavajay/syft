@@ -416,7 +416,7 @@ async def dir_state(
         if remote_dir_state:
             return DirStateResponse(
                 sub_path=sub_path,
-                dir_state=remote_dir_state.to_dict(),
+                dir_state=remote_dir_state,
                 status="success",
             )
         raise HTTPException(status_code=400, detail={"status": "error"})

@@ -158,12 +158,24 @@ class ReadRequest(BaseModel):
     change: FileChange
 
 
-class DirStateRequest(BaseModel):
+class FileInfo(SyftBaseModel):
+    file_hash: str
+    last_modified: float
+
+
+class DirState(SyftBaseModel):
+    tree: dict[str, FileInfo]
+    timestamp: float
+    sync_folder: str
+    sub_path: str
+
+
+class DirStateRequest(SyftBaseModel):
     email: str
     sub_path: str
 
 
-class DirStateResponse(BaseModel):
+class DirStateResponse(SyftBaseModel):
     sub_path: str
     dir_state: dict
     status: str

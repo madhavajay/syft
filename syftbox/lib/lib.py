@@ -16,7 +16,12 @@ from typing import Any
 import requests
 from typing_extensions import Self
 
-from syftbox.server.models import get_file_hash, get_file_last_modified
+from syftbox.server.models import (
+    DirState,
+    FileInfo,
+    get_file_hash,
+    get_file_last_modified,
+)
 
 USER_GROUP_GLOBAL = "GLOBAL"
 
@@ -203,14 +208,6 @@ def strtobin(encoded_data):
     return zlib.decompress(base64.b85decode(encoded_data.encode("utf-8")))
 
 
-@dataclass
-class DirState(Jsonable):
-    tree: dict[str, FileInfo]
-    timestamp: float
-    sync_folder: str
-    sub_path: str
-
-
 def get_symlink(file_path) -> str:
     return os.readlink(file_path)
 
@@ -237,12 +234,6 @@ def ignore_dirs(directory: str, root: str, ignore_folders=None) -> bool:
             if root.endswith(ignore_folder):
                 return True
     return False
-
-
-@dataclass
-class FileInfo(Jsonable):
-    file_hash: str
-    last_modified: float
 
 
 def hash_dir(
