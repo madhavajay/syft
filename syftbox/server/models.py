@@ -11,6 +11,11 @@ class SyftBaseModel(BaseModel):
         # used until we remote Jsonable from the code base
         return self.model_dump(mode="json")
 
+    def save(self, path: str) -> bool:
+        with open(path, "w") as f:
+            f.write(self.model_dump_json())
+        return self.model_dump(mode="json")
+
 
 class FileChangeKind(Enum):
     CREATE: str = "create"
@@ -61,12 +66,17 @@ class FileChange(SyftBaseModel):
 
         return False
 
-    def read(self) -> bytes:
+    def is_directory(self) -> bool:
+        return os.path.isdir(self.full_path)
+
+    def read(self) -> bytes | None:
         # if is_symlink(self.full_path):
         #     # write a text file with a syftlink
         #     data = convert_to_symlink(self.full_path).encode("utf-8")
         #     return data
         # else:
+        if self.is_directory():
+            return None
         with open(self.full_path, "rb") as f:
             return f.read()
 
@@ -138,6 +148,41 @@ class WriteResponse(BaseModel):
 
 class ListDatasitesResponse(BaseModel):
     datasites: list[str]
+    status: str
+
+
+class ReadResponse(BaseModel):
+    change: FileChange
+    status: str
+    is_directory: bool = False
+    data: Optional[str] = None
+
+
+class ReadRequest(BaseModel):
+    email: str
+    change: FileChange
+
+
+class FileInfo(SyftBaseModel):
+    file_hash: str
+    last_modified: float
+
+
+class DirState(SyftBaseModel):
+    tree: dict[str, FileInfo]
+    timestamp: float
+    sync_folder: str
+    sub_path: str
+
+
+class DirStateRequest(SyftBaseModel):
+    email: str
+    sub_path: str
+
+
+class DirStateResponse(SyftBaseModel):
+    sub_path: str
+    dir_state: DirState
     status: str
 
 
