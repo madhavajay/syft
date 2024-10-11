@@ -9,7 +9,7 @@ import re
 import threading
 import zlib
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Optional
@@ -268,7 +268,7 @@ def hash_dir(
                     )
                     state_dict[rel_path] = file_info
 
-    utc_unix_timestamp = datetime.now().timestamp()
+    utc_unix_timestamp = datetime.now(timezone.utc).timestamp()
     dir_state = DirState(
         tree=state_dict,
         timestamp=utc_unix_timestamp,

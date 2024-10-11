@@ -2,6 +2,7 @@ import argparse
 import contextlib
 import json
 import os
+import platform
 import random
 import sys
 from dataclasses import dataclass
@@ -150,7 +151,9 @@ def create_folders(folders: list[str]) -> None:
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI, settings: ServerSettings | None = None):
     # Startup
-    logger.info("> Starting Server")
+    logger.info(
+        f"> Starting SyftBox Server {__version__}. Python {platform.python_version()}"
+    )
     if settings is None:
         settings = ServerSettings()
     logger.info(settings)

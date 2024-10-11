@@ -16,7 +16,7 @@ class ErrorReport(BaseModel):
     python_version: str = sys.version
     platform: str = platform()
     timestamp: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.UTC)
+        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
 
     @classmethod
