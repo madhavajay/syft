@@ -24,7 +24,7 @@ jobs:
       max-parallel: 99
       matrix:
         # os: [ubuntu-latest, macos-latest]
-        runner: [syftbox-sh-linux-x64, syftbox-sh-macos-arm64]
+        runner: [syftbox-sh-linux-x64, syftbox-sh-mac-arm64]
         python-version: ["3.12", "3.11", "3.10"]
       fail-fast: false
 
