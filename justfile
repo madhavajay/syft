@@ -69,6 +69,21 @@ run-client name port="auto" server="http://localhost:5001":
 
 # ---------------------------------------------------------------------------------------------------------------------
 
+[group('client')]
+run-live-client server="https://syftbox.openmined.org/":
+    #!/bin/bash
+    set -eou pipefail
+
+    # Working directory for client is .clients/<email>
+    CONFIG_DIR=~/.syftbox
+    mkdir -p $CONFIG_DIR
+
+    echo -e "Config Dir : $CONFIG_DIR"
+
+    uv run syftbox/client/client.py --config_path=$CONFIG_DIR/client_config.json --server={{ server }}
+
+# ---------------------------------------------------------------------------------------------------------------------
+
 # Run a local syftbox app command
 [group('app')]
 run-app name command subcommand="":
