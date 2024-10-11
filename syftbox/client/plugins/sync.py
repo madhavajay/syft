@@ -313,6 +313,7 @@ def pull_changes(client_config, changes: list[FileChange]):
                     f"> {client_config.email} FAILED /read {change.kind} {change.internal_path}",
                 )
         except Exception as e:
+            traceback.print_exc()
             print("Failed to call /read on the server", str(e))
     return remote_changes
 

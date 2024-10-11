@@ -4,6 +4,7 @@ import json
 import os
 import random
 import sys
+import traceback
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -426,6 +427,9 @@ async def dir_state(
             return JSONResponse({"status": "success"} | response_json, status_code=200)
         return JSONResponse({"status": "error"}, status_code=400)
     except Exception as e:
+        # TODO dir_state can fail in hash_dir os.path.join
+        # example: if sub_path is absolute, os.path.join will return sub_path and not snapshot_folder
+        traceback.print_exc()
         print("Failed to run /dir_state", e)
 
 
