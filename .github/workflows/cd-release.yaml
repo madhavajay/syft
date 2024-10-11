@@ -39,9 +39,16 @@ jobs:
 
   deploy-syftbox:
     needs: [call-pr-tests]
-    runs-on: ubuntu-latest
+    # runs-on: ubuntu-latest
+    runs-on: syftbox-sh-linux-x64
 
     steps:
+      - name: Install Git
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install git -y
+
       - name: Checkout SyftBox repo with github token
         uses: actions/checkout@v4
         with:
