@@ -5,9 +5,9 @@ import importlib
 import os
 import sys
 import time
-import traceback
 import types
 from dataclasses import dataclass
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from loguru import logger
 from pydantic import BaseModel
 
 from syftbox.client.fsevents import (
@@ -31,12 +32,14 @@ from syftbox.client.fsevents import (
     FileSystemEvent,
     FSWatchdog,
 )
+from syftbox.client.utils.error_reporting import make_error_report
 from syftbox.lib import (
     DEFAULT_CONFIG_PATH,
     ClientConfig,
     SharedState,
     load_or_create_config,
 )
+from syftbox.lib.logger import zip_logs
 
 
 class CustomFastAPI(FastAPI):
@@ -116,7 +119,7 @@ def load_plugins(client_config: ClientConfig) -> dict[str, Plugin]:
                     )
                     loaded_plugins[plugin_name] = plugin
                 except Exception as e:
-                    print(e)
+                    logger.info(e)
 
     return loaded_plugins
 
@@ -166,11 +169,10 @@ def run_plugin(plugin_name, *args, **kwargs):
         module = app.loaded_plugins[plugin_name].module
         module.run(app.shared_state, *args, **kwargs)
     except Exception as e:
-        traceback.print_exc()
-        print("error", e)
+        logger.exception(e)
 
 
-def start_plugin(app: FastAPI, plugin_name: str):
+def start_plugin(app: CustomFastAPI, plugin_name: str):
     if plugin_name not in app.loaded_plugins:
         raise HTTPException(
             status_code=400,
@@ -202,7 +204,7 @@ def start_plugin(app: FastAPI, plugin_name: str):
             }
             return {"message": f"Plugin {plugin_name} started successfully"}
         else:
-            print(f"Job {existing_job}, already added")
+            logger.info(f"Job {existing_job}, already added")
             return {"message": f"Plugin {plugin_name} already started"}
     except Exception as e:
         raise HTTPException(
@@ -228,6 +230,15 @@ def parse_args():
         default="https://syftbox.openmined.org",
         help="Server",
     )
+    subparsers = parser.add_subparsers(dest="command", help="Sub-command help")
+    start_parser = subparsers.add_parser("report", help="Generate an error report")
+    start_parser.add_argument(
+        "--path",
+        type=str,
+        help="Path to the error report file",
+        default=f"./syftbox_logs_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}",
+    )
+
     return parser.parse_args()
 
 
@@ -250,7 +261,7 @@ def start_watchdog(app) -> FSWatchdog:
 @contextlib.asynccontextmanager
 async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None):
     # Startup
-    print("> Starting Client")
+    logger.info("> Starting Client")
 
     # client_config needs to be closed if it was created in this context
     # if it is passed as lifespan arg (eg for testing) it should be managed by the caller instead.
@@ -266,7 +277,7 @@ async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None
     app.job_file = job_file
     if os.path.exists(job_file):
         os.remove(job_file)
-        print(f"> Cleared existing job file: {job_file}")
+        logger.info(f"> Cleared existing job file: {job_file}")
 
     # Start the scheduler
     jobstores = {"default": SQLAlchemyJobStore(url=f"sqlite:///{job_file}")}
@@ -277,16 +288,16 @@ async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None
     app.scheduler = scheduler
     app.running_plugins = {}
     app.loaded_plugins = load_plugins(client_config)
-    print("> Loaded plugins:", sorted(list(app.loaded_plugins.keys())))
+    logger.info("> Loaded plugins:", sorted(list(app.loaded_plugins.keys())))
     app.watchdog = start_watchdog(app)
 
-    print("> Starting autorun plugins:", sorted(client_config.autorun_plugins))
+    logger.info("> Starting autorun plugins:", sorted(client_config.autorun_plugins))
     for plugin in client_config.autorun_plugins:
         start_plugin(app, plugin)
 
     yield  # This yields control to run the application
 
-    print("> Shutting down...")
+    logger.info("> Shutting down...")
     scheduler.shutdown()
     app.watchdog.stop()
     if close_client_config:
@@ -297,7 +308,7 @@ def stop_scheduler(app: FastAPI):
     # Remove the lock file if it exists
     if os.path.exists(app.job_file):
         os.remove(app.job_file)
-        print("> Scheduler stopped and lock file removed.")
+        logger.info("> Scheduler stopped and lock file removed.")
 
 
 app: CustomFastAPI = FastAPI(lifespan=lifespan)
@@ -463,12 +474,22 @@ def get_syftbox_src_path():
 def main() -> None:
     args = parse_args()
     client_config = load_or_create_config(args)
+    error_config = make_error_report(client_config)
+
+    if args.command == "report":
+        output_path = Path(args.path).resolve()
+        output_path_with_extension = zip_logs(output_path)
+        logger.info(f"Logs saved to: {output_path_with_extension}.")
+        logger.info("Please share your bug report together with the zipped logs")
+        return
+
+    logger.info(f"Client metadata: {error_config.model_dump_json(indent=2)}")
 
     os.environ["SYFTBOX_DATASITE"] = client_config.email
     os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = client_config.config_path
 
-    print("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
-    print("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
+    logger.info("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
+    logger.info("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
 
     debug = True
     port = client_config.port
@@ -488,9 +509,9 @@ def main() -> None:
         except SystemExit as e:
             if e.code != 1:  # If it's not the "Address already in use" error
                 raise
-            print(f"Failed to start server on port {port}. Trying next port.")
+            logger.info(f"Failed to start server on port {port}. Trying next port.")
             port = 0
-    print(f"Unable to find an available port after {max_attempts} attempts.")
+    logger.info(f"Unable to find an available port after {max_attempts} attempts.")
     sys.exit(1)
 
 

@@ -3,6 +3,7 @@ import os
 from enum import Enum
 from typing import Optional
 
+from loguru import logger
 from pydantic import BaseModel
 from typing_extensions import Self
 
@@ -120,7 +121,7 @@ class FileChange(SyftBaseModel):
         except Exception as e:
             if "No such file" in str(e):
                 return True
-            print(f"Failed to delete file at {self.full_path}. {e}")
+            logger.info(f"Failed to delete file at {self.full_path}. {e}")
         return False
 
     def write_to(self, data: bytes, path: str) -> bool:
@@ -136,7 +137,8 @@ class FileChange(SyftBaseModel):
             )
             return True
         except Exception as e:
-            print("failed to write", path, e)
+            logger.error(f"failed to write to {path}.")
+            logger.exception(e)
             return False
 
 

@@ -98,6 +98,21 @@ def test_read_file(client: TestClient):
     response.raise_for_status()
 
 
+def test_read_folder(client: TestClient):
+    change = {
+        "kind": "write",
+        "parent_path": TEST_DATASITE_NAME,
+        "sub_path": ".",
+        "file_hash": "some_hash",
+        "last_modified": time.time(),
+    }
+    response = client.post(
+        "/read", json={"email": TEST_DATASITE_NAME, "change": change}
+    )
+
+    response.raise_for_status()
+
+
 def test_dir_state(client: TestClient):
     response = client.post(
         "/dir_state", json={"email": TEST_DATASITE_NAME, "sub_path": "."}

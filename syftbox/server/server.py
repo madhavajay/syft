@@ -4,7 +4,6 @@ import json
 import os
 import random
 import sys
-import traceback
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +19,7 @@ from fastapi.responses import (
     RedirectResponse,
 )
 from jinja2 import Template
+from loguru import logger
 from typing_extensions import Any
 
 from syftbox import __version__
@@ -56,7 +56,7 @@ def load_list(cls, filepath: str) -> list[Any]:
                 ds.append(cls(**di))
             return ds
     except Exception as e:
-        print(f"Unable to load list file: {filepath}. {e}")
+        logger.info(f"Unable to load list file: {filepath}. {e}")
     return None
 
 
@@ -78,7 +78,7 @@ def load_dict(cls, filepath: str) -> list[Any]:
                 dicts[key] = cls(**value)
             return dicts
     except Exception as e:
-        print(f"Unable to load dict file: {filepath}. {e}")
+        logger.info(f"Unable to load dict file: {filepath}. {e}")
     return None
 
 
@@ -150,25 +150,25 @@ def create_folders(folders: list[str]) -> None:
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI, settings: ServerSettings | None = None):
     # Startup
-    print("> Starting Server")
+    logger.info("> Starting Server")
     if settings is None:
         settings = ServerSettings()
-    print(settings)
+    logger.info(settings)
 
-    print("> Creating Folders")
+    logger.info("> Creating Folders")
 
     create_folders(settings.folders)
 
     users = Users(path=settings.user_file_path)
-    print("> Loading Users")
-    print(users)
+    logger.info("> Loading Users")
+    logger.info(users)
 
     yield {
         "server_settings": settings,
         "users": users,
     }
 
-    print("> Shutting down server")
+    logger.info("> Shutting down server")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -320,7 +320,7 @@ async def register(request: Request, users: Users = Depends(get_users)):
     data = await request.json()
     email = data["email"]
     token = users.create_user(email)
-    print(f"> {email} registering: {token}")
+    logger.info(f"> {email} registering: {token}")
     return JSONResponse({"status": "success", "token": token}, status_code=200)
 
 
@@ -349,16 +349,18 @@ async def write(
                 if change.hash_equal_or_none():
                     result = change.delete()
                 else:
-                    print(f"> 🔥 {change.kind} hash doesnt match so ignore {change}")
+                    logger.info(
+                        f"> 🔥 {change.kind} hash doesnt match so ignore {change}"
+                    )
                     accepted = False
             else:
                 raise Exception(f"Unknown type of change kind. {change.kind}")
         else:
-            print(f"> 🔥 {change.kind} is older so ignore {change}")
+            logger.info(f"> 🔥 {change.kind} is older so ignore {change}")
             accepted = False
 
         if result:
-            print(f"> {email} {change.kind}: {change.internal_path}")
+            logger.info(f"> {email} {change.kind}: {change.internal_path}")
             return WriteResponse(
                 status="success",
                 change=change,
@@ -370,7 +372,7 @@ async def write(
             accepted=accepted,
         ), 400
     except Exception as e:
-        print("Exception writing", e)
+        logger.info("Exception writing", e)
         raise HTTPException(
             status_code=400,
             detail=f"Exception writing {e}",
@@ -384,12 +386,15 @@ async def read(
     email = request.email
     change = request.change
     change.sync_folder = os.path.abspath(str(server_settings.snapshot_folder))
-    print(f"> {email} {change.kind}: {change.internal_path}")
+    logger.info(f"> {email} {change.kind}: {change.internal_path}")
     # TODO: handle permissions, create and delete
+    data = None
+    if change.kind_write and not change.is_directory():
+        data = bintostr(change.read())
     return ReadResponse(
         status="success",
         change=change.model_dump(mode="json"),
-        data=bintostr(change.read()) if change.kind_write else None,
+        data=data,
         is_directory=change.is_directory(),
     )
 
@@ -421,10 +426,7 @@ async def dir_state(
             )
         raise HTTPException(status_code=400, detail={"status": "error"})
     except Exception as e:
-        # TODO dir_state can fail in hash_dir os.path.join
-        # example: if sub_path is absolute, os.path.join will return sub_path and not snapshot_folder
-        traceback.print_exc()
-        print("Failed to run /dir_state", e)
+        logger.exception("Failed to run /dir_state", e)
 
 
 @app.get("/list_datasites", response_model=ListDatasitesResponse)

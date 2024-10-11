@@ -4,6 +4,8 @@ import sys
 from collections import namedtuple
 from pathlib import Path
 
+from loguru import logger
+
 from ..lib import DEFAULT_CONFIG_PATH, ClientConfig
 from .install import install
 
@@ -19,12 +21,12 @@ def list_app(client_config: ClientConfig, silent: bool = False) -> list[str]:
 
     if len(apps):
         if not silent:
-            print("\nInstalled apps:")
+            logger.info("\nInstalled apps:")
             for app in apps:
-                print(f"✅ {app}")
+                logger.info(f"✅ {app}")
     else:
         if not silent:
-            print(
+            logger.info(
                 "\nYou have no apps installed.\n\n"
                 f"Try:\nsyftbox app install OpenMined/github_app_updater\n\nor copy an app to: {apps_path}"
             )
@@ -32,15 +34,15 @@ def list_app(client_config: ClientConfig, silent: bool = False) -> list[str]:
 
 
 def uninstall_app(client_config: ClientConfig) -> None:
-    print("Uninstalling Apps")
+    logger.info("Uninstalling Apps")
 
 
 def update_app(client_config: ClientConfig) -> None:
-    print("Updating Apps")
+    logger.info("Updating Apps")
 
 
 def upgrade_app(client_config: ClientConfig) -> None:
-    print("Upgrading Apps")
+    logger.info("Upgrading Apps")
 
 
 Commands = namedtuple("Commands", ["description", "execute"])
@@ -105,6 +107,6 @@ def main(parser, args_list) -> None:
             # we should make this a type
             if isinstance(result, tuple):
                 step, exception = result
-                print(f"Error during {step}: ", str(exception))
+                logger.info(f"Error during {step}: ", str(exception))
     else:
         parser.print_help()

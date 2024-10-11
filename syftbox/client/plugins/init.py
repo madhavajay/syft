@@ -1,5 +1,7 @@
 from threading import Event
 
+from loguru import logger
+
 stop_event = Event()
 
 
@@ -21,4 +23,4 @@ def run(shared_state):
     if not stop_event.is_set():
         if not shared_state.client_config.token:
             register(shared_state.client_config)
-            print("> Register Complete")
+            logger.info("> Register Complete")
