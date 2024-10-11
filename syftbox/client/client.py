@@ -483,13 +483,12 @@ def main() -> None:
                 reload=debug,
                 reload_dirs="./syftbox",
             )
-            break  # If successful, exit the loop
+            return  # If successful, exit the loop
         except SystemExit as e:
             if e.code != 1:  # If it's not the "Address already in use" error
                 raise
             print(f"Failed to start server on port {port}. Trying next port.")
             port = 0
-
     print(f"Unable to find an available port after {max_attempts} attempts.")
     sys.exit(1)
 

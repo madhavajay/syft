@@ -100,9 +100,11 @@ def main(parser, args_list) -> None:
     if args.command:
         command = commands[args.command]
         sys.argv = [sys.argv[0]] + remaining_args
-        error = command.execute(client_config)
-        if error is not None:
-            step, exception = error
-            print(f"Error during {step}: ", str(exception))
+        result = command.execute(client_config)
+        if result is not None:
+            # we should make this a type
+            if isinstance(result, tuple):
+                step, exception = result
+                print(f"Error during {step}: ", str(exception))
     else:
         parser.print_help()
