@@ -371,9 +371,10 @@ def create_symbolic_link(
         os.unlink(target_symlink_path)
 
     if not os.path.exists(target_symlink_path):
-        os.symlink(app_path, target_symlink_path)
+        os.symlink(sanitized_path, target_symlink_path)
     else:
         raise Exception(f"Path exists and isn't a symlink: {target_symlink_path}")
+    return target_symlink_path
 
 
 def move_repository_to_syftbox(
@@ -630,7 +631,7 @@ def update_app_config_file(app_path: str, sanitized_git_path: str, app_config) -
 
 def check_app_config(tmp_clone_path) -> SimpleNamespace | None:
     try:
-        app_config_path = tmp_clone_path / "config.json"
+        app_config_path = Path(tmp_clone_path) / "config.json"
         if os.path.exists(app_config_path):
             app_config = load_config(app_config_path)
             step = "Loading config.json"
@@ -700,22 +701,26 @@ def install(client_config: ClientConfig) -> None | Tuple[str, Exception]:
         # Handles: bad format repository path.
         # Returns: Sanitized repository path.
         step = "Checking app name"
-        sanitized_path = sanitize_git_path(args.repository)
 
-        # NOTE:
-        # Clones the app repository
-        # Handles: Git cli tool not installed.
-        # Handles: Repository path doesn't exits / isn't public.
-        # Handles: If /tmp/apps/<repository_name> already exists (replaces it)
-        # Returns: Path where the repository folder was cloned temporarily.
-        step = "Pulling App"
-        tmp_clone_path = clone_repository(sanitized_path)
+        if not os.path.exists(args.repository):
+            sanitized_path = sanitize_git_path(args.repository)
 
-        # NOTE:
-        # Load config.json
-        # Handles: config.json doesn't exist in the pulled repository
-        # Handles: config.json version is different from syftbox config version.
-        # Returns: Loaded app config as SimpleNamespace instance.
+            # NOTE:
+            # Clones the app repository
+            # Handles: Git cli tool not installed.
+            # Handles: Repository path doesn't exits / isn't public.
+            # Handles: If /tmp/apps/<repository_name> already exists (replaces it)
+            # Returns: Path where the repository folder was cloned temporarily.
+            step = "Pulling App"
+            tmp_clone_path = clone_repository(sanitized_path)
+
+            # NOTE:
+            # Load config.json
+            # Handles: config.json doesn't exist in the pulled repository
+            # Handles: config.json version is different from syftbox config version.
+            # Returns: Loaded app config as SimpleNamespace instance.
+        else:
+            tmp_clone_path = os.path.abspath(args.repository)
 
         # make optional
         app_config = check_app_config(tmp_clone_path)
@@ -723,20 +728,24 @@ def install(client_config: ClientConfig) -> None | Tuple[str, Exception]:
         # NOTE:
         # Moves the repository from /tmp to ~/.syftbox/apps/<repository_name>
         # Handles: If ~/.syftbox/apps/<repository_name> already exists (replaces it)
-        app_config_path = move_repository_to_syftbox(
-            client_config, tmp_clone_path=tmp_clone_path, sanitized_path=sanitized_path
-        )
-
-        # NOTE:
-        # Creates a Symbolic Link ( ~/Desktop/Syftbox/app/<rep> -> ~/.syftbox/apps/<rep>)
-        # Handles: If ~/.syftbox/apps/<repository_name> already exists (replaces it)
-        # step = "Creating Symbolic Link"
-        # print(step)
-        # create_symbolic_link(
-        #     client_config=client_config,
-        #     app_path=app_config_path,
-        #     sanitized_path=sanitized_path,
-        # )
+        if not os.path.exists(args.repository):
+            app_config_path = move_repository_to_syftbox(
+                client_config,
+                tmp_clone_path=tmp_clone_path,
+                sanitized_path=sanitized_path,
+            )
+        else:
+            # Creates a Symbolic Link ( ~/Desktop/Syftbox/app/<rep> -> ~/.syftbox/apps/<rep>)
+            # Handles: If ~/.syftbox/apps/<repository_name> already exists (replaces it)
+            step = "Creating Symbolic Link"
+            output_path = (
+                f"{client_config.sync_folder}/apps/{tmp_clone_path.split('/')[-1]}"
+            )
+            app_config_path = create_symbolic_link(
+                client_config=client_config,
+                app_path=output_path,
+                sanitized_path=tmp_clone_path,
+            )
 
         # NOTE:
         # Executes config.json pre-install command list
