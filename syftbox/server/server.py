@@ -388,10 +388,13 @@ async def read(
     change.sync_folder = os.path.abspath(str(server_settings.snapshot_folder))
     logger.info(f"> {email} {change.kind}: {change.internal_path}")
     # TODO: handle permissions, create and delete
+    data = None
+    if change.kind_write and not change.is_directory():
+        data = bintostr(change.read())
     return ReadResponse(
         status="success",
         change=change.model_dump(mode="json"),
-        data=bintostr(change.read()) if change.kind_write else None,
+        data=data,
         is_directory=change.is_directory(),
     )
 
