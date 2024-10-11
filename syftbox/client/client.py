@@ -3,6 +3,7 @@ import atexit
 import contextlib
 import importlib
 import os
+import platform
 import sys
 import time
 import types
@@ -262,7 +263,9 @@ def start_watchdog(app) -> FSWatchdog:
 @contextlib.asynccontextmanager
 async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None):
     # Startup
-    logger.info(f"> Starting SyftBox Client: {__version__}")
+    logger.info(
+        f"> Starting SyftBox Client: {__version__} Python {platform.python_version()}"
+    )
 
     # client_config needs to be closed if it was created in this context
     # if it is passed as lifespan arg (eg for testing) it should be managed by the caller instead.
