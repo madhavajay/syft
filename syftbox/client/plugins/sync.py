@@ -353,7 +353,9 @@ def get_remote_state(client_config: ClientConfig, sub_path: str):
                 dir_state = DirState(**state_response["dir_state"])
                 fix_tree = {}
                 for key, value in dir_state.tree.items():
-                    fix_tree[key] = FileInfo(**value)
+                    fix_tree[key] = (
+                        FileInfo(**value) if isinstance(value, dict) else value
+                    )
                 dir_state.tree = fix_tree
                 return dir_state
             else:
@@ -452,7 +454,7 @@ def sync_up(client_config):
             old_dir_state = DirState.load(dir_filename)
             fix_tree = {}
             for key, value in old_dir_state.tree.items():
-                fix_tree[key] = FileInfo(**value)
+                fix_tree[key] = FileInfo(**value) if isinstance(value, dict) else value
             old_dir_state.tree = fix_tree
         except Exception:
             pass
