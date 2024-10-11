@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import json
 import os
 import random
@@ -145,10 +146,12 @@ def create_folders(folders: list[str]) -> None:
             os.makedirs(folder, exist_ok=True)
 
 
-async def lifespan(app: FastAPI):
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI, settings: ServerSettings | None = None):
     # Startup
     print("> Starting Server")
-    settings = ServerSettings()
+    if settings is None:
+        settings = ServerSettings()
     print(settings)
 
     print("> Creating Folders")
@@ -178,18 +181,11 @@ ascii_art = rf"""
        |___/        {__version__:>17}
 
 
-# MacOS and Linux
-Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# Install Syftbox (MacOS and Linux)
+curl -LsSf https://syftboxstage.openmined.org/install.sh | sh
 
-# create a virtualenv `.venv` in current working dir
-uv venv
-
-# Install SyftBox
-uv pip install -U syftbox
-
-# run the client
-uv run syftbox client
+# Run the client
+syftbox client
 """
 
 
@@ -388,7 +384,7 @@ async def read(
     # TODO: handle permissions, create and delete
     return ReadResponse(
         status="success",
-        change=change,
+        change=change.model_dump(mode="json"),
         data=bintostr(change.read()) if change.kind_write else None,
         is_directory=change.is_directory(),
     )
@@ -437,14 +433,20 @@ async def datasites(
     raise HTTPException(status_code=400, detail={"status": "error"})
 
 
+@app.get("/install.sh")
+async def install():
+    install_script = current_dir / "templates" / "install.sh"
+    return FileResponse(install_script, media_type="text/plain")
+
+
 @app.get("/info")
-def info():
+async def info():
     return {
         "version": __version__,
     }
 
 
-def main() -> None:
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run FastAPI server")
     parser.add_argument(
         "--port",
@@ -457,18 +459,43 @@ def main() -> None:
         action="store_true",
         help="Run the server in debug mode with hot reloading",
     )
+    parser.add_argument(
+        "--ssl-keyfile",
+        type=str,
+        help="Path to SSL key file for HTTPS",
+    )
+    parser.add_argument(
+        "--ssl-keyfile-password",
+        type=str,
+        help="SSL key file password for HTTPS",
+    )
+    parser.add_argument(
+        "--ssl-certfile",
+        type=str,
+        help="Path to SSL certificate file for HTTPS",
+    )
 
     args = parser.parse_args()
+    return args
 
-    uvicorn.run(
-        "syftbox.server.server:app"
-        if args.debug
-        else app,  # Use import string in debug mode
-        host="0.0.0.0",
-        port=args.port,
-        log_level="debug" if args.debug else "info",
-        reload=args.debug,  # Enable hot reloading only in debug mode
+
+def main() -> None:
+    args = parse_args()
+    uvicorn_config = {
+        "app": "syftbox.server.server:app" if args.debug else app,
+        "host": "0.0.0.0",
+        "port": args.port,
+        "log_level": "debug" if args.debug else "info",
+        "reload": args.debug,
+    }
+
+    uvicorn_config["ssl_keyfile"] = args.ssl_keyfile if args.ssl_keyfile else None
+    uvicorn_config["ssl_certfile"] = args.ssl_certfile if args.ssl_certfile else None
+    uvicorn_config["ssl_keyfile_password"] = (
+        args.ssl_keyfile_password if args.ssl_keyfile_password else None
     )
+
+    uvicorn.run(**uvicorn_config)
 
 
 if __name__ == "__main__":

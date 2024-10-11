@@ -9,12 +9,12 @@ from pydantic import BaseModel
 class SyftBaseModel(BaseModel):
     def to_dict(self) -> dict:
         # used until we remote Jsonable from the code base
-        return self.model_dump()
+        return self.model_dump(mode="json")
 
     def save(self, path: str) -> bool:
         with open(path, "w") as f:
             f.write(self.model_dump_json())
-        return True
+        return self.model_dump(mode="json")
 
 
 class FileChangeKind(Enum):

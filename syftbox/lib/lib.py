@@ -4,24 +4,34 @@ import base64
 import hashlib
 import json
 import os
+import platform
 import re
 import threading
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, Optional
 
+import httpx
 import requests
 from typing_extensions import Self
 
+from syftbox.client.utils import macos
 from syftbox.server.models import (
     DirState,
     FileInfo,
     get_file_hash,
     get_file_last_modified,
 )
+
+current_dir = Path(__file__).parent
+ASSETS_FOLDER = current_dir.parent / "assets"
+DEFAULT_PORT = 8082
+ICON_FOLDER = ASSETS_FOLDER / "icon"
+DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
+DEFAULT_CONFIG_PATH = os.path.expanduser("~/.syftbox/client_config.json")
 
 USER_GROUP_GLOBAL = "GLOBAL"
 
@@ -88,7 +98,7 @@ class Jsonable:
 
     def save(self, filepath: str) -> None:
         d = self.to_dict()
-        with open(filepath, "w") as f:
+        with open(Path(filepath).expanduser(), "w") as f:
             f.write(json.dumps(d))
 
 
@@ -519,6 +529,24 @@ class ClientConfig(Jsonable):
     token: int | None = None
     server_url: str = "http://localhost:5001"
     email_token: str | None = None
+    autorun_plugins: list[str] | None = field(
+        default_factory=lambda: ["init", "create_datasite", "sync", "apps"]
+    )
+    _server_client: httpx.Client | None = None
+
+    @property
+    def is_registered(self) -> bool:
+        return self.token is not None
+
+    @property
+    def server_client(self) -> httpx.Client:
+        if self._server_client is None:
+            self._server_client = httpx.Client(base_url=self.server_url)
+        return self._server_client
+
+    def close(self):
+        if self._server_client:
+            self._server_client.close()
 
     def save(self, path: str | None = None) -> None:
         if path is None:
@@ -533,18 +561,6 @@ class ClientConfig(Jsonable):
     def manifest_path(self) -> Path:
         return os.path.join(self.datasite_path, "public/manifest/manifest.json")
 
-    # @property
-    # def manifest(self) -> DatasiteManifest:
-    #     datasite_manifest = None
-    #     try:
-    #         datasite_manifest = DatasiteManifest.load(self.manifest_path)
-    #     except Exception:
-    #         datasite_manifest = DatasiteManifest.create_manifest(
-    #             path=self.manifest_path, email=self.email
-    #         )
-
-    #     return datasite_manifest
-
     def get_datasites(self: str) -> list[str]:
         datasites = []
         folders = os.listdir(self.sync_folder)
@@ -553,71 +569,10 @@ class ClientConfig(Jsonable):
                 datasites.append(folder)
         return datasites
 
-    # def get_all_manifests(self):
-    #     manifests = {}
-    #     for datasite in get_datasites(self.sync_folder):
-    #         datasite_path = Path(self.sync_folder + "/" + datasite)
-    #         datasite_manifest = DatasiteManifest.load_from_datasite(datasite_path)
-    #         if datasite_manifest:
-    #             manifests[datasite] = datasite_manifest
-    #     return manifests
-
-    # def get_datasets(self):
-    #     manifests = self.get_all_manifests()
-    #     datasets = []
-    #     for datasite, manifest in manifests.items():
-    #         for dataset_name, dataset_dict in manifest.datasets.items():
-    #             try:
-    #                 dataset = TabularDataset(**dataset_dict)
-    #                 dataset.syft_link = SyftLink(**dataset_dict["syft_link"])
-    #                 dataset.readme_link = SyftLink(**dataset_dict["readme_link"])
-    #                 dataset.loader_link = SyftLink(**dataset_dict["loader_link"])
-    #                 dataset._client_config = self
-    #                 datasets.append(dataset)
-    #             except Exception as e:
-    #                 print(f"Bad dataset format. {datasite} {e}")
-
-    #     return DatasetResults(datasets)
-
-    # def get_code(self):
-    #     manifests = self.get_all_manifests()
-    #     all_code = []
-    #     for datasite, manifest in manifests.items():
-    #         for func_name, code_dict in manifest.code.items():
-    #             try:
-    #                 code = Code(**code_dict)
-    #                 code.syft_link = SyftLink(**code_dict["syft_link"])
-    #                 code.readme_link = SyftLink(**code_dict["readme_link"])
-    #                 code.requirements_link = SyftLink(**code_dict["requirements_link"])
-    #                 code._client_config = self
-    #                 all_code.append(code)
-    #             except Exception as e:
-    #                 print(f"Bad dataset format. {datasite} {e}")
-
-    #     return CodeResults(all_code)
-
-    # def resolve_link(self, link: SyftLink | str) -> Path:
-    #     if isinstance(link, str):
-    #         link = SyftLink.from_url(link)
-    #     return Path(os.path.join(os.path.abspath(self.sync_folder), link.sync_path))
-
     def use(self):
         os.environ["SYFTBOX_CURRENT_CLIENT"] = self.config_path
         os.environ["SYFTBOX_SYNC_DIR"] = self.sync_folder
         print(f"> Setting Sync Dir to: {self.sync_folder}")
-
-    # @classmethod
-    # def create_manifest(cls, path: str, email: str):
-    #     # make a dir and set the permissions
-    #     manifest_dir = os.path.dirname(path)
-    #     os.makedirs(manifest_dir, exist_ok=True)
-
-    #     public_read = SyftPermission.mine_with_public_read(email=email)
-    #     public_read.save(manifest_dir)
-
-    #     datasite_manifest = DatasiteManifest(datasite=email, file_path=path)
-    #     datasite_manifest.save(path)
-    #     return datasite_manifest
 
     def create_folder(self, path: str, permission: SyftPermission):
         os.makedirs(path, exist_ok=True)
@@ -635,6 +590,77 @@ class ClientConfig(Jsonable):
         public_read.save(full_path)
         return Path(full_path)
 
-    # def publish(self, item, overwrite: bool = False):
-    #     if isinstance(item, Callable):
-    #         syftbox_code(item).publish(self, overwrite=overwrite)
+
+def get_user_input(prompt, default: Optional[str] = None):
+    if default:
+        prompt = f"{prompt} (default: {default}): "
+    user_input = input(prompt).strip()
+    return user_input if user_input else default
+
+
+def load_or_create_config(args) -> ClientConfig:
+    syft_config_dir = os.path.abspath(os.path.expanduser("~/.syftbox"))
+    os.makedirs(syft_config_dir, exist_ok=True)
+
+    client_config = None
+    try:
+        client_config = ClientConfig.load(args.config_path)
+    except Exception:
+        pass
+
+    if client_config is None and args.config_path:
+        config_path = os.path.abspath(os.path.expanduser(args.config_path))
+        client_config = ClientConfig(config_path=config_path)
+
+    if client_config is None:
+        # config_path = get_user_input("Path to config file?", DEFAULT_CONFIG_PATH)
+        config_path = os.path.abspath(os.path.expanduser(config_path))
+        client_config = ClientConfig(config_path=config_path)
+
+    if args.sync_folder:
+        sync_folder = os.path.abspath(os.path.expanduser(args.sync_folder))
+        client_config.sync_folder = sync_folder
+
+    if client_config.sync_folder is None:
+        sync_folder = get_user_input(
+            "Where do you want to Sync SyftBox to?",
+            DEFAULT_SYNC_FOLDER,
+        )
+        sync_folder = os.path.abspath(os.path.expanduser(sync_folder))
+        client_config.sync_folder = sync_folder
+
+    if args.server:
+        client_config.server_url = args.server
+
+    if not os.path.exists(client_config.sync_folder):
+        os.makedirs(client_config.sync_folder, exist_ok=True)
+
+    if platform.system() == "Darwin":
+        macos.copy_icon_file(ICON_FOLDER, client_config.sync_folder)
+
+    if args.email:
+        client_config.email = args.email
+
+    if client_config.email is None:
+        email = get_user_input("What is your email address? ")
+        if not validate_email(email):
+            raise Exception(f"Invalid email: {email}")
+        client_config.email = email
+
+    if args.port:
+        client_config.port = args.port
+
+    if client_config.port is None:
+        port = int(get_user_input("Enter the port to use", DEFAULT_PORT))
+        client_config.port = port
+
+    email_token = os.environ.get("EMAIL_TOKEN", None)
+    if email_token:
+        client_config.email_token = email_token
+
+    # Migrate Old Server URL to HTTPS
+    if client_config.server_url == "http://20.168.10.234:8080":
+        client_config.server_url = "https://syftbox.openmined.org"
+
+    client_config.save(args.config_path)
+    return client_config
