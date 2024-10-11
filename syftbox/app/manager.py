@@ -1,16 +1,34 @@
+import argparse
 import os
 import sys
 from collections import namedtuple
+from pathlib import Path
 
-from ..lib import ClientConfig
+from ..lib import DEFAULT_CONFIG_PATH, ClientConfig
 from .install import install
-from .utils import get_config_path
 
 config_path = os.environ.get("SYFTBOX_CLIENT_CONFIG_PATH", None)
 
 
-def list_app(client_config: ClientConfig) -> None:
-    print("Listing apps")
+def list_app(client_config: ClientConfig, silent: bool = False) -> list[str]:
+    apps_path = Path(client_config.sync_folder + "/" + "apps")
+    apps = []
+    if os.path.exists(apps_path):
+        files_and_folders = os.listdir(apps_path)
+        apps = [app for app in files_and_folders if os.path.isdir(apps_path / app)]
+
+    if len(apps):
+        if not silent:
+            print("\nInstalled apps:")
+            for app in apps:
+                print(f"✅ {app}")
+    else:
+        if not silent:
+            print(
+                "\nYou have no apps installed.\n\n"
+                f"Try:\nsyftbox app install OpenMined/github_app_updater\n\nor copy an app to: {apps_path}"
+            )
+    return apps
 
 
 def uninstall_app(client_config: ClientConfig) -> None:
@@ -25,12 +43,11 @@ def upgrade_app(client_config: ClientConfig) -> None:
     print("Upgrading Apps")
 
 
-def main(parser, args_list) -> None:
-    config_path = get_config_path()
-    client_config = ClientConfig.load(config_path + "config.json")
+Commands = namedtuple("Commands", ["description", "execute"])
 
-    Commands = namedtuple("Commands", ["description", "execute"])
-    commands = {
+
+def make_commands() -> dict[str, Commands]:
+    return {
         "list": Commands(
             "List all currently installed apps in your syftbox.", list_app
         ),
@@ -40,23 +57,48 @@ def main(parser, args_list) -> None:
         "upgrade": Commands("Upgrade an app.", upgrade_app),
     }
 
-    # Add a subparser to the "app" parser to handle different actions
-    app_subparsers = parser.add_subparsers(
-        title="App Commands",
-        dest="subcommand",
+
+class CustomHelpFormatter(argparse.HelpFormatter):
+    def add_arguments(self, actions):
+        for action in actions:
+            if action.dest == "command":
+                commands = make_commands()
+                action.choices = commands.keys()
+                # Build help message with descriptions
+                action.help = "\n".join(
+                    [f"{cmd}: {commands[cmd].description}" for cmd in commands]
+                )
+        super().add_arguments(actions)
+
+
+# Parsing arguments and initializing shared state
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run the web application with plugins.",
     )
 
-    # Add all the commands to the argparser
-    for command, cmd_info in commands.items():
-        app_subparsers.add_parser(command, help=cmd_info.description)
+    commands = make_commands()
 
-    # Parse the remaining args using the parser with subparsers added
-    # args = parser.parse_args(args_list)
+    # Add a subparser to the "app" parser to handle different actions
+    parser.add_argument(
+        "command", choices=commands.keys(), help="The command to execute"
+    )
+
+    parser.add_argument(
+        "--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path"
+    )
     args, remaining_args = parser.parse_known_args()
+    return args, remaining_args
 
+
+def main(parser, args_list) -> None:
+    args, remaining_args = parse_args()
+    client_config = ClientConfig.load(args.config_path)
+
+    commands = make_commands()
     # Handle the subcommands as needed
-    if args.subcommand:
-        command = commands[args.subcommand]
+    if args.command:
+        command = commands[args.command]
         sys.argv = [sys.argv[0]] + remaining_args
         error = command.execute(client_config)
         if error is not None:

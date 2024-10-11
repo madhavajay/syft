@@ -19,6 +19,17 @@ def test_valid_git_path():
     assert path == output_path
 
 
+def test_valid_git_url():
+    path = "Example/Repository"
+    http_url = f"http://github.com/{path}"
+    output_path = sanitize_git_path(http_url)
+    assert path == output_path
+
+    https_url = f"https://github.com/{path}"
+    output_path = sanitize_git_path(https_url)
+    assert path == output_path
+
+
 def test_invalid_git_path():
     path = "..Example/../Repository"
     with pytest.raises(ValueError) as excpt:
