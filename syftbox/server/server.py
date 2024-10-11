@@ -182,7 +182,7 @@ ascii_art = rf"""
 
 
 # Install Syftbox (MacOS and Linux)
-curl -LsSf https://syftboxstage.openmined.org/install.sh | sh
+curl -LsSf https://syftbox.openmined.org/install.sh | sh
 
 # Run the client
 syftbox client
@@ -190,7 +190,10 @@ syftbox client
 
 
 @app.get("/", response_class=PlainTextResponse)
-async def get_ascii_art():
+async def get_ascii_art(request: Request):
+    req_host = request.headers.get("host", "")
+    if "syftboxstage" in req_host:
+        return ascii_art.replace("syftbox.openmined.org", "syftboxstage.openmined.org")
     return ascii_art
 
 
