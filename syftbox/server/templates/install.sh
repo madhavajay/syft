@@ -197,11 +197,7 @@ do_install() {
     install_syftbox
 
     success "Installation completed!"
-    if [ $RUN_CLIENT -eq 1 ]; then
-        exec ~/.local/bin/syftbox client < /dev/tty
-    else
-        post_install
-    fi
+    post_install
 }
 
 do_install "$@" || exit 1
