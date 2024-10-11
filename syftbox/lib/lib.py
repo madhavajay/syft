@@ -544,7 +544,10 @@ class ClientConfig(Jsonable):
     @property
     def server_client(self) -> httpx.Client:
         if self._server_client is None:
-            self._server_client = httpx.Client(base_url=self.server_url)
+            self._server_client = httpx.Client(
+                base_url=self.server_url,
+                follow_redirects=True,
+            )
         return self._server_client
 
     def close(self):

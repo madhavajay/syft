@@ -9,7 +9,6 @@ from watchdog.events import DirModifiedEvent
 
 from syftbox.lib import (
     DirState,
-    FileInfo,
     PermissionTree,
     ResettableTimer,
     bintostr,
@@ -237,7 +236,9 @@ def filter_changes(
     return valid_changes, valid_change_files, invalid_changes
 
 
-def push_changes(client_config: ClientConfig, changes: list[FileChange]):
+def push_changes(
+    client_config: ClientConfig, changes: list[FileChange]
+) -> list[FileChange]:
     written_changes = []
     for change in changes:
         try:
@@ -313,7 +314,7 @@ def pull_changes(client_config, changes: list[FileChange]):
                     f"> {client_config.email} FAILED /read {change.kind} {change.internal_path}",
                 )
         except Exception as e:
-            logger.info("Failed to call /read on the server", str(e))
+            logger.exception("Failed to call /read on the server", str(e))
     return remote_changes
 
 
@@ -352,7 +353,7 @@ def get_remote_state(client_config: ClientConfig, sub_path: str):
                 dir_state = DirState(**state_response["dir_state"])
                 fix_tree = {}
                 for key, value in dir_state.tree.items():
-                    fix_tree[key] = FileInfo(**value)
+                    fix_tree[key] = value
                 dir_state.tree = fix_tree
                 return dir_state
             else:
@@ -426,7 +427,7 @@ def filter_changes_ignore(
     return filtered_changes
 
 
-def sync_up(client_config):
+def sync_up(client_config: ClientConfig):
     # create a folder to store the change log
     change_log_folder = f"{client_config.sync_folder}/{CLIENT_CHANGELOG_FOLDER}"
     os.makedirs(change_log_folder, exist_ok=True)
@@ -451,7 +452,7 @@ def sync_up(client_config):
             old_dir_state = DirState.load(dir_filename)
             fix_tree = {}
             for key, value in old_dir_state.tree.items():
-                fix_tree[key] = FileInfo(**value)
+                fix_tree[key] = value
             old_dir_state.tree = fix_tree
         except Exception:
             pass

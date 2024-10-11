@@ -39,8 +39,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SYFTBOX_SERVER_PRIVATE_KEY }}" > ~/.ssh/syftbox.pem
           chmod 600 ~/.ssh/syftbox.pem
-          ssh-keyscan -H "20.168.10.234" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "172.210.40.183" >> ~/.ssh/known_hosts
 
       - name: Deploy SyftBox Server
         run: |
-          just upload-pip ${{ inputs.version }} ~/.ssh/syftbox.pem azureuser@20.168.10.234
+          just upload-pip ${{ inputs.version }} ~/.ssh/syftbox.pem azureuser@172.210.40.183

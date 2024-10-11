@@ -151,7 +151,7 @@ bump-version level="patch":
 
 # Build & Deploy syftbox to a remote server using SSH
 [group('deploy')]
-upload-dev keyfile remote="azureuser@20.168.10.234": build
+upload-dev keyfile remote="user@0.0.0.0": build
     #!/bin/bash
     set -eou pipefail
 
@@ -174,13 +174,13 @@ upload-dev keyfile remote="azureuser@20.168.10.234": build
     ssh -i {{ keyfile }} {{ remote }} "uv venv && uv pip install $REMOTE_WHEEL"
 
     # restart service
-    # TODO - syftbox service was created manually on 20.168.10.234
+    # NOTE - syftbox service is created manually on the remote server
     ssh -i {{ keyfile }} {{ remote }} "sudo systemctl daemon-reload && sudo systemctl restart syftbox"
     echo -e "{{ _green }}Deployed SyftBox local wheel to {{ remote }}{{ _nc }}"
 
 # Deploy syftbox from pypi to a remote server using SSH
 [group('deploy')]
-upload-pip version keyfile remote="azureuser@20.168.10.234":
+upload-pip version keyfile remote="user@0.0.0.0":
     #!/bin/bash
     set -eou pipefail
 
@@ -200,7 +200,7 @@ upload-pip version keyfile remote="azureuser@20.168.10.234":
 # ---------------------------------------------------------------------------------------------------------------------
 
 [group('utils')]
-ssh keyfile remote="azureuser@20.168.10.234":
+ssh keyfile remote="user@0.0.0.0":
     ssh -i {{ keyfile }} {{ remote }}
 
 # remove all local files & directories
