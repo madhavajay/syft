@@ -40,6 +40,7 @@ from syftbox.lib import (
     SharedState,
     load_or_create_config,
 )
+from syftbox.lib.logger import zip_logs
 
 
 class CustomFastAPI(FastAPI):
@@ -237,7 +238,7 @@ def parse_args():
         "--path",
         type=str,
         help="Path to the error report file",
-        default=f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.zip",
+        default=f"./syftbox_logs_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}",
     )
 
     return parser.parse_args()
@@ -475,15 +476,16 @@ def get_syftbox_src_path():
 def main() -> None:
     args = parse_args()
     client_config = load_or_create_config(args)
-
     error_config = make_error_report(client_config)
-    logger.info(f"Error Report: {error_config.model_dump_json(indent=2)}")
 
     if args.command == "report":
-        logger.info(
-            "Report: ", make_error_report(client_config).model_dump_json(indent=2)
-        )
+        output_path = Path(args.path).resolve()
+        output_path_with_extension = zip_logs(output_path)
+        logger.info(f"Logs saved to: {output_path_with_extension}.")
+        logger.info("Please share your bug report together with the zipped logs")
         return
+
+    logger.info(f"Client metadata: {error_config.model_dump_json(indent=2)}")
 
     os.environ["SYFTBOX_DATASITE"] = client_config.email
     os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = client_config.config_path
