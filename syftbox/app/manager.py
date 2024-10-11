@@ -6,13 +6,12 @@ from ..lib import ClientConfig
 from .install import install
 from .utils import get_config_path
 
-config_path = os.environ.get(
-    "SYFTBOX_CLIENT_CONFIG_PATH", None 
-)
+config_path = os.environ.get("SYFTBOX_CLIENT_CONFIG_PATH", None)
 
 
 def list_app(client_config: ClientConfig) -> None:
     print("Listing apps")
+
 
 def uninstall_app(client_config: ClientConfig) -> None:
     print("Uninstalling Apps")

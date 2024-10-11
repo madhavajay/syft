@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import Request
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing_extensions import Self
 
 
 class ServerSettings(BaseSettings):
@@ -24,6 +25,15 @@ class ServerSettings(BaseSettings):
     @property
     def folders(self) -> list[Path]:
         return [self.data_folder, self.snapshot_folder]
+
+    @classmethod
+    def from_data_folder(cls, data_folder: Path | str) -> Self:
+        data_folder = Path(data_folder)
+        return cls(
+            data_folder=data_folder,
+            snapshot_folder=data_folder / "snapshot",
+            user_file_path=data_folder / "users.json",
+        )
 
 
 def get_server_settings(request: Request) -> ServerSettings:

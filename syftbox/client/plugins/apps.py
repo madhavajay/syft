@@ -1,11 +1,12 @@
+import json
 import logging
 import os
-import json
 import shutil
 import subprocess
 import threading
 from types import SimpleNamespace
 from typing import Any
+
 from syftbox.lib import (
     SyftPermission,
     get_file_hash,
@@ -136,6 +137,7 @@ def run_apps(client_config):
                 thread.start()
                 RUNNING_APPS[app] = thread
 
+
 def output_published(app_output, published_output) -> bool:
     return (
         os.path.exists(app_output)
@@ -157,7 +159,7 @@ def run_custom_app_config(client_config, app_config, path):
     env.update(app_envs)
     while True:
         print(f"👟 Running {app_name}")
-        result = subprocess.run(
+        _ = subprocess.run(
             app_config.app.run.command,
             cwd=path,
             check=True,

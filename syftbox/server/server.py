@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import json
 import os
 import random
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 import uvicorn
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -22,8 +23,6 @@ from typing_extensions import Any
 
 from syftbox import __version__
 from syftbox.lib import (
-    FileChange,
-    FileChangeKind,
     Jsonable,
     PermissionTree,
     bintostr,
@@ -31,6 +30,13 @@ from syftbox.lib import (
     get_datasites,
     hash_dir,
     strtobin,
+)
+from syftbox.server.models import (
+    FileChange,
+    FileChangeKind,
+    ListDatasitesResponse,
+    WriteRequest,
+    WriteResponse,
 )
 from syftbox.server.settings import ServerSettings, get_server_settings
 
@@ -138,10 +144,12 @@ def create_folders(folders: list[str]) -> None:
             os.makedirs(folder, exist_ok=True)
 
 
-async def lifespan(app: FastAPI):
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI, settings: ServerSettings | None = None):
     # Startup
     print("> Starting Server")
-    settings = ServerSettings()
+    if settings is None:
+        settings = ServerSettings()
     print(settings)
 
     print("> Creating Folders")
@@ -171,18 +179,11 @@ ascii_art = rf"""
        |___/        {__version__:>17}
 
 
-# MacOS and Linux
-Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# Install Syftbox (MacOS and Linux)
+curl -LsSf https://syftboxstage.openmined.org/install.sh | sh
 
-# create a virtualenv `.venv` in current working dir
-uv venv
-
-# Install SyftBox
-uv pip install -U syftbox
-
-# run the client
-uv run syftbox client
+# Run the client
+syftbox client
 """
 
 
@@ -192,7 +193,7 @@ async def get_ascii_art():
 
 
 @app.get("/wheel/{path:path}", response_class=HTMLResponse)
-async def get_wheel(request: Request, path: str):
+async def get_wheel(path: str):
     if path == "":  # Check if path is empty (meaning "/datasites/")
         return RedirectResponse(url="/")
 
@@ -317,28 +318,26 @@ async def register(request: Request, users: Users = Depends(get_users)):
     return JSONResponse({"status": "success", "token": token}, status_code=200)
 
 
-@app.post("/write")
+@app.post("/write", response_model=WriteResponse)
 async def write(
-    request: Request, server_settings: ServerSettings = Depends(get_server_settings)
-):
+    request: WriteRequest,
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> WriteResponse:
     try:
-        data = await request.json()
-        email = data["email"]
-        change_dict = data["change"]
-        change_dict["kind"] = FileChangeKind(change_dict["kind"])
-        change = FileChange(**change_dict)
+        email = request.email
+        change = request.change
 
         change.sync_folder = os.path.abspath(str(server_settings.snapshot_folder))
         result = True
         accepted = True
         if change.newer():
             if change.kind_write:
-                if data.get("is_directory", False):
+                if request.is_directory:
                     # Handle empty directory
                     os.makedirs(change.full_path, exist_ok=True)
                     result = True
                 else:
-                    bin_data = strtobin(data["data"])
+                    bin_data = strtobin(request.data)
                     result = change.write(bin_data)
             elif change.kind_delete:
                 if change.hash_equal_or_none():
@@ -354,24 +353,21 @@ async def write(
 
         if result:
             print(f"> {email} {change.kind}: {change.internal_path}")
-            json_payload = {
-                "status": "success",
-                "change": change.to_dict(),
-                "accepted": accepted,
-            }
-            return JSONResponse(
-                json_payload,
-                status_code=200,
+            return WriteResponse(
+                status="success",
+                change=change,
+                accepted=accepted,
             )
-        return JSONResponse(
-            {"status": "error", "change": change.to_dict()},
-            status_code=400,
-        )
+        return WriteResponse(
+            status="error",
+            change=change,
+            accepted=accepted,
+        ), 400
     except Exception as e:
         print("Exception writing", e)
-        return JSONResponse(
-            {"status": "error", "error": str(e)},
+        raise HTTPException(
             status_code=400,
+            detail=f"Exception writing {e}",
         )
 
 
@@ -386,7 +382,7 @@ async def read(
     change = FileChange(**change_dict)
     change.sync_folder = os.path.abspath(str(server_settings.snapshot_folder))
 
-    json_dict = {"change": change.to_dict()}
+    json_dict = {"change": change.model_dump(mode="json")}
 
     if change.kind_write:
         if os.path.isdir(change.full_path):
@@ -434,24 +430,30 @@ async def dir_state(
 
 
 @app.get("/list_datasites")
-async def datasites(
-    request: Request, server_settings: ServerSettings = Depends(get_server_settings)
-):
+async def datasites(server_settings: ServerSettings = Depends(get_server_settings)):
     datasites = get_datasites(server_settings.snapshot_folder)
-    response_json = {"datasites": datasites}
     if datasites:
-        return JSONResponse({"status": "success"} | response_json, status_code=200)
-    return JSONResponse({"status": "error"}, status_code=400)
+        return ListDatasitesResponse(
+            datasites=datasites,
+            status="success",
+        )
+    raise HTTPException(status_code=400, detail={"status": "error"})
+
+
+@app.get("/install.sh")
+async def install():
+    install_script = current_dir / "templates" / "install.sh"
+    return FileResponse(install_script, media_type="text/plain")
 
 
 @app.get("/info")
-def info():
+async def info():
     return {
         "version": __version__,
     }
 
 
-def main() -> None:
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run FastAPI server")
     parser.add_argument(
         "--port",
@@ -464,18 +466,43 @@ def main() -> None:
         action="store_true",
         help="Run the server in debug mode with hot reloading",
     )
+    parser.add_argument(
+        "--ssl-keyfile",
+        type=str,
+        help="Path to SSL key file for HTTPS",
+    )
+    parser.add_argument(
+        "--ssl-keyfile-password",
+        type=str,
+        help="SSL key file password for HTTPS",
+    )
+    parser.add_argument(
+        "--ssl-certfile",
+        type=str,
+        help="Path to SSL certificate file for HTTPS",
+    )
 
     args = parser.parse_args()
+    return args
 
-    uvicorn.run(
-        "syftbox.server.server:app"
-        if args.debug
-        else app,  # Use import string in debug mode
-        host="0.0.0.0",
-        port=args.port,
-        log_level="debug" if args.debug else "info",
-        reload=args.debug,  # Enable hot reloading only in debug mode
+
+def main() -> None:
+    args = parse_args()
+    uvicorn_config = {
+        "app": "syftbox.server.server:app" if args.debug else app,
+        "host": "0.0.0.0",
+        "port": args.port,
+        "log_level": "debug" if args.debug else "info",
+        "reload": args.debug,
+    }
+
+    uvicorn_config["ssl_keyfile"] = args.ssl_keyfile if args.ssl_keyfile else None
+    uvicorn_config["ssl_certfile"] = args.ssl_certfile if args.ssl_certfile else None
+    uvicorn_config["ssl_keyfile_password"] = (
+        args.ssl_keyfile_password if args.ssl_keyfile_password else None
     )
+
+    uvicorn.run(**uvicorn_config)
 
 
 if __name__ == "__main__":

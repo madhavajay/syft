@@ -1,12 +1,16 @@
-import pytest
-from syftbox.app.install import sanitize_git_path
-from syftbox.app.install import clone_repository
-from syftbox.app.install import check_os_compatibility
-from syftbox.app.install import load_config
 import json
-import shutil
 import os
+import shutil
 from types import SimpleNamespace
+
+import pytest
+
+from syftbox.app.install import (
+    check_os_compatibility,
+    clone_repository,
+    load_config,
+    sanitize_git_path,
+)
 
 
 def test_valid_git_path():
@@ -18,14 +22,14 @@ def test_valid_git_path():
 def test_invalid_git_path():
     path = "..Example/../Repository"
     with pytest.raises(ValueError) as excpt:
-        output_path = sanitize_git_path(path)
+        _ = sanitize_git_path(path)
         assert excpt.value == "Invalid Git repository path format."
 
 
 def test_second_invalid_git_path():
     path = "http://example.com"
     with pytest.raises(ValueError) as excpt:
-        output_path = sanitize_git_path(path)
+        _ = sanitize_git_path(path)
         assert excpt.value == "Invalid Git repository path format."
 
 
@@ -50,7 +54,7 @@ def test_clone_repository_to_an_existent_path():
 def test_clone_invalid_repository():
     path = "InvalidUser/InvalidRepo"
     with pytest.raises(ValueError) as excpt:
-        temp_path = clone_repository(path)
+        _ = clone_repository(path)
         assert (
             excpt.value
             == "The provided repository path doesn't seems to be accessible. Please check it out."
@@ -98,7 +102,6 @@ def test_load_invalid_app_config():
 
 
 def test_load_inexistent_app_config():
-
     with pytest.raises(ValueError) as expt:
         load_config("inexistent_app.json")
         assert expt.value == "Couln't find the json config file for this path."
