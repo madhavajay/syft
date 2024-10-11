@@ -31,10 +31,6 @@ jobs:
     # runs-on: ${{ matrix.os }}
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Permission to home directory
-        run: |
-          sudo chown -R $USER:$USER $HOME
-
       - name: Install Git
         if: runner.os == 'Linux'
         run: |
