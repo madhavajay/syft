@@ -150,7 +150,7 @@ def create_folders(folders: list[str]) -> None:
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI, settings: ServerSettings | None = None):
     # Startup
-    logger.info("> Starting Server")
+    logger.info(f"> Starting SyftBox Server {__version__}")
     if settings is None:
         settings = ServerSettings()
     logger.info(settings)

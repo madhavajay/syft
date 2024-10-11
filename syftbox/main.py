@@ -109,7 +109,7 @@ def main():
         sys.argv = [sys.argv[0]] + remaining_args
         app_manager_main(app_parser, remaining_args)
     elif args.command == "version":
-        logger.info(f"{__version__}")
+        print(__version__)
     elif args.command == "debug":
         logger.info_debug()
     else:

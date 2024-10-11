@@ -27,6 +27,7 @@ from fastapi.templating import Jinja2Templates
 from loguru import logger
 from pydantic import BaseModel
 
+from syftbox import __version__
 from syftbox.client.fsevents import (
     AnyFileSystemEventHandler,
     FileSystemEvent,
@@ -261,7 +262,7 @@ def start_watchdog(app) -> FSWatchdog:
 @contextlib.asynccontextmanager
 async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None):
     # Startup
-    logger.info("> Starting Client")
+    logger.info(f"> Starting SyftBox Client: {__version__}")
 
     # client_config needs to be closed if it was created in this context
     # if it is passed as lifespan arg (eg for testing) it should be managed by the caller instead.
