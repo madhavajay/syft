@@ -72,10 +72,6 @@ def datasite_1(
 
     client_config._server_client = server_client
 
-    # Create the sync folder before starting the client
-    sync_folder = Path(client_config.sync_folder)
-    sync_folder.mkdir(parents=True, exist_ok=True)
-
     lifespan_with_settings = partial(client_lifespan, client_config=client_config)
     client_app.router.lifespan_context = lifespan_with_settings
     with TestClient(client_app) as client:
