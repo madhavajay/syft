@@ -136,7 +136,7 @@ pre_install() {
 run_client() {
     echo
     success "Starting SyftBox client..."
-    exec ~/.local/bin/syftbox client
+    exec ~/.local/bin/syftbox client < /dev/tty
 }
 
 prompt_run_client() {
@@ -197,7 +197,11 @@ do_install() {
     install_syftbox
 
     success "Installation completed!"
-    post_install
+    if [ $RUN_CLIENT -eq 1 ]; then
+        exec ~/.local/bin/syftbox client < /dev/tty
+    else
+        post_install
+    fi
 }
 
 do_install "$@" || exit 1
