@@ -19,7 +19,12 @@ import requests
 from typing_extensions import Self
 
 from syftbox.client.utils import macos
-from syftbox.server.models import get_file_hash, get_file_last_modified
+from syftbox.server.models import (
+    DirState,
+    FileInfo,
+    get_file_hash,
+    get_file_last_modified,
+)
 
 current_dir = Path(__file__).parent
 ASSETS_FOLDER = current_dir.parent / "assets"
@@ -107,7 +112,7 @@ class SyftPermission(Jsonable):
 
     @classmethod
     def datasite_default(cls, email: str) -> Self:
-        return SyftPermission(
+        return cls(
             admin=[email],
             read=[email],
             write=[email],
@@ -213,14 +218,6 @@ def strtobin(encoded_data):
     return zlib.decompress(base64.b85decode(encoded_data.encode("utf-8")))
 
 
-@dataclass
-class DirState(Jsonable):
-    tree: dict[str, FileInfo]
-    timestamp: float
-    sync_folder: str
-    sub_path: str
-
-
 def get_symlink(file_path) -> str:
     return os.readlink(file_path)
 
@@ -247,12 +244,6 @@ def ignore_dirs(directory: str, root: str, ignore_folders=None) -> bool:
             if root.endswith(ignore_folder):
                 return True
     return False
-
-
-@dataclass
-class FileInfo(Jsonable):
-    file_hash: str
-    last_modified: float
 
 
 def hash_dir(
@@ -295,7 +286,10 @@ def ignore_file(directory: str, root: str, filename: str) -> bool:
     return False
 
 
-def get_datasites(sync_folder: str) -> list[str]:
+def get_datasites(sync_folder: str | Path) -> list[str]:
+    sync_folder = (
+        str(sync_folder.resolve()) if isinstance(sync_folder, Path) else sync_folder
+    )
     datasites = []
     folders = os.listdir(sync_folder)
     for folder in folders:

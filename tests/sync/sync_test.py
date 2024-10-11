@@ -43,6 +43,8 @@ from fastapi.testclient import TestClient
 
 from syftbox.client.client import app as client_app
 from syftbox.client.client import lifespan as client_lifespan
+from syftbox.client.plugins.create_datasite import run as run_create_datasite_plugin
+from syftbox.client.plugins.init import run as run_init_plugin
 from syftbox.client.plugins.sync import do_sync
 from syftbox.lib.lib import ClientConfig, perm_file_path
 from syftbox.server.server import app as server_app
@@ -67,7 +69,7 @@ def datasite_1(
         sync_folder=str(client_path / "sync"),
         email=email,
         server_url=str(server_client.base_url),
-        autorun_plugins=["init", "create_datasite"],
+        autorun_plugins=[],
     )
 
     client_config._server_client = server_client
@@ -76,6 +78,12 @@ def datasite_1(
     client_app.router.lifespan_context = lifespan_with_settings
     with TestClient(client_app) as client:
         yield client
+
+
+def setup_datasite(datasite: TestClient):
+    run_init_plugin(datasite.app.shared_state)
+    run_create_datasite_plugin(datasite.app.shared_state)
+    wait_for_datasite_setup(datasite)
 
 
 @pytest.fixture(scope="function")
@@ -97,7 +105,7 @@ def http_server_client():
         yield client
 
 
-def wait_for_datasite_setup(datasite: TestClient, timeout=20):
+def wait_for_datasite_setup(datasite: TestClient, timeout=5):
     print("waiting for datasite setup...")
 
     client_config: ClientConfig = datasite.app.shared_state.client_config
@@ -127,8 +135,7 @@ def test_sync_file_to_server_snapshot(
     tmp_path: Path, server_client: TestClient, datasite_1: TestClient
 ):
     print(datasite_1.app.shared_state.client_config)
-
-    wait_for_datasite_setup(datasite_1)
+    setup_datasite(datasite_1)
 
     do_sync(datasite_1.app.shared_state)
 
