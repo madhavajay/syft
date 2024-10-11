@@ -1,5 +1,4 @@
 import os
-import traceback
 from collections import defaultdict
 from datetime import datetime
 from threading import Event
@@ -652,8 +651,8 @@ def do_sync(shared_state):
                 try:
                     create_datasites(shared_state.client_config)
                 except Exception as e:
-                    traceback.logger.info_exc()
-                    logger.info("failed to get_datasites", e)
+                    logger.error("failed to get_datasites", e)
+                    logger.exception(e)
 
                 try:
                     if SYNC_UP_ENABLED:
@@ -661,8 +660,8 @@ def do_sync(shared_state):
                     else:
                         logger.info("❌ Sync Up Disabled")
                 except Exception as e:
-                    traceback.logger.info_exc()
-                    logger.info("failed to sync up", e)
+                    logger.error("failed to sync up", e)
+                    logger.exception(e)
 
                 try:
                     if SYNC_DOWN_ENABLED:
@@ -670,15 +669,16 @@ def do_sync(shared_state):
                     else:
                         logger.info("❌ Sync Down Disabled")
                 except Exception as e:
-                    traceback.logger.info_exc()
-                    logger.info("failed to sync down", e)
+                    logger.error("failed to sync down", e)
+                    logger.exception(e)
             if num_changes == 0:
                 if event_length:
                     logger.info(f"✅ Synced {event_length} File Events")
                 else:
                     logger.info("✅ Synced due to Timer")
     except Exception as e:
-        logger.info("Failed to run plugin", e)
+        logger.error("Failed to run plugin")
+        logger.exception(e)
 
 
 FLUSH_SYNC_TIMEOUT = 0.5

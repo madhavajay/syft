@@ -5,7 +5,6 @@ import importlib
 import os
 import sys
 import time
-import traceback
 import types
 from dataclasses import dataclass
 from datetime import datetime
@@ -170,8 +169,7 @@ def run_plugin(plugin_name, *args, **kwargs):
         module = app.loaded_plugins[plugin_name].module
         module.run(app.shared_state, *args, **kwargs)
     except Exception as e:
-        traceback.logger.info_exc()
-        logger.info("error", e)
+        logger.exception(e)
 
 
 def start_plugin(app: CustomFastAPI, plugin_name: str):
