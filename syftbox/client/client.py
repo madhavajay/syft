@@ -236,6 +236,7 @@ def start_watchdog(app) -> FSWatchdog:
         run_plugin("sync", event)
 
     watch_dir = Path(app.shared_state.client_config.sync_folder)
+    watch_dir.mkdir(parents=True, exist_ok=True)
     event_handler = AnyFileSystemEventHandler(
         watch_dir,
         callbacks=[sync_on_event],
