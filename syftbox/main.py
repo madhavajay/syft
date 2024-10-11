@@ -1,6 +1,8 @@
 import argparse
 import sys
 
+from loguru import logger
+
 from syftbox import __version__
 from syftbox.app.manager import list_app
 from syftbox.app.manager import main as app_manager_main
@@ -61,9 +63,9 @@ def print_debug():
                 if key.startswith("SYFT")
             },
         }
-        print(yaml.dump(debug_info, default_flow_style=False))
+        logger.info(yaml.dump(debug_info, default_flow_style=False))
     except Exception as e:
-        print(e)
+        logger.info(e)
 
 
 def main():
@@ -107,11 +109,11 @@ def main():
         sys.argv = [sys.argv[0]] + remaining_args
         app_manager_main(app_parser, remaining_args)
     elif args.command == "version":
-        print(f"{__version__}")
+        logger.info(f"{__version__}")
     elif args.command == "debug":
-        print_debug()
+        logger.info_debug()
     else:
-        parser.print_help()
+        parser.logger.info_help()
 
 
 if __name__ == "__main__":

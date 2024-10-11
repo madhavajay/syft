@@ -16,6 +16,7 @@ from typing import Any, Optional
 
 import httpx
 import requests
+from loguru import logger
 from typing_extensions import Self
 
 from syftbox.client.utils import macos
@@ -31,7 +32,9 @@ ASSETS_FOLDER = current_dir.parent / "assets"
 DEFAULT_PORT = 8082
 ICON_FOLDER = ASSETS_FOLDER / "icon"
 DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
-DEFAULT_CONFIG_PATH = os.path.expanduser("~/.syftbox/client_config.json")
+DEFAULT_CONFIG_FOLDER = os.path.expanduser("~/.syftbox")
+DEFAULT_CONFIG_PATH = os.path.join(DEFAULT_CONFIG_FOLDER, "client_config.json")
+DEFAULT_LOGS_PATH = os.path.join(DEFAULT_CONFIG_FOLDER, "logs", "syftbox.log")
 
 USER_GROUP_GLOBAL = "GLOBAL"
 
@@ -93,7 +96,7 @@ class Jsonable:
                 return cls(**d)
         except Exception as e:
             raise e
-            print(f"Unable to load jsonable file: {filepath}. {e}")
+            logger.info(f"Unable to load jsonable file: {filepath}. {e}")
         return None
 
     def save(self, filepath: str) -> None:
@@ -482,7 +485,7 @@ def autocache(
             return file_path
         return download_file(url, file_path)
     except Exception as e:
-        print(f"Failed to autocache: {url}. {e}")
+        logger.info(f"Failed to autocache: {url}. {e}")
         return None
 
 
@@ -491,7 +494,7 @@ def download_file(url: str, full_path: str | Path) -> Path | None:
     if not full_path.exists():
         r = requests.get(url, allow_redirects=True, verify=verify_tls())  # nosec
         if not r.ok:
-            print(f"Got {r.status_code} trying to download {url}")
+            logger.info(f"Got {r.status_code} trying to download {url}")
             return None
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_bytes(r.content)
@@ -572,7 +575,7 @@ class ClientConfig(Jsonable):
     def use(self):
         os.environ["SYFTBOX_CURRENT_CLIENT"] = self.config_path
         os.environ["SYFTBOX_SYNC_DIR"] = self.sync_folder
-        print(f"> Setting Sync Dir to: {self.sync_folder}")
+        logger.info(f"> Setting Sync Dir to: {self.sync_folder}")
 
     def create_folder(self, path: str, permission: SyftPermission):
         os.makedirs(path, exist_ok=True)

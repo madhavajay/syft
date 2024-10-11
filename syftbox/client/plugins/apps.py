@@ -44,10 +44,10 @@ def find_and_run_script(task_path, extra_args):
                 env=env,
             )
 
-            # print("✅ Script run.sh executed successfully.")
+            # logger.info("✅ Script run.sh executed successfully.")
             return result
         except Exception as e:
-            print("Error running shell script", e)
+            logger.info("Error running shell script", e)
     else:
         raise FileNotFoundError(f"run.sh not found in {task_path}")
 
@@ -64,7 +64,7 @@ DEFAULT_APPS_PATH = os.path.abspath(
 
 # def copy_default_apps(apps_path):
 #     if not os.path.exists(DEFAULT_APPS_PATH):
-#         print(f"Default apps directory not found: {DEFAULT_APPS_PATH}")
+#         logger.info(f"Default apps directory not found: {DEFAULT_APPS_PATH}")
 #         return
 
 #     for app in os.listdir(DEFAULT_APPS_PATH):
@@ -73,11 +73,11 @@ DEFAULT_APPS_PATH = os.path.abspath(
 
 #         if os.path.isdir(src_app_path):
 #             if os.path.exists(dst_app_path):
-#                 print(f"App already installed at: {dst_app_path}")
+#                 logger.info(f"App already installed at: {dst_app_path}")
 #                 # shutil.rmtree(dst_app_path)
 #             else:
 #                 shutil.copytree(src_app_path, dst_app_path)
-#             print(f"Copied default app: {app}")
+#             logger.info(f"Copied default app: {app}")
 
 
 def dict_to_namespace(data) -> SimpleNamespace | list | Any:
@@ -113,12 +113,12 @@ def run_apps(client_config):
     if os.path.exists(file_path):
         perm_file = SyftPermission.load(file_path)
     else:
-        print(f"> {client_config.email} Creating Apps Permfile")
+        logger.info(f"> {client_config.email} Creating Apps Permfile")
         try:
             perm_file = SyftPermission.datasite_default(client_config.email)
             perm_file.save(file_path)
         except Exception as e:
-            print("Failed to create perm file", e)
+            logger.info("Failed to create perm file", e)
 
     apps = os.listdir(apps_path)
     for app in apps:
@@ -128,7 +128,7 @@ def run_apps(client_config):
             if app_config is None:
                 run_app(client_config, app_path)
             elif RUNNING_APPS.get(app, None) is None:
-                print("⏱  Scheduling a  new app run.")
+                logger.info("⏱  Scheduling a  new app run.")
                 thread = threading.Thread(
                     target=run_custom_app_config,
                     args=(client_config, app_config, app_path),
@@ -157,7 +157,7 @@ def run_custom_app_config(client_config, app_config, path):
 
     env.update(app_envs)
     while True:
-        print(f"👟 Running {app_name}")
+        logger.info(f"👟 Running {app_name}")
         _ = subprocess.run(
             app_config.app.run.command,
             cwd=path,
@@ -174,22 +174,22 @@ def run_app(client_config, path):
 
     extra_args = []
     try:
-        print(f"👟 Running {app_name} app", end="")
+        logger.info(f"👟 Running {app_name} app", end="")
         result = find_and_run_script(path, extra_args)
         if hasattr(result, "returncode"):
             if "Already generated" not in str(result.stdout):
-                print("\n")
-                print(result.stdout)
+                logger.info("\n")
+                logger.info(result.stdout)
             else:
-                print(" - no change")
+                logger.info(" - no change")
             exit_code = result.returncode
             if exit_code != 0:
-                print(f"Error running: {app_name}", result.stdout, result.stderr)
+                logger.info(f"Error running: {app_name}", result.stdout, result.stderr)
     except Exception as e:
-        print(f"Failed to run. {e}")
+        logger.info(f"Failed to run. {e}")
 
 
 def run(shared_state):
-    # print("> Running Apps")
+    # logger.info("> Running Apps")
     client_config = shared_state.client_config
     run_apps(client_config)
