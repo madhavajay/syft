@@ -3,7 +3,6 @@ import traceback
 from collections import defaultdict
 from datetime import datetime
 from threading import Event
-from typing import Tuple
 
 from watchdog.events import DirModifiedEvent
 
@@ -26,7 +25,7 @@ STAGING = "staging"
 IGNORE_FOLDERS = [CLIENT_CHANGELOG_FOLDER, STAGING, CLIENT_APPS]
 
 
-def get_ignore_rules(dir_state: DirState) -> Tuple[str, str, str]:
+def get_ignore_rules(dir_state: DirState) -> list[str, str, str]:
     # get the ignore files
     syft_ignore_files = []
     folder_path = dir_state.sync_folder + "/" + dir_state.sub_path
