@@ -109,4 +109,4 @@ def main(parser, args_list) -> None:
                 step, exception = result
                 logger.info(f"Error during {step}: ", str(exception))
     else:
-        parser.logger.info_help()
+        parser.print_help()

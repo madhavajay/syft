@@ -113,7 +113,7 @@ def main():
     elif args.command == "debug":
         logger.info_debug()
     else:
-        parser.logger.info_help()
+        parser.print_help()
 
 
 if __name__ == "__main__":
