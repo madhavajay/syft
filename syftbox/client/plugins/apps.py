@@ -5,6 +5,7 @@ import subprocess
 import threading
 from types import SimpleNamespace
 from typing import Any
+import shutil
 
 from syftbox.lib import (
     SyftPermission,
