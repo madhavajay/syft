@@ -136,7 +136,7 @@ pre_install() {
 run_client() {
     echo
     success "Starting SyftBox client..."
-    exec ~/.local/bin/syftbox client
+    exec ~/.local/bin/syftbox client < /dev/tty
 }
 
 prompt_run_client() {
