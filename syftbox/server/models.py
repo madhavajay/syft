@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel
+from typing_extensions import Self
 
 
 class SyftBaseModel(BaseModel):
@@ -15,6 +16,12 @@ class SyftBaseModel(BaseModel):
         with open(path, "w") as f:
             f.write(self.model_dump_json())
         return self.model_dump(mode="json")
+
+    @classmethod
+    def load(cls, filepath: str) -> Self:
+        with open(filepath) as f:
+            data = f.read()
+            return cls.model_validate_json(data)
 
 
 class FileChangeKind(Enum):
