@@ -137,7 +137,8 @@ class FileChange(SyftBaseModel):
             )
             return True
         except Exception as e:
-            logger.info("failed to write", path, e)
+            logger.error(f"failed to write to {path}.")
+            logger.exception(e)
             return False
 
 

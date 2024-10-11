@@ -313,7 +313,8 @@ def pull_changes(client_config, changes: list[FileChange]):
                     f"> {client_config.email} FAILED /read {change.kind} {change.internal_path}",
                 )
         except Exception as e:
-            logger.exception("Failed to call /read on the server", str(e))
+            logger.error("Failed to call /read on the server")
+            logger.exception(e)
     return remote_changes
 
 
@@ -331,7 +332,8 @@ def list_datasites(client_config: ClientConfig):
         else:
             logger.info(f"> {client_config.email} FAILED /list_datasites")
     except Exception as e:
-        logger.info("Failed to call /list_datasites on the server", str(e))
+        logger.error("Failed to call /list_datasites on the server")
+        logger.exception(e)
     return datasites
 
 
@@ -364,7 +366,8 @@ def get_remote_state(client_config: ClientConfig, sub_path: str):
         logger.info(f"> {client_config.email} FAILED /dir_state: {sub_path}")
         return None
     except Exception as e:
-        logger.info("Failed to call /dir_state on the server", str(e))
+        logger.error("Failed to call /dir_state on the server")
+        logger.exception(e)
 
 
 def create_datasites(client_config):

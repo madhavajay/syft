@@ -118,7 +118,8 @@ def run_apps(client_config):
             perm_file = SyftPermission.datasite_default(client_config.email)
             perm_file.save(file_path)
         except Exception as e:
-            logger.info("Failed to create perm file", e)
+            logger.error("Failed to create perm file")
+            logger.exception(e)
 
     apps = os.listdir(apps_path)
     for app in apps:
