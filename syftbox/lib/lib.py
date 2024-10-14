@@ -26,6 +26,8 @@ from syftbox.server.models import (
     get_file_last_modified,
 )
 
+from .exceptions import ClientConfigException
+
 current_dir = Path(__file__).parent
 ASSETS_FOLDER = current_dir.parent / "assets"
 DEFAULT_PORT = 8082
@@ -523,7 +525,7 @@ def validate_email(email: str) -> bool:
 
 
 @dataclass
-class ClientConfig(Jsonable):
+class Client(Jsonable):
     config_path: Path
     sync_folder: Path | None = None
     port: int | None = None
@@ -594,6 +596,26 @@ class ClientConfig(Jsonable):
         public_read = SyftPermission.mine_with_public_read(email=self.datasite)
         public_read.save(full_path)
         return Path(full_path)
+
+    @classmethod
+    def load(cls, filepath: str | None = None) -> Self:
+        try:
+            if filepath is None:
+                config_path = os.getenv(
+                    "SYFTBOX_CLIENT_CONFIG_PATH", DEFAULT_CONFIG_PATH
+                )
+                filepath = config_path
+            return super().load(filepath)
+        except Exception:
+            raise ClientConfigException(
+                f"Unable to load Client config from {filepath}."
+                "If you are running this outside of syftbox app runner you must supply "
+                "the Client config path like so: \n"
+                "SYFTBOX_CLIENT_CONFIG_PATH=~/.syftbox/client_config.json"
+            )
+
+
+ClientConfig = Client
 
 
 def get_user_input(prompt, default: Optional[str] = None):
