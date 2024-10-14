@@ -1,6 +1,7 @@
 import os
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from threading import Event
 
 from loguru import logger
@@ -155,7 +156,7 @@ def diff_dirstate(old: DirState, new: DirState):
                     changes.append(change)
                 else:
                     logger.info(
-                        f"🔥 Skipping delete {file_info}. File change is < {SECS_SINCE_CHANGE} seconds ago"
+                        f"🔥 Skipping delete {afile} {file_info}. File change is < {SECS_SINCE_CHANGE} seconds ago"
                     )
         return changes
     except Exception as e:
@@ -209,8 +210,11 @@ def filter_changes(
     valid_changes = []
     valid_change_files = []
     invalid_changes = []
+    invalid_permissions = []
     for change in changes:
-        if change.kind in [
+        if perm_tree.has_corrupted_permission(change.full_path):
+            invalid_permissions.append(change)
+        elif change.kind in [
             FileChangeKind.WRITE,
             FileChangeKind.CREATE,
             FileChangeKind.DELETE,
@@ -231,8 +235,9 @@ def filter_changes(
             #         valid_change_files.append(change.sub_path)
             #         continue
 
-        invalid_changes.append(change)
-    return valid_changes, valid_change_files, invalid_changes
+        else:
+            invalid_changes.append(change)
+    return valid_changes, valid_change_files, invalid_changes, invalid_permissions
 
 
 def push_changes(
@@ -429,6 +434,67 @@ def filter_changes_ignore(
     return filtered_changes
 
 
+def filter_changes_with_corrupted_permissions(
+    pre_filter_changes: list[FileChange], perm_tree: PermissionTree
+) -> list[FileChange]:
+    removed_changes = []
+    filtered_changes = []
+    corrupted_permission_files = perm_tree.corrupted_permission_files
+    corrupted_permission_files = perm_tree.corrupted_permission_files
+    # parents of permission files
+    corrupted_permission_paths = set(
+        Path(perm_file).parent for perm_file in corrupted_permission_files
+    )
+
+    for change in pre_filter_changes:
+        full_path = Path(change.full_path)
+        for corrupted_path in corrupted_permission_paths:
+            # Skip any files under a corrupted permission file
+            if full_path.resolve().is_relative_to(corrupted_path.resolve()):
+                removed_changes.append(change)
+            else:
+                filtered_changes.append(change)
+
+    if len(removed_changes) > 0:
+        removed_files = [change.full_path for change in removed_changes]
+        logger.warning(
+            f"Filtered {len(removed_changes)} changes with corrupted permissions"
+        )
+        logger.debug(f"Filtered changes with corrupted permissions: {removed_files}")
+
+    return filtered_changes
+
+
+def filter_corrupted_permissions(new_dir_state: DirState, perm_tree: PermissionTree):
+    filtered_files = []
+
+    pruned_tree = new_dir_state.tree.copy()
+    corrupted_permission_files = perm_tree.corrupted_permission_files
+    # parents of permission files
+    corrupted_permission_paths = set(
+        Path(perm_file).parent for perm_file in corrupted_permission_files
+    )
+
+    for afile, file_info in new_dir_state.tree.items():
+        full_path = Path(new_dir_state.sync_folder) / new_dir_state.sub_path / afile
+        for corrupted_path in corrupted_permission_paths:
+            if full_path.resolve().is_relative_to(corrupted_path.resolve()):
+                del pruned_tree[afile]
+                filtered_files.append(afile)
+
+    if len(filtered_files) > 0:
+        logger.warning(
+            f"Filtered {len(filtered_files)} files with corrupted permissions"
+        )
+        logger.debug(f"Filtered corrupted files: {filtered_files}")
+    return DirState(
+        tree=pruned_tree,
+        timestamp=datetime.now().timestamp(),
+        sync_folder=new_dir_state.sync_folder,
+        sub_path=new_dir_state.sub_path,
+    )
+
+
 def sync_up(client_config: ClientConfig):
     # create a folder to store the change log
     change_log_folder = f"{client_config.sync_folder}/{CLIENT_CHANGELOG_FOLDER}"
@@ -487,7 +553,19 @@ def sync_up(client_config: ClientConfig):
         if len(changes) == 0:
             continue
 
-        val, val_files, inval = filter_changes(client_config.email, changes, perm_tree)
+        val, val_files, inval_changes, inval_permissions = filter_changes(
+            client_config.email, changes, perm_tree
+        )
+        if len(inval_permissions) > 0:
+            logger.warning(
+                f"Filtered {len(inval_permissions)} changes with corrupted permissions"
+            )
+            inval_permission_files = [
+                change.internal_path for change in inval_permissions
+            ]
+            logger.debug(
+                f"Filtered changes with corrupted permissions: {inval_permission_files}"
+            )
 
         # send val changes
         results = push_changes(client_config, val)

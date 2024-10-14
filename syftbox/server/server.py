@@ -437,7 +437,7 @@ async def datasites(
     server_settings: ServerSettings = Depends(get_server_settings),
 ) -> ListDatasitesResponse:
     datasites = get_datasites(server_settings.snapshot_folder)
-    if datasites:
+    if isinstance(datasites, list):
         return ListDatasitesResponse(
             datasites=datasites,
             status="success",

@@ -327,21 +327,47 @@ class PermissionTree(Jsonable):
     parent_path: str
     root_perm: SyftPermission | None
 
+    corrupted_permission_files: list[str] = field(default_factory=list)
+
     @classmethod
     def from_path(cls, parent_path) -> Self:
+        corrupted_permission_files = []
         perm_dict = {}
         for root, dirs, files in os.walk(parent_path):
             for file in files:
                 if file.endswith(".syftperm"):
                     path = os.path.join(root, file)
-                    perm_dict[path] = SyftPermission.load(path)
+                    try:
+                        perm_dict[path] = SyftPermission.load(path)
+                    except Exception:
+                        corrupted_permission_files.append(path)
 
         root_perm = None
         root_perm_path = perm_file_path(parent_path)
         if root_perm_path in perm_dict:
             root_perm = perm_dict[root_perm_path]
 
-        return cls(root_perm=root_perm, tree=perm_dict, parent_path=parent_path)
+        if corrupted_permission_files:
+            logger.warning(
+                f"Found corrupted permission files: {corrupted_permission_files}"
+            )
+
+        return cls(
+            root_perm=root_perm,
+            tree=perm_dict,
+            parent_path=parent_path,
+            corrupted_permission_files=corrupted_permission_files,
+        )
+
+    def has_corrupted_permission(self, path: str | Path) -> bool:
+        path = Path(path).resolve()
+        corrupted_permission_paths = [
+            Path(p).parent.resolve() for p in self.corrupted_permission_files
+        ]
+        for perm_path in corrupted_permission_paths:
+            if path.is_relative_to(perm_path):
+                return True
+        return False
 
     @property
     def root_or_default(self) -> SyftPermission:

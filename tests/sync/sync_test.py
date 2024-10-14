@@ -355,10 +355,18 @@ def test_corrupted_permissions(
     do_sync(datasite_2_shared_state)
 
     dir_tree = {
-        "my_folder": {
+        "corrupted_folder": {
             "_.syftperm": SyftPermission.mine_with_public_read(datasite_1.email),
-            "public.json": "content",
-        }
+            "file.txt": "content",
+            "corrupted_subfolder": {
+                "_.syftperm": SyftPermission.mine_with_public_read(datasite_1.email),
+                "file.txt": "content",
+            },
+        },
+        "normal_folder": {
+            "_.syftperm": SyftPermission.mine_with_public_read(datasite_1.email),
+            "file.txt": "content",
+        },
     }
 
     create_local_tree(Path(datasite_1.datasite_path), dir_tree)
@@ -366,9 +374,73 @@ def test_corrupted_permissions(
     do_sync(datasite_1_shared_state)
     do_sync(datasite_2_shared_state)
 
-    # Corrupt the permission file
-    permission_file = Path(datasite_1.datasite_path) / "my_folder" / "_.syftperm"
+    # Corrupt the permission file and do an update
+    permission_file = Path(datasite_1.datasite_path) / "corrupted_folder" / "_.syftperm"
     permission_file.write_text("corrupted")
+
+    # Make local changes
+    # expected behaviour: files under corrupted permissions are not synced, other files are
+    corrupted_file_to_update = (
+        Path(datasite_1.datasite_path) / "corrupted_folder" / "file.txt"
+    )
+    corrupted_subfolder_file_to_update = (
+        Path(datasite_1.datasite_path)
+        / "corrupted_folder"
+        / "corrupted_subfolder"
+        / "file.txt"
+    )
+    normal_file_to_update = (
+        Path(datasite_1.datasite_path) / "normal_folder" / "file.txt"
+    )
+    corrupted_file_to_update.write_text("updated")
+    corrupted_subfolder_file_to_update.write_text("updated")
+    normal_file_to_update.write_text("updated")
+
+    # NOTE fix this, need to sleep in order to detect faulty deletes
+    time.sleep(5)
 
     do_sync(datasite_1_shared_state)
     do_sync(datasite_2_shared_state)
+
+    # Corrupted folders and subfolders are not synced
+    assert (
+        Path(datasite_2.sync_folder)
+        / datasite_1.email
+        / "corrupted_folder"
+        / "file.txt"
+    ).read_text() == "content"
+    assert (
+        Path(datasite_2.sync_folder)
+        / datasite_1.email
+        / "corrupted_folder"
+        / "corrupted_subfolder"
+        / "file.txt"
+    ).read_text() == "content"
+
+    # Normal folder is synced
+    assert (
+        Path(datasite_2.sync_folder) / datasite_1.email / "normal_folder" / "file.txt"
+    ).read_text() == "updated"
+
+    # Fix the corrupted permission file
+    SyftPermission.mine_with_public_read(datasite_1.email).save(
+        path=str(permission_file)
+    )
+
+    do_sync(datasite_1_shared_state)
+    do_sync(datasite_2_shared_state)
+
+    # Corrupted folders and subfolders are now synced
+    assert (
+        Path(datasite_2.sync_folder)
+        / datasite_1.email
+        / "corrupted_folder"
+        / "file.txt"
+    ).read_text() == "updated"
+    assert (
+        Path(datasite_2.sync_folder)
+        / datasite_1.email
+        / "corrupted_folder"
+        / "corrupted_subfolder"
+        / "file.txt"
+    ).read_text() == "updated"
