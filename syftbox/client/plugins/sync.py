@@ -1,7 +1,6 @@
 import os
 from collections import defaultdict
 from datetime import datetime
-from pathlib import Path
 from threading import Event
 
 from loguru import logger
@@ -432,67 +431,6 @@ def filter_changes_ignore(
             filtered_changes.append(change)
 
     return filtered_changes
-
-
-def filter_changes_with_corrupted_permissions(
-    pre_filter_changes: list[FileChange], perm_tree: PermissionTree
-) -> list[FileChange]:
-    removed_changes = []
-    filtered_changes = []
-    corrupted_permission_files = perm_tree.corrupted_permission_files
-    corrupted_permission_files = perm_tree.corrupted_permission_files
-    # parents of permission files
-    corrupted_permission_paths = set(
-        Path(perm_file).parent for perm_file in corrupted_permission_files
-    )
-
-    for change in pre_filter_changes:
-        full_path = Path(change.full_path)
-        for corrupted_path in corrupted_permission_paths:
-            # Skip any files under a corrupted permission file
-            if full_path.resolve().is_relative_to(corrupted_path.resolve()):
-                removed_changes.append(change)
-            else:
-                filtered_changes.append(change)
-
-    if len(removed_changes) > 0:
-        removed_files = [change.full_path for change in removed_changes]
-        logger.warning(
-            f"Filtered {len(removed_changes)} changes with corrupted permissions"
-        )
-        logger.debug(f"Filtered changes with corrupted permissions: {removed_files}")
-
-    return filtered_changes
-
-
-def filter_corrupted_permissions(new_dir_state: DirState, perm_tree: PermissionTree):
-    filtered_files = []
-
-    pruned_tree = new_dir_state.tree.copy()
-    corrupted_permission_files = perm_tree.corrupted_permission_files
-    # parents of permission files
-    corrupted_permission_paths = set(
-        Path(perm_file).parent for perm_file in corrupted_permission_files
-    )
-
-    for afile, file_info in new_dir_state.tree.items():
-        full_path = Path(new_dir_state.sync_folder) / new_dir_state.sub_path / afile
-        for corrupted_path in corrupted_permission_paths:
-            if full_path.resolve().is_relative_to(corrupted_path.resolve()):
-                del pruned_tree[afile]
-                filtered_files.append(afile)
-
-    if len(filtered_files) > 0:
-        logger.warning(
-            f"Filtered {len(filtered_files)} files with corrupted permissions"
-        )
-        logger.debug(f"Filtered corrupted files: {filtered_files}")
-    return DirState(
-        tree=pruned_tree,
-        timestamp=datetime.now().timestamp(),
-        sync_folder=new_dir_state.sync_folder,
-        sub_path=new_dir_state.sub_path,
-    )
 
 
 def sync_up(client_config: ClientConfig):
