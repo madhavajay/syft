@@ -1,10 +1,12 @@
 import json
 import logging
 import os
+import shutil
 import subprocess
 import threading
 from types import SimpleNamespace
-from typing import Any
+
+from typing_extensions import Any
 
 from syftbox.lib import (
     SyftPermission,
@@ -62,22 +64,22 @@ DEFAULT_APPS_PATH = os.path.abspath(
 )
 
 
-# def copy_default_apps(apps_path):
-#     if not os.path.exists(DEFAULT_APPS_PATH):
-#         logger.info(f"Default apps directory not found: {DEFAULT_APPS_PATH}")
-#         return
+def copy_default_apps(apps_path):
+    if not os.path.exists(DEFAULT_APPS_PATH):
+        logger.info(f"Default apps directory not found: {DEFAULT_APPS_PATH}")
+        return
 
-#     for app in os.listdir(DEFAULT_APPS_PATH):
-#         src_app_path = os.path.join(DEFAULT_APPS_PATH, app)
-#         dst_app_path = os.path.join(apps_path, app)
+    for app in os.listdir(DEFAULT_APPS_PATH):
+        src_app_path = os.path.join(DEFAULT_APPS_PATH, app)
+        dst_app_path = os.path.join(apps_path, app)
 
-#         if os.path.isdir(src_app_path):
-#             if os.path.exists(dst_app_path):
-#                 logger.info(f"App already installed at: {dst_app_path}")
-#                 # shutil.rmtree(dst_app_path)
-#             else:
-#                 shutil.copytree(src_app_path, dst_app_path)
-#             logger.info(f"Copied default app: {app}")
+        if os.path.isdir(src_app_path):
+            if os.path.exists(dst_app_path):
+                logger.info(f"App already installed at: {dst_app_path}")
+                # shutil.rmtree(dst_app_path)
+            else:
+                shutil.copytree(src_app_path, dst_app_path)
+            logger.info(f"Copied default app: {app}")
 
 
 def dict_to_namespace(data) -> SimpleNamespace | list | Any:
@@ -106,7 +108,7 @@ def run_apps(client_config):
     os.makedirs(apps_path, exist_ok=True)
 
     # Copy default apps if they don't exist
-    # copy_default_apps(apps_path)
+    copy_default_apps(apps_path)
 
     # add the first perm file
     file_path = perm_file_path(apps_path)

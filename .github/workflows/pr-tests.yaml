@@ -43,9 +43,9 @@ jobs:
         run: |
           uv python install ${{ matrix.python-version }}
           uv venv
-        
+
       - name: Install pip packages
-        run: | 
+        run: |
           uv pip  install -U tox tox-uv pytest
 
       - name: Get uv cache dir

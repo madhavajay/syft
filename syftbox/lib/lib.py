@@ -12,12 +12,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from typing import Any, Optional
 
 import httpx
 import requests
 from loguru import logger
-from typing_extensions import Self
+from typing_extensions import Any, Optional, Self
 
 from syftbox.client.utils import macos
 from syftbox.server.models import (
@@ -330,7 +329,7 @@ class PermissionTree(Jsonable):
     corrupted_permission_files: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_path(cls, parent_path) -> Self:
+    def from_path(cls, parent_path, raise_on_corrupted_files: bool = False) -> Self:
         corrupted_permission_files = []
         perm_dict = {}
         for root, dirs, files in os.walk(parent_path):
@@ -348,6 +347,10 @@ class PermissionTree(Jsonable):
             root_perm = perm_dict[root_perm_path]
 
         if corrupted_permission_files:
+            if raise_on_corrupted_files:
+                raise ValueError(
+                    f"Found corrupted permission files: {corrupted_permission_files}"
+                )
             logger.warning(
                 f"Found corrupted permission files: {corrupted_permission_files}"
             )
