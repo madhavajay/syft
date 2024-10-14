@@ -121,6 +121,9 @@ class SyftPermission(Jsonable):
             write=[email],
         )
 
+    def has_read_permission(self, email: str) -> bool:
+        return email in self.read or USER_GROUP_GLOBAL in self.read
+
     def __eq__(self, other):
         if not isinstance(other, SyftPermission):
             return NotImplemented

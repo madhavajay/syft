@@ -155,7 +155,7 @@ def diff_dirstate(old: DirState, new: DirState):
                     changes.append(change)
                 else:
                     logger.info(
-                        f"🔥 Skipping delete {file_info}. File change is < 3 seconds ago"
+                        f"🔥 Skipping delete {file_info}. File change is < {SECS_SINCE_CHANGE} seconds ago"
                     )
         return changes
     except Exception as e:
