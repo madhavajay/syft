@@ -254,6 +254,53 @@ def test_delete_public_file(
     assert_files_on_datasite(datasite_2, [file_path_1])
 
 
+def test_move_file(
+    server_client: TestClient, datasite_1: ClientConfig, datasite_2: ClientConfig
+):
+    datasite_1_shared_state = SharedState(client_config=datasite_1)
+    datasite_2_shared_state = SharedState(client_config=datasite_2)
+
+    tree = {
+        "folder1": {
+            "_.syftperm": SyftPermission.mine_with_public_read(datasite_1.email),
+            "file1.txt": "content1",
+        },
+    }
+
+    create_local_tree(Path(datasite_1.datasite_path), tree)
+
+    do_sync(datasite_1_shared_state)
+    do_sync(datasite_2_shared_state)
+
+    assert_dirtree_exists(Path(datasite_2.sync_folder) / datasite_1.email, tree)
+
+    # move file1 to new folder
+    file1 = Path(datasite_1.datasite_path) / "folder1" / "file1.txt"
+
+    new_tree = {
+        "folder2": {
+            "_.syftperm": SyftPermission.mine_with_public_read(datasite_1.email),
+        },
+    }
+
+    do_sync(datasite_1_shared_state)
+    do_sync(datasite_2_shared_state)
+
+    # wait for delete
+    time.sleep(5)
+
+    create_local_tree(Path(datasite_1.datasite_path), new_tree)
+    file1.rename(Path(datasite_1.datasite_path) / "folder2" / "file1.txt")
+
+    do_sync(datasite_1_shared_state)
+    do_sync(datasite_2_shared_state)
+
+    assert_files_not_on_datasite(
+        datasite_2, [Path(datasite_1.email) / "folder1" / "file1.txt"]
+    )
+    assert_dirtree_exists(Path(datasite_2.sync_folder) / datasite_1.email, new_tree)
+
+
 def test_sync_with_permissions(
     server_client: TestClient, datasite_1: ClientConfig, datasite_2: ClientConfig
 ):
