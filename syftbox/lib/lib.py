@@ -332,7 +332,10 @@ class PermissionTree(Jsonable):
             for file in files:
                 if file.endswith(".syftperm"):
                     path = os.path.join(root, file)
-                    perm_dict[path] = SyftPermission.load(path)
+                    try:
+                        perm_dict[path] = SyftPermission.load(path)
+                    except Exception as e:
+                        print(f"Failed to parse perm file at: {path}. {e}")
 
         root_perm = None
         root_perm_path = perm_file_path(parent_path)
