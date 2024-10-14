@@ -1,11 +1,12 @@
 import json
 import logging
 import os
+import shutil
 import subprocess
 import threading
 from types import SimpleNamespace
-from typing import Any
-import shutil
+
+from typing_extensions import Any
 
 from syftbox.lib import (
     SyftPermission,

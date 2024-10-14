@@ -12,12 +12,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from typing import Any, Optional
 
 import httpx
 import requests
 from loguru import logger
-from typing_extensions import Self
+from typing_extensions import Any, Optional, Self
 
 from syftbox.client.utils import macos
 from syftbox.server.models import (
