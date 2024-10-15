@@ -6,6 +6,8 @@ import threading
 from types import SimpleNamespace
 from datetime import datetime
 import time
+from croniter import croniter
+
 
 from loguru import logger
 from typing_extensions import Any
@@ -147,33 +149,6 @@ def output_published(app_output, published_output) -> bool:
         and get_file_hash(app_output) == get_file_hash(published_output)
     )
 
-
-def parse_cron_schedule(cron_schedule):
-    """
-    Parses a cron schedule string into individual components.
-    """
-    minute, hour, dom, month, dow = cron_schedule.split()
-    return {
-        "minute": minute,
-        "hour": hour,
-        "day_of_month": dom,
-        "month": month,
-        "day_of_week": dow
-    }
-
-def matches_schedule(schedule, current_time):
-    """
-    Checks if the current time matches the given cron schedule.
-    """
-    def matches(field, current):
-        return field == '*' or str(current) == field or str(current) in field.split(',')
-
-    return (matches(schedule["minute"], current_time.minute) and
-            matches(schedule["hour"], current_time.hour) and
-            matches(schedule["day_of_month"], current_time.day) and
-            matches(schedule["month"], current_time.month) and
-            matches(schedule["day_of_week"], current_time.strftime("%a").lower()[:3]))
-
 def run_custom_app_config(client_config, app_config, path):
     env = os.environ.copy()
     app_name = os.path.basename(path)
@@ -186,12 +161,14 @@ def run_custom_app_config(client_config, app_config, path):
 
     # Retrieve the cron-style schedule from app_config
     cron_schedule = getattr(app_config.app.run, "schedule", "* * * * *")
-    schedule = parse_cron_schedule(cron_schedule)
+    base_time = datetime.now()
+    cron_iter = croniter(cron_schedule, base_time)
+    next_execution = cron_iter.get_next(datetime)  # Initial next execution time
 
     while True:
         current_time = datetime.now()
         
-        if matches_schedule(schedule, current_time):
+        if current_time >= next_execution:
             logger.info(f"👟 Running {app_name} at scheduled time {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
             try:
                 result = subprocess.run(
@@ -202,16 +179,19 @@ def run_custom_app_config(client_config, app_config, path):
                     text=True,
                     env=env,
                 )
-                # logger.info(result.stdout)
-                # logger.error(result.stderr)
+                logger.info(result.stdout)
+                logger.error(result.stderr)
             except subprocess.CalledProcessError as e:
                 logger.error(f"Error running {app_name}: {e}")
-        else:
-            logger.info(f"⏲ Waiting for scheduled time. Current time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        # Wait for a minute before re-checking
-        time.sleep(60)
 
+            # Set the next execution time after each successful run
+            next_execution = cron_iter.get_next(datetime)
+        else:
+            # Log waiting status with current and next scheduled time
+            logger.info(f"⏲ Waiting for scheduled time. Current time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}, Next execution: {next_execution.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        # Wait for a short interval to recheck time, e.g., 30 seconds
+        time.sleep(30)
 
 def run_app(client_config, path):
     app_name = os.path.basename(path)
