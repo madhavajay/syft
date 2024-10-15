@@ -190,8 +190,11 @@ def run_custom_app_config(client_config, app_config, path):
             # Log waiting status with current and next scheduled time
             logger.info(f"⏲ Waiting for scheduled time. Current time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}, Next execution: {next_execution.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        # Wait for a short interval to recheck time, e.g., 30 seconds
-        time.sleep(30)
+        # Calculate the time to wait until the next execution
+        next_execution = iter.get_next(datetime)
+        time_to_wait = next_execution-current_time
+        time.sleep(time_to_wait)
+
 
 def run_app(client_config, path):
     app_name = os.path.basename(path)
