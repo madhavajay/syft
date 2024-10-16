@@ -223,6 +223,9 @@ def parse_args():
     parser.add_argument(
         "--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path"
     )
+
+    parser.add_argument('--debug', action='store_true', help='debug mode')
+
     parser.add_argument("--sync_folder", type=str, help="sync folder path")
     parser.add_argument("--email", type=str, help="email")
     parser.add_argument("--port", type=int, default=8080, help="Port number")
@@ -266,6 +269,10 @@ async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None
     logger.info(
         f"> Starting SyftBox Client: {__version__} Python {platform.python_version()}"
     )
+
+    config_path = os.environ.get("SYFTBOX_CLIENT_CONFIG_PATH")
+    if config_path:
+        client_config = ClientConfig.load(config_path)
 
     # client_config needs to be closed if it was created in this context
     # if it is passed as lifespan arg (eg for testing) it should be managed by the caller instead.
@@ -495,7 +502,7 @@ def main() -> None:
     logger.info("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
     logger.info("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
 
-    debug = True
+    debug = True if args.debug else False
     port = client_config.port
     max_attempts = 10  # Maximum number of port attempts
 
