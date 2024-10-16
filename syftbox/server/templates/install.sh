@@ -51,6 +51,20 @@ downloader() {
     fi
 }
 
+get_python_command() {
+    # check if either python3 or python is available
+    # and return the python command
+
+    if check_cmd python3; then
+        echo "python3"
+    elif check_cmd python; then
+        echo "python"
+    else
+        err "need 'python' or 'python3' (command not found)"
+    fi
+}
+
+
 need_python() {
     # check if either python3 or python is available
     if ! check_cmd python && ! check_cmd python3
@@ -116,33 +130,24 @@ install_syftbox() {
     fi
 }
 
-#!/bin/bash
 
 check_python_version() {
     # Try python3, if it exists; otherwise, fall back to python
-    if check_cmd python3; then
-        python_command="python3"
-    elif check_cmd python; then
-        python_command="python"
-    else
-        echo "Python is not installed."
+    python_command=$(get_python_command)
+
+    # Check if python_command is empty (meaning no python was found)
+    if [ -z "$python_command" ]; then
         return 1
     fi
 
-    # Get the Python version (major and minor)
-    python_version=$($python_command --version 2>&1 | awk '{print $2}')
+    # Check if the python version is >= 3.10
+    pyver_check=$($python_command -c "import sys; print((sys.version_info[:2] >= (3, 10)))")
 
-    # Extract major and minor version numbers
-    major_version=$(echo "$python_version" | cut -d. -f1)
-    minor_version=$(echo "$python_version" | cut -d. -f2)
-
-    # Check if Python version is greater than or equal to 3.10
-    if [ "$major_version" -eq 3 ] && [ "$minor_version" -ge 10 ] || [ "$major_version" -gt 3 ]; then
-        echo "$python_command version is greater than or equal to 3.10"
-
-    else
-        err "Your python version $major_version.$minor_version <= 3.10. Please install Python >= 3.10."
+    # Check if Python version not is greater than or equal to 3.10
+    if [ "$pyver_check" = "False" ]; then
+        err "Minimum python version is 3.10. Found: $($python_command -V)"
     fi
+
 }
 
 
@@ -150,12 +155,12 @@ pre_install() {
     # ----- pre-install checks ----
     # uv doesn't really need python,
     # ... but incase we want we can toggle this on
-    # need_python
-
-    # if you see this message, you're good to go
+    #  need_python
 
     # check if python version is >= 3.10
     check_python_version
+
+    # if you see this message, you're good to go
 
     echo "
  ____         __ _   ____
