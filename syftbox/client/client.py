@@ -223,6 +223,9 @@ def parse_args():
     parser.add_argument(
         "--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path"
     )
+
+    parser.add_argument('--debug', action='store_true', help='debug mode')
+
     parser.add_argument("--sync_folder", type=str, help="sync folder path")
     parser.add_argument("--email", type=str, help="email")
     parser.add_argument("--port", type=int, default=8080, help="Port number")
@@ -499,7 +502,7 @@ def main() -> None:
     logger.info("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
     logger.info("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
 
-    debug = True
+    debug = True if args.debug else False
     port = client_config.port
     max_attempts = 10  # Maximum number of port attempts
 
