@@ -46,29 +46,7 @@ from syftbox.server.settings import ServerSettings, get_server_settings
 current_dir = Path(__file__).parent
 
 
-def load_list(cls, filepath: str) -> list[Any]:
-    try:
-        with open(filepath) as f:
-            data = f.read()
-            d = json.loads(data)
-            ds = []
-            for di in d:
-                ds.append(cls(**di))
-            return ds
-    except Exception as e:
-        logger.info(f"Unable to load list file: {filepath}. {e}")
-    return None
-
-
-def save_list(obj: Any, filepath: str) -> None:
-    dicts = []
-    for d in obj:
-        dicts.append(d.to_dict())
-    with open(filepath, "w") as f:
-        f.write(json.dumps(dicts))
-
-
-def load_dict(cls, filepath: str) -> list[Any]:
+def load_dict(cls, filepath: str) -> Optional[dict[str, Any]]:
     try:
         with open(filepath) as f:
             data = f.read()

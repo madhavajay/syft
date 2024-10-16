@@ -12,7 +12,7 @@ class SyftBaseModel(BaseModel):
         # used until we remote Jsonable from the code base
         return self.model_dump(mode="json")
 
-    def save(self, path: str) -> bool:
+    def save(self, path: str) -> dict:
         with open(path, "w") as f:
             f.write(self.model_dump_json())
         return self.model_dump(mode="json")
