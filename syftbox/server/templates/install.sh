@@ -116,6 +116,36 @@ install_syftbox() {
     fi
 }
 
+#!/bin/bash
+
+check_python_version() {
+    # Try python3, if it exists; otherwise, fall back to python
+    if check_cmd python3; then
+        python_command="python3"
+    elif check_cmd python; then
+        python_command="python"
+    else
+        echo "Python is not installed."
+        return 1
+    fi
+
+    # Get the Python version (major and minor)
+    python_version=$($python_command --version 2>&1 | awk '{print $2}')
+
+    # Extract major and minor version numbers
+    major_version=$(echo "$python_version" | cut -d. -f1)
+    minor_version=$(echo "$python_version" | cut -d. -f2)
+
+    # Check if Python version is greater than or equal to 3.10
+    if [ "$major_version" -eq 3 ] && [ "$minor_version" -ge 10 ] || [ "$major_version" -gt 3 ]; then
+        echo "$python_command version is greater than or equal to 3.10"
+
+    else
+        err "Your python version $major_version.$minor_version <= 3.10. Please install Python >= 3.10."
+    fi
+}
+
+
 pre_install() {
     # ----- pre-install checks ----
     # uv doesn't really need python,
@@ -123,6 +153,10 @@ pre_install() {
     # need_python
 
     # if you see this message, you're good to go
+
+    # check if python version is >= 3.10
+    check_python_version
+
     echo "
  ____         __ _   ____
 / ___| _   _ / _| |_| __ )  _____  __
