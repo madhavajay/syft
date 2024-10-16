@@ -835,6 +835,11 @@ wheels = [
 ]
 
 [[package]]
+name = "py-fast-rsync"
+version = "0.1.0"
+source = { git = "https://github.com/OpenMined/py_fast_rsync.git?rev=main#484cfc73992be4517a323dcd090fc83e1145f7a9" }
+
+[[package]]
 name = "pycparser"
 version = "2.22"
 source = { registry = "https://pypi.org/simple" }
@@ -1203,6 +1208,7 @@ dependencies = [
     { name = "pandas" },
     { name = "postmarker" },
     { name = "psutil" },
+    { name = "py-fast-rsync" },
     { name = "pydantic-settings" },
     { name = "pytest" },
     { name = "pyyaml" },
@@ -1236,6 +1242,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2.2" },
     { name = "postmarker", specifier = ">=1.0" },
     { name = "psutil", specifier = ">=6.0.0" },
+    { name = "py-fast-rsync", git = "https://github.com/OpenMined/py_fast_rsync.git?rev=main" },
     { name = "pydantic-settings", specifier = ">=2.5.2" },
     { name = "pytest", specifier = ">=8.3.3" },
     { name = "pyyaml", specifier = ">=6.0.2" },
