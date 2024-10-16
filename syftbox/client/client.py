@@ -267,18 +267,17 @@ async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None
         f"> Starting SyftBox Client: {__version__} Python {platform.python_version()}"
     )
 
+    config_path = os.environ.get("SYFTBOX_CLIENT_CONFIG_PATH")
+    if config_path:
+        client_config = ClientConfig.load(config_path)
+
     # client_config needs to be closed if it was created in this context
     # if it is passed as lifespan arg (eg for testing) it should be managed by the caller instead.
-    config_path = os.environ.get("SYFTBOX_CLIENT_CONFIG_PATH", None)
-    if config_path is not None:
-        client_config = ClientConfig.load(config_path)
-    else:
-        close_client_config: bool = False
-        if client_config is None:
-            args = parse_args()
-            client_config = load_or_create_config(args)
-            close_client_config = True
-
+    close_client_config: bool = False
+    if client_config is None:
+        args = parse_args()
+        client_config = load_or_create_config(args)
+        close_client_config = True
     app.shared_state = SharedState(client_config=client_config)
 
     # Clear the lock file on the first run if it exists
