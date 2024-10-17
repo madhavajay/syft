@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from pathlib import Path
+import subprocess
 
 import uvicorn
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -74,6 +75,21 @@ class Plugin:
     schedule: int
     description: str
 
+
+def open_sync_folder(folder_path):
+    """Open the folder specified by `folder_path` in the default file explorer."""
+    logger.info(f"Opening your sync folder: {folder_path}")
+    try:
+        if platform.system() == "Darwin":  # macOS
+            subprocess.run(["open", folder_path])
+        elif platform.system() == "Windows":  # Windows
+            subprocess.run(["explorer", folder_path])
+        elif platform.system() == "Linux":  # Linux
+            subprocess.run(["xdg-open", folder_path])
+        else:
+            logger.warning(f"Unsupported OS for opening folders: {platform.system()}")
+    except Exception as e:
+        logger.error(f"Failed to open folder {folder_path}: {e}")
 
 def process_folder_input(user_input, default_path):
     if not user_input:
@@ -480,6 +496,7 @@ def get_syftbox_src_path():
 def main() -> None:
     args = parse_args()
     client_config = load_or_create_config(args)
+    open_sync_folder(client_config.sync_folder)
     error_config = make_error_report(client_config)
 
     if args.command == "report":
