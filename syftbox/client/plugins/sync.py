@@ -554,15 +554,15 @@ def sync_down(client_config) -> int:
     change_log_folder = f"{client_config.sync_folder}/{CLIENT_CHANGELOG_FOLDER}"
     os.makedirs(change_log_folder, exist_ok=True)
 
-    executor = ThreadPoolExecutor(max_workers=6)
-
     # get all the datasites
     datasites = get_datasites(client_config.sync_folder)
-    results = []
-    for datasite in datasites:
-        n_changes_datasite_future =  executor.submit(sync_down_dataite, datasite, client_config, change_log_folder)
-        results.append(n_changes_datasite_future)
-    n_changes = sum([x.result() for x in results])
+
+    with ThreadPoolExecutor(max_workers=min(6, len(datasites))) as executor:
+        results = []
+        for datasite in datasites:
+            n_changes_datasite_future =  executor.submit(sync_down_dataite, datasite, client_config, change_log_folder)
+            results.append(n_changes_datasite_future)
+        n_changes = sum([x.result() for x in results])
 
     return n_changes
 
