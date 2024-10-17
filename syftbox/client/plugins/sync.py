@@ -355,8 +355,9 @@ def get_remote_state(client_config: ClientConfig, sub_path: str):
         try:
             state_response = response.json()
         except Exception as e:
-            print("/dir_state response Not JSON:", response.text)
-            raise e
+            logger.error(f"""Failed to call /dir_state for {sub_path} response Not JSON: {response.text}. \
+This may be related to broken (empty!) syftperm files""")
+            return None
 
         if response.status_code == 200:
             if isinstance(state_response, dict) and "dir_state" in state_response:
@@ -577,7 +578,7 @@ def sync_down(client_config) -> int:
 
         remote_dir_state = get_remote_state(client_config, datasite)
         if not remote_dir_state:
-            # logger.info(f"No remote state for dir: {datasite}")
+            logger.info(f"Could not find remote state for {datasite}, skipping syncing down")
             continue
 
         pre_filter_changes = diff_dirstate(new_dir_state, remote_dir_state)
