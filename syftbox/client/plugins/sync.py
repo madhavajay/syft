@@ -724,7 +724,6 @@ DEFAULT_SCHEDULE = 1000
 
 
 def run(shared_state, *args, **kwargs):
-    print("CALLING RUN")
     if len(args) == 1:
         event = args[0]
         # ignore certain files / folders
