@@ -78,6 +78,7 @@ class Plugin:
 
 def open_sync_folder(folder_path):
     """Open the folder specified by `folder_path` in the default file explorer."""
+    logger.info(f"Opening your sync folder: {folder_path}")
     try:
         if platform.system() == "Darwin":  # macOS
             subprocess.run(["open", folder_path])
