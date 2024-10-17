@@ -29,11 +29,6 @@ from pydantic import BaseModel
 from typing_extensions import Any
 
 from syftbox import __version__
-from syftbox.client.fsevents import (
-    AnyFileSystemEventHandler,
-    FileSystemEvent,
-    FSWatchdog,
-)
 from syftbox.client.utils.error_reporting import make_error_report
 from syftbox.lib import (
     DEFAULT_CONFIG_PATH,
@@ -192,7 +187,6 @@ def start_plugin(app: CustomFastAPI, plugin_name: str):
 
         existing_job = app.scheduler.get_job(plugin_name)
         if existing_job is None:
-            print(f"CrEATING SCHEDULER, {plugin_name}, every {plugin.schedule / 1000} seconds")
             job = app.scheduler.add_job(
                 func=run_plugin,
                 trigger="interval",
@@ -225,7 +219,7 @@ def parse_args():
         "--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path"
     )
 
-    parser.add_argument('--debug', action='store_true', help='debug mode')
+    parser.add_argument("--debug", action="store_true", help="debug mode")
 
     parser.add_argument("--sync_folder", type=str, help="sync folder path")
     parser.add_argument("--email", type=str, help="email")

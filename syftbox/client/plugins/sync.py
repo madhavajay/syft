@@ -1,8 +1,8 @@
 import os
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from threading import Event
-from concurrent.futures import ThreadPoolExecutor
 
 from loguru import logger
 from watchdog.events import DirModifiedEvent
@@ -10,7 +10,6 @@ from watchdog.events import DirModifiedEvent
 from syftbox.lib import (
     DirState,
     PermissionTree,
-    ResettableTimer,
     bintostr,
     get_datasites,
     hash_dir,
@@ -355,7 +354,7 @@ def get_remote_state(client_config: ClientConfig, sub_path: str):
         )
         try:
             state_response = response.json()
-        except Exception as e:
+        except Exception:
             logger.error(f"""Failed to call /dir_state for {sub_path} response Not JSON: {response.text}. \
 This may be related to broken (empty!) syftperm files""")
             return None
@@ -560,14 +559,16 @@ def sync_down(client_config) -> int:
     with ThreadPoolExecutor(max_workers=min(6, len(datasites))) as executor:
         results = []
         for datasite in datasites:
-            n_changes_datasite_future =  executor.submit(sync_down_dataite, datasite, client_config, change_log_folder)
+            n_changes_datasite_future = executor.submit(
+                sync_down_dataite, datasite, client_config, change_log_folder
+            )
             results.append(n_changes_datasite_future)
         n_changes = sum([x.result() for x in results])
 
     return n_changes
 
-def sync_down_dataite(datasite, client_config, change_log_folder):
 
+def sync_down_dataite(datasite, client_config, change_log_folder):
     # get the top level perm file
 
     dir_filename = f"{change_log_folder}/{datasite}.json"
@@ -588,7 +589,9 @@ def sync_down_dataite(datasite, client_config, change_log_folder):
 
     remote_dir_state = get_remote_state(client_config, datasite)
     if not remote_dir_state:
-        logger.info(f"Could not find remote state for {datasite}, skipping syncing down")
+        logger.info(
+            f"Could not find remote state for {datasite}, skipping syncing down"
+        )
         return 0
 
     pre_filter_changes = diff_dirstate(new_dir_state, remote_dir_state)
@@ -665,6 +668,7 @@ def sync_down_dataite(datasite, client_config, change_log_folder):
 
     if len(change_text) > 0:
         import threading
+
         logger.info(f"{threading.get_ident()} {os.getpid()} {change_text}")
 
     synced_dir_state.save(dir_filename)
@@ -741,10 +745,3 @@ def run(shared_state, *args, **kwargs):
         shared_state.fs_events.append(event)
 
     do_sync(shared_state)
-    # if "sync" not in shared_state.timers:
-    #     shared_state.timers["sync"] = ResettableTimer(
-    #         timeout=FLUSH_SYNC_TIMEOUT,
-    #         callback=do_sync,
-    #     )
-
-    # shared_state.timers["sync"].start(shared_state=shared_state)
