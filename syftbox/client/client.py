@@ -30,11 +30,6 @@ from pydantic import BaseModel
 from typing_extensions import Any
 
 from syftbox import __version__
-from syftbox.client.fsevents import (
-    AnyFileSystemEventHandler,
-    FileSystemEvent,
-    FSWatchdog,
-)
 from syftbox.client.utils.error_reporting import make_error_report
 from syftbox.lib import (
     DEFAULT_CONFIG_PATH,
@@ -238,6 +233,9 @@ def parse_args():
     parser.add_argument(
         "--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path"
     )
+
+    parser.add_argument("--debug", action="store_true", help="debug mode")
+
     parser.add_argument("--sync_folder", type=str, help="sync folder path")
     parser.add_argument("--email", type=str, help="email")
     parser.add_argument("--port", type=int, default=8080, help="Port number")
@@ -259,20 +257,20 @@ def parse_args():
     return parser.parse_args()
 
 
-def start_watchdog(app) -> FSWatchdog:
-    def sync_on_event(event: FileSystemEvent):
-        run_plugin("sync", event)
+# def start_watchdog(app) -> FSWatchdog:
+#     def sync_on_event(event: FileSystemEvent):
+#         run_plugin("sync", event)
 
-    watch_dir = Path(app.shared_state.client_config.sync_folder)
-    watch_dir.mkdir(parents=True, exist_ok=True)
-    event_handler = AnyFileSystemEventHandler(
-        watch_dir,
-        callbacks=[sync_on_event],
-        ignored=WATCHDOG_IGNORE,
-    )
-    watchdog = FSWatchdog(watch_dir, event_handler)
-    watchdog.start()
-    return watchdog
+#     watch_dir = Path(app.shared_state.client_config.sync_folder)
+#     watch_dir.mkdir(parents=True, exist_ok=True)
+#     event_handler = AnyFileSystemEventHandler(
+#         watch_dir,
+#         callbacks=[sync_on_event],
+#         ignored=WATCHDOG_IGNORE,
+#     )
+#     watchdog = FSWatchdog(watch_dir, event_handler)
+#     watchdog.start()
+#     return watchdog
 
 
 @contextlib.asynccontextmanager
@@ -312,7 +310,7 @@ async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None
     app.running_plugins = {}
     app.loaded_plugins = load_plugins(client_config)
     logger.info("> Loaded plugins:", sorted(list(app.loaded_plugins.keys())))
-    app.watchdog = start_watchdog(app)
+    # app.watchdog = start_watchdog(app)
 
     logger.info("> Starting autorun plugins:", sorted(client_config.autorun_plugins))
     for plugin in client_config.autorun_plugins:
@@ -322,7 +320,7 @@ async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None
 
     logger.info("> Shutting down...")
     scheduler.shutdown()
-    app.watchdog.stop()
+    # app.watchdog.stop()
     if close_client_config:
         client_config.close()
 
@@ -515,7 +513,7 @@ def main() -> None:
     logger.info("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
     logger.info("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
 
-    debug = True
+    debug = True if args.debug else False
     port = client_config.port
     max_attempts = 10  # Maximum number of port attempts
 
