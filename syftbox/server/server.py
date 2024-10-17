@@ -43,6 +43,8 @@ from syftbox.server.models import (
 )
 from syftbox.server.settings import ServerSettings, get_server_settings
 
+from .sync.router import router as sync_router
+
 current_dir = Path(__file__).parent
 
 
@@ -152,6 +154,7 @@ async def lifespan(app: FastAPI, settings: ServerSettings | None = None):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(sync_router)
 # Define the ASCII art
 ascii_art = rf"""
  ____         __ _   ____

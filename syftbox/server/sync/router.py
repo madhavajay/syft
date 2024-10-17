@@ -1,54 +1,104 @@
+import base64
 import hashlib
+from pathlib import Path
 
 import py_fast_rsync
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+
+from syftbox.server.settings import ServerSettings, get_server_settings
+from syftbox.server.sync.hash import hash_file
 
 from .models import (
     ApplyDiffRequest,
+    ApplyDiffResponse,
     DiffRequest,
     DiffResponse,
+    FileMetadata,
     SignatureRequest,
     SignatureResponse,
 )
 
-app = APIRouter(
-    prefix="/rsync",
-    tags=["rsync"],
-)
+
+def get_file_metadata(
+    req: SignatureRequest,
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> FileMetadata:
+    path = Path(req.path)
+
+    if path.absolute() == path:
+        raise HTTPException(status_code=400, detail="path must be relative")
+
+    abs_path = server_settings.snapshot_folder.absolute() / path
+    if not abs_path.exists():
+        raise HTTPException(status_code=400, detail="path does not exist")
+    metadata = hash_file(server_settings.snapshot_folder.absolute(), abs_path)
+
+    # TODO check permissions
+    return metadata
 
 
-@app.post("/get_diffs", response_model=list[DiffResponse])
-async def get_diffs(diff_requests: list[DiffRequest]) -> list[DiffResponse]:
-    response_diffs = []
-    for diff in diff_requests:
-        with open(diff.path, "rb") as f:
-            data = f.read()
-
-        # not ideal for large files
-        # but py_fast_rsync does not support files yet.
-        # TODO: add support for files
-        delta = py_fast_rsync.diff(diff.signature, data)
-
-        # TODO: load from cache/db
-        hash_server = hashlib.sha256(data).hexdigest()
-
-        response_diffs.append(
-            DiffResponse(
-                path=diff.path,
-                diff=delta,
-                hash=hash_server,
-            )
-        )
-    return response_diffs
+router = APIRouter(prefix="/sync", tags=["sync"])
 
 
-@app.get("/get_signatures", response_model=list[SignatureResponse])
-async def get_signatures(
-    signature_requests: list[SignatureRequest],
-) -> list[SignatureResponse]:
-    pass
+@router.post("/get_diff", response_model=DiffResponse)
+async def get_diff(
+    req: DiffRequest,
+    metadata: FileMetadata = Depends(get_file_metadata),
+) -> DiffResponse:
+    with open(metadata.path, "rb") as f:
+        data = f.read()
+
+    # also load from cache
+    diff = py_fast_rsync.diff(req.signature_bytes, data)
+    diff_bytes = base64.b85encode(diff).decode("utf-8")
+    return DiffResponse(
+        path=metadata.relative_path.as_posix(),
+        diff=diff_bytes,
+        hash=metadata.hash,
+    )
 
 
-@app.post("/apply_diffs")
-async def apply_diffs(diff_requests: list[ApplyDiffRequest]) -> None:
-    pass
+@router.post("/get_signature", response_model=SignatureResponse)
+async def get_signature(
+    metadata: FileMetadata = Depends(get_file_metadata),
+) -> SignatureResponse:
+    return SignatureResponse(
+        # convert to relative path to syftbox
+        path=metadata.relative_path.as_posix(),
+        signature=metadata.signature,
+    )
+
+
+@router.post("/apply_diff", response_model=ApplyDiffResponse)
+async def apply_diffs(
+    req: ApplyDiffRequest,
+    metadata: FileMetadata = Depends(get_file_metadata),
+) -> ApplyDiffResponse:
+    # do it in parallel?
+    # how does it work with multiple writers
+    # should work in a transaction
+    with open(metadata.path, "rb") as f:
+        data = f.read()
+
+    # document the behaviour instead of
+    result = py_fast_rsync.apply(data, req.diff_bytes)
+    sha256 = hashlib.sha256(result).hexdigest()
+    if sha256 != req.expected_hash:
+        raise HTTPException(status_code=400, detail="expected_hash mismatch")
+
+    # when could write fail?
+    # - no diskspace
+    with open(req.path, "wb") as f:
+        f.write(result)
+
+    # TODO update hash and signature
+
+    return ApplyDiffResponse(
+        path=req.path, current_hash=sha256, previous_hash=metadata.hash
+    )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(router, host="127.0.0.1", port=8000)
