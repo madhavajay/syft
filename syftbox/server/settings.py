@@ -19,21 +19,29 @@ class ServerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SYFTBOX_")
 
     data_folder: Path = Path("data")
-    snapshot_folder: Path = Path("data/snapshot")
-    user_file_path: Path = Path("data/users.json")
 
     @property
     def folders(self) -> list[Path]:
         return [self.data_folder, self.snapshot_folder]
+
+    @property
+    def snapshot_folder(self) -> Path:
+        return self.data_folder / "snapshot"
+
+    @property
+    def user_file_path(self) -> Path:
+        return self.data_folder / "users.json"
 
     @classmethod
     def from_data_folder(cls, data_folder: Path | str) -> Self:
         data_folder = Path(data_folder)
         return cls(
             data_folder=data_folder,
-            snapshot_folder=data_folder / "snapshot",
-            user_file_path=data_folder / "users.json",
         )
+
+    @property
+    def file_db_path(self) -> Path:
+        return self.data_folder / "file.db"
 
 
 def get_server_settings(request: Request) -> ServerSettings:

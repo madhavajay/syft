@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import re
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from py_fast_rsync import signature
 from syftbox.server.sync.models import FileMetadata
 
 
-def hash_file(snapshot_folder: Path, file_path: Path) -> FileMetadata:
+def hash_file(file_path: Path) -> FileMetadata:
     # ignore files larger then 100MB
     if file_path.stat().st_size > 100_000_000:
         logger.warning("File too large: %s", file_path)
@@ -22,7 +23,6 @@ def hash_file(snapshot_folder: Path, file_path: Path) -> FileMetadata:
         data = f.read()
 
     return FileMetadata(
-        relative_path=file_path.relative_to(snapshot_folder),
         path=file_path,
         hash=hashlib.sha256(data).hexdigest(),
         signature=base64.b85encode(signature.calculate(data)),
@@ -37,12 +37,36 @@ def hash_files_parallel(files: list[str]):
     return results
 
 
-def collect_files(dir: Path | str) -> list[Path]:
+def hash_files(files: list[str]):
+    pass
+
+
+def collect_files(
+    dir: Path | str, pattern: str | re.Pattern | None = None
+) -> list[Path]:
+    """Recursively collect files in a directory
+
+    Examples:
+        >>> # list all .syftperm files
+        >>> collect_files(snapshot_dir, r".*\.syftperm")
+
+        >>> # list all files in a directory info
+        >>> collect_files(snapshot_dir, r".*")
+
+
+    """
     dir = Path(dir)
     files = []
+
+    # Compile the regex pattern if it's a string
+    if isinstance(pattern, str):
+        pattern = re.compile(pattern)
+
     for entry in dir.iterdir():
         if entry.is_file():
-            files.append(entry)
+            if pattern is None or pattern.match(entry.as_posix()):
+                files.append(entry)
         elif entry.is_dir():
-            files.extend(collect_files(entry))
+            files.extend(collect_files(entry, pattern))
+
     return files

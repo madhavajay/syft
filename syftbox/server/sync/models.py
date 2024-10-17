@@ -34,12 +34,12 @@ class SignatureResponse(BaseModel):
     error: SignatureError | None = None
 
 
-class SignatureRequest(BaseModel):
-    path: Path
+class FileMetadataRequest(BaseModel):
+    path_like: str
 
 
 class ApplyDiffRequest(BaseModel):
-    path: Path
+    path: str
     diff: str
     expected_hash: str
 
@@ -55,7 +55,6 @@ class ApplyDiffResponse(BaseModel):
 
 
 class FileMetadata(BaseModel):
-    relative_path: Path
     path: Path
     hash: str
     signature: str

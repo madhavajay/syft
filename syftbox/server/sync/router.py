@@ -1,12 +1,13 @@
 import base64
 import hashlib
-from pathlib import Path
+import sqlite3
+import tempfile
 
 import py_fast_rsync
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from py_fast_rsync import signature
 
-from syftbox.server.settings import ServerSettings, get_server_settings
-from syftbox.server.sync.hash import hash_file
+from syftbox.server.sync.db import get_all_metadata, get_db, move_with_transaction
 
 from .models import (
     ApplyDiffRequest,
@@ -14,84 +15,101 @@ from .models import (
     DiffRequest,
     DiffResponse,
     FileMetadata,
-    SignatureRequest,
-    SignatureResponse,
+    FileMetadataRequest,
 )
 
 
+def get_db_connection(request: Request):
+    conn = get_db(request.state.server_settings.file_db_path)
+    yield conn
+    conn.close()
+
+
 def get_file_metadata(
-    req: SignatureRequest,
-    server_settings: ServerSettings = Depends(get_server_settings),
-) -> FileMetadata:
-    path = Path(req.path)
-
-    if path.absolute() == path:
-        raise HTTPException(status_code=400, detail="path must be relative")
-
-    abs_path = server_settings.snapshot_folder.absolute() / path
-    if not abs_path.exists():
-        raise HTTPException(status_code=400, detail="path does not exist")
-    metadata = hash_file(server_settings.snapshot_folder.absolute(), abs_path)
-
+    req: FileMetadataRequest,
+    conn=Depends(get_db_connection),
+) -> list[FileMetadata]:
     # TODO check permissions
-    return metadata
+
+    return get_all_metadata(conn, path_like=req.path_like)
 
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
 
 @router.post("/get_diff", response_model=DiffResponse)
-async def get_diff(
+def get_diff(
     req: DiffRequest,
-    metadata: FileMetadata = Depends(get_file_metadata),
+    metadata_list: list[FileMetadata] = Depends(get_file_metadata),
 ) -> DiffResponse:
+    if len(metadata_list) == 0:
+        raise HTTPException(status_code=404, detail="path not found")
+    elif len(metadata_list) > 1:
+        raise HTTPException(status_code=400, detail="too many files to get diff")
+
+    metadata = metadata_list[0]
+
     with open(metadata.path, "rb") as f:
         data = f.read()
 
-    # also load from cache
+    # TODO load from cache
     diff = py_fast_rsync.diff(req.signature_bytes, data)
     diff_bytes = base64.b85encode(diff).decode("utf-8")
     return DiffResponse(
-        path=metadata.relative_path.as_posix(),
+        path=metadata.path.as_posix(),
         diff=diff_bytes,
         hash=metadata.hash,
     )
 
 
-@router.post("/get_signature", response_model=SignatureResponse)
-async def get_signature(
-    metadata: FileMetadata = Depends(get_file_metadata),
-) -> SignatureResponse:
-    return SignatureResponse(
-        # convert to relative path to syftbox
-        path=metadata.relative_path.as_posix(),
-        signature=metadata.signature,
-    )
+@router.post("/get_metadata", response_model=list[FileMetadata])
+def get_metadata(
+    metadata: list[FileMetadata] = Depends(get_file_metadata),
+) -> list[FileMetadata]:
+    return metadata
 
 
 @router.post("/apply_diff", response_model=ApplyDiffResponse)
-async def apply_diffs(
+def apply_diffs(
     req: ApplyDiffRequest,
-    metadata: FileMetadata = Depends(get_file_metadata),
+    conn: sqlite3.Connection = Depends(get_db_connection),
 ) -> ApplyDiffResponse:
-    # do it in parallel?
-    # how does it work with multiple writers
-    # should work in a transaction
+    metadata_list = get_all_metadata(conn, path_like=f"%{req.path}%")
+    if len(metadata_list) == 0:
+        raise HTTPException(status_code=404, detail="path not found")
+    elif len(metadata_list) > 1:
+        raise HTTPException(
+            status_code=400, detail="found too many files to apply diff"
+        )
+
+    metadata = metadata_list[0]
+
     with open(metadata.path, "rb") as f:
         data = f.read()
-
-    # document the behaviour instead of
     result = py_fast_rsync.apply(data, req.diff_bytes)
+    sig = signature.calculate(result)
     sha256 = hashlib.sha256(result).hexdigest()
     if sha256 != req.expected_hash:
         raise HTTPException(status_code=400, detail="expected_hash mismatch")
 
-    # when could write fail?
-    # - no diskspace
-    with open(req.path, "wb") as f:
-        f.write(result)
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        temp_file.write(result)
+        temp_path = temp_file.name
 
-    # TODO update hash and signature
+    new_metadata = FileMetadata(
+        path=temp_path,
+        hash=sha256,
+        signature=base64.b85encode(sig),
+        file_size=len(data),
+        last_modified=metadata.last_modified,
+    )
+
+    # move temp path to real path and update db
+    move_with_transaction(
+        conn,
+        metadata=new_metadata,
+        origin_path=metadata.path,
+    )
 
     return ApplyDiffResponse(
         path=req.path, current_hash=sha256, previous_hash=metadata.hash
