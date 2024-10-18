@@ -1,6 +1,7 @@
 import hashlib
 import os
 from enum import Enum
+from pathlib import Path
 
 from loguru import logger
 from pydantic import BaseModel
@@ -12,7 +13,9 @@ class SyftBaseModel(BaseModel):
         # used until we remote Jsonable from the code base
         return self.model_dump(mode="json")
 
-    def save(self, path: str) -> dict:
+    def save(self, path: str | Path) -> dict:
+        if isinstance(path, Path):
+            path = str(path)
         with open(path, "w") as f:
             f.write(self.model_dump_json())
         return self.model_dump(mode="json")
