@@ -560,7 +560,7 @@ def sync_down(client_config) -> int:
         results = []
         for datasite in datasites:
             n_changes_datasite_future = executor.submit(
-                sync_down_dataite, datasite, client_config, change_log_folder
+                sync_down_datasite, datasite, client_config, change_log_folder
             )
             results.append(n_changes_datasite_future)
         n_changes = sum([x.result() for x in results])
@@ -568,7 +568,7 @@ def sync_down(client_config) -> int:
     return n_changes
 
 
-def sync_down_dataite(datasite, client_config, change_log_folder):
+def sync_down_datasite(datasite, client_config, change_log_folder):
     # get the top level perm file
 
     dir_filename = f"{change_log_folder}/{datasite}.json"
