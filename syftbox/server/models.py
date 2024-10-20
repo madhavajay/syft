@@ -177,6 +177,7 @@ class ReadRequest(BaseModel):
 class FileInfo(SyftBaseModel):
     file_hash: str
     last_modified: float
+    num_bytes: int
 
 
 class DirState(SyftBaseModel):
@@ -199,6 +200,10 @@ class DirStateResponse(SyftBaseModel):
 
 def get_file_last_modified(file_path: str) -> float:
     return os.path.getmtime(file_path)
+
+
+def get_file_size(file_path: str) -> int:
+    return os.path.getsize(file_path)
 
 
 def get_file_hash(file_path: str) -> str:

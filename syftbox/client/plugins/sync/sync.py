@@ -140,23 +140,25 @@ def compare_fileinfo(
     local_info: FileInfo | None,
     remote_info: FileInfo | None,
 ) -> FileChangeInfo | None:
-    if local_info is None:
-        if remote_info is None:
-            return None
+    if local_info is None and remote_info is None:
+        return
 
+    if local_info is None and remote_info is not None:
         # File only exists on remote
         return FileChangeInfo(
             path=path,
             side_last_modified=SyncSide.REMOTE,
             date_last_modified=remote_info.last_modified,
+            num_bytes=remote_info.num_bytes,
         )
 
-    if remote_info is None:
+    if remote_info is None and local_info is not None:
         # File only exists on local
         return FileChangeInfo(
             path=path,
             side_last_modified=SyncSide.LOCAL,
             date_last_modified=local_info.last_modified,
+            num_bytes=local_info.num_bytes,
         )
 
     if local_info.file_hash != remote_info.file_hash:
@@ -164,14 +166,17 @@ def compare_fileinfo(
         if local_info.last_modified > remote_info.last_modified:
             date_last_modified = local_info.last_modified
             side_last_modified = SyncSide.LOCAL
+            num_bytes = local_info.num_bytes
         else:
             date_last_modified = remote_info.last_modified
             side_last_modified = SyncSide.REMOTE
+            num_bytes = remote_info.num_bytes
 
         return FileChangeInfo(
             path=path,
             side_last_modified=side_last_modified,
             date_last_modified=date_last_modified,
+            num_bytes=num_bytes,
         )
 
 
@@ -215,23 +220,3 @@ def filter_ignored_changes(
         if keep:
             filtered_changes.append(change)
     return filtered_changes
-
-
-"""
-fast thread
-- selectively look at file changes from watchdog
-
-slow thread
-- loop through all datasites
-
-
-producer:
-
-for each local change:
-    enqueue
-    - can detect with watchdog
-    - detect with loop over datasites
-for each remote change:
-    enqueue
-    - detect with loop over datasites
-"""

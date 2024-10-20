@@ -176,14 +176,15 @@ def test_enqueue_changes(datasite_1: Client):
     tree = {
         "folder1": {
             "_.syftperm": SyftPermission.mine_with_public_read(datasite_1.email),
-            "file1.txt": "content1",
+            "large.txt": fake.text(max_nb_chars=1000),
+            "small.txt": fake.text(max_nb_chars=10),
         },
     }
     create_local_tree(Path(datasite_1.datasite_path), tree)
     out_of_sync_permissions, out_of_sync_files = datasites[0].get_out_of_sync_files()
     num_out_of_sync_files = len(out_of_sync_files) + len(out_of_sync_permissions)
-    # 2 new files
-    assert num_out_of_sync_files - num_files_after_setup == 2
+    # 3 new files
+    assert num_out_of_sync_files - num_files_after_setup == 3
 
     # Enqueue the changes + verify order
     for change in out_of_sync_permissions + out_of_sync_files:
@@ -198,3 +199,6 @@ def test_enqueue_changes(datasite_1: Client):
 
     assert all(is_permission_file(item.data.path) for item in should_be_permissions)
     assert all(not is_permission_file(item.data.path) for item in should_be_files)
+
+    for item in should_be_files:
+        print(item.priority, item.data)

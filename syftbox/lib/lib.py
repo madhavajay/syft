@@ -24,6 +24,7 @@ from syftbox.server.models import (
     FileInfo,
     get_file_hash,
     get_file_last_modified,
+    get_file_size,
 )
 
 from .exceptions import ClientConfigException
@@ -269,6 +270,7 @@ def hash_dir(
                     file_info = FileInfo(
                         file_hash=get_file_hash(path),
                         last_modified=get_file_last_modified(path),
+                        num_bytes=get_file_size(path),
                     )
                     state_dict[rel_path] = file_info
 
