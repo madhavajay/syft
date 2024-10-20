@@ -317,11 +317,21 @@ async def browse_datasite(
 
 
 @app.post("/register")
-async def register(request: Request, users: Users = Depends(get_users)):
+async def register(
+    request: Request,
+    users: Users = Depends(get_users),
+    server_settings: ServerSettings = Depends(get_server_settings),
+):
     data = await request.json()
     email = data["email"]
     token = users.create_user(email)
-    logger.info(f"> {email} registering: {token}")
+
+    # create datasite snapshot folder
+    datasite_folder = Path(server_settings.snapshot_folder) / email
+    os.makedirs(datasite_folder, exist_ok=True)
+
+    logger.info(f"> {email} registering: {token}, snapshot folder: {datasite_folder}")
+
     return JSONResponse({"status": "success", "token": token}, status_code=200)
 
 
@@ -443,6 +453,7 @@ async def dir_state(
 async def datasites(
     server_settings: ServerSettings = Depends(get_server_settings),
 ) -> ListDatasitesResponse:
+    print("snapshot_folder", server_settings.snapshot_folder)
     datasites = get_datasites(server_settings.snapshot_folder)
     if isinstance(datasites, list):
         return ListDatasitesResponse(

@@ -13,41 +13,47 @@ from syftbox.lib import Client, DirState, FileInfo, hash_dir
 from syftbox.server.models import SyftBaseModel
 
 
+def is_permission_file(path: Path | str, check_exists: bool = False) -> bool:
+    path = Path(path)
+    if check_exists and not path.is_file():
+        return False
+
+    return path.name == "_.syftperm"
+
+
 class SyncSide(str, Enum):
     LOCAL = "local"
     REMOTE = "remote"
 
 
-class FileChangeInfo(SyftBaseModel):
+class FileChangeInfo(SyftBaseModel, frozen=True):
     path: Path
     side_last_modified: SyncSide
     date_last_modified: float
-    date_local_modified: float | None = None
-    date_remote_modified: float | None = None
-    local_hash: str | None = None
-    remote_hash: str | None = None
-    num_bytes: int = 1  # TODO: get file size
+    num_bytes: int = 1  # TODO: get change size
 
-    @property
-    def priority(self) -> int:
-        if self.path.name == "_.syftperm":
+    def get_priority(self) -> int:
+        if is_permission_file(self.path):
             return 0
         else:
-            return self.num_bytes
+            return max(1, self.num_bytes)
+
+    def __lt__(self, other: "FileChangeInfo") -> bool:
+        return self.path < other.path
 
 
 class DatasiteState:
-    def __init__(self, client: Client, datasite: str):
+    def __init__(self, client: Client, email: str):
         """
         NOTE DatasiteState is not threadsafe, this should be handled by the caller
         """
         self.client = client
-        self.datasite = datasite
+        self.email = email
         self.setup()
 
     @property
     def path(self) -> Path:
-        p = Path(self.client.sync_folder) / self.datasite
+        p = Path(self.client.sync_folder) / self.email
         return p.expanduser().resolve()
 
     @property
@@ -55,7 +61,7 @@ class DatasiteState:
         p = (
             Path(self.client.sync_folder)
             / CLIENT_CHANGELOG_FOLDER
-            / f"{self.datasite}_changelog.json"
+            / f"{self.email}_changelog.json"
         )
         return p.expanduser().resolve()
 
@@ -67,7 +73,7 @@ class DatasiteState:
                 tree={},
                 timestamp=0,
                 sync_folder=self.client.sync_folder,
-                sub_path=self.datasite,
+                sub_path=self.email,
             )
             self.changelog.save(self.changelog_file)
 
@@ -82,7 +88,7 @@ class DatasiteState:
         self.changelog.save(self.changelog_file)
 
     def get_current_state(self) -> DirState:
-        return hash_dir(self.client.sync_folder, self.datasite, IGNORE_FOLDERS)
+        return hash_dir(self.client.sync_folder, self.email, IGNORE_FOLDERS)
 
     def get_out_of_sync_files(
         self,
@@ -95,7 +101,7 @@ class DatasiteState:
         TODO: we are not handling empty folders
         """
         local_state = self.get_current_state()
-        remote_state = get_remote_state(self.client, self.datasite)
+        remote_state = get_remote_state(self.client, self.email)
 
         all_changes = []
         all_files = set(local_state.tree.keys()) | set(remote_state.tree.keys())
@@ -109,11 +115,24 @@ class DatasiteState:
         ignore_rules = get_ignore_rules(local_state)
 
         filtered_changes = filter_ignored_changes(all_changes, ignore_rules)
-        permissions, changes = split_permissions(filtered_changes)
+        permission_changes, file_changes = split_permissions(filtered_changes)
         # TODO debounce changes
         # filtered_changes = filter_recent_local_changes(filtered_changes)
 
         return permission_changes, file_changes
+
+
+def split_permissions(
+    changes: list[FileChangeInfo],
+) -> tuple[list[FileChangeInfo], list[FileChangeInfo]]:
+    permissions = []
+    files = []
+    for change in changes:
+        if is_permission_file(change.path):
+            permissions.append(change)
+        else:
+            files.append(change)
+    return permissions, files
 
 
 def compare_fileinfo(
@@ -130,7 +149,6 @@ def compare_fileinfo(
             path=path,
             side_last_modified=SyncSide.REMOTE,
             date_last_modified=remote_info.last_modified,
-            remote_hash=remote_info.file_hash,
         )
 
     if remote_info is None:
@@ -139,7 +157,6 @@ def compare_fileinfo(
             path=path,
             side_last_modified=SyncSide.LOCAL,
             date_last_modified=local_info.last_modified,
-            local_hash=local_info.file_hash,
         )
 
     if local_info.file_hash != remote_info.file_hash:
@@ -155,8 +172,6 @@ def compare_fileinfo(
             path=path,
             side_last_modified=side_last_modified,
             date_last_modified=date_last_modified,
-            local_hash=local_info.file_hash,
-            remote_hash=remote_info.file_hash,
         )
 
 
