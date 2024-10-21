@@ -43,6 +43,10 @@ class ServerSettings(BaseSettings):
     def file_db_path(self) -> Path:
         return self.data_folder / "file.db"
 
+    def read(self, path: Path) -> bytes:
+        with open(self.snapshot_folder / path, "rb") as f:
+            return f.read()
+
 
 def get_server_settings(request: Request) -> ServerSettings:
     return request.state.server_settings

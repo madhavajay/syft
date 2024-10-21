@@ -80,8 +80,11 @@ def get_all_metadata(
 def move_with_transaction(
     conn: sqlite3.Connection, *, origin_path: str, metadata: FileMetadata
 ):
-    """Since file system and db are seperate,
-    this operation is still not atomic.
+    """The file system and database do not share transactions,
+    so this operation is not atomic.
+    Ideally, files (blobs) should be immutable,
+    and the path should update to a new location
+    whenever there is a change to the file contents.
     """
 
     # backup the original file

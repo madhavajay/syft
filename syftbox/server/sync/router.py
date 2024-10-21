@@ -40,8 +40,9 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 @router.post("/get_diff", response_model=DiffResponse)
 def get_diff(
     req: DiffRequest,
-    metadata_list: list[FileMetadata] = Depends(get_file_metadata),
+    conn: sqlite3.Connection = Depends(get_db_connection),
 ) -> DiffResponse:
+    metadata_list = get_all_metadata(conn, path_like=f"%{req.path}%")
     if len(metadata_list) == 0:
         raise HTTPException(status_code=404, detail="path not found")
     elif len(metadata_list) > 1:
@@ -114,9 +115,3 @@ def apply_diffs(
     return ApplyDiffResponse(
         path=req.path, current_hash=sha256, previous_hash=metadata.hash
     )
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(router, host="127.0.0.1", port=8000)
