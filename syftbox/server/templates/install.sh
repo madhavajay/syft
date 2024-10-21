@@ -158,7 +158,7 @@ check_python_version() {
 
     # Check if Python version not is greater than or equal to 3.10
     if [ "$py_valid_ver" = "False" ]; then
-        err "SyftBox requires Python $REQ_PYTHON_MAJOR.$REQ_PYTHON_MINOR or higher, found $($py -V). Please upgrade your Python installation to proceed."
+        err "SyftBox requires Python $REQ_PYTHON_MAJOR.$REQ_PYTHON_MINOR or higher, found $($py -V). Please upgrade your Python installation and retry."
     fi
 }
 
