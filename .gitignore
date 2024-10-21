@@ -182,3 +182,5 @@ experimental/
 dev_space/
 
 *.db
+
+notebooks/
