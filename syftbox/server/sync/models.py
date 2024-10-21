@@ -3,7 +3,7 @@ import enum
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DiffRequest(BaseModel):
@@ -20,6 +20,10 @@ class DiffResponse(BaseModel):
     diff: str
     hash: str
 
+    @property
+    def diff_bytes(self) -> bytes:
+        return base64.b85decode(self.diff)
+
 
 class SignatureError(str, enum.Enum):
     FILE_NOT_FOUND = "FILE_NOT_FOUND"
@@ -35,7 +39,7 @@ class SignatureResponse(BaseModel):
 
 
 class FileMetadataRequest(BaseModel):
-    path_like: str
+    path_like: str = Field(description="Path to search for files, uses SQL LIKE syntax")
 
 
 class ApplyDiffRequest(BaseModel):
