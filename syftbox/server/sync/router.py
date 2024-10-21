@@ -7,11 +7,13 @@ import py_fast_rsync
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 
+from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.sync.db import (
     delete_file_metadata,
     get_all_metadata,
     get_db,
     move_with_transaction,
+    save_file_metadata,
 )
 from syftbox.server.sync.hash import hash_file
 
@@ -138,13 +140,22 @@ def delete_file(
 def create_file(
     file: UploadFile,
     conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
 ) -> JSONResponse:
-    # there is probably a better way to do this
-    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-        temp_file.write(file.read())
-        temp_path = temp_file.name
+    #
+    relative_path = Path(file.filename)
+    abs_path = server_settings.snapshot_folder / relative_path
+    with open(abs_path, "wb") as f:
+        # better to use async aiosqlite
+        f.write(file.file.read())
 
-    metadata = hash_file(temp_path)
-    target_path = ...
-    move_with_transaction(conn, metadata=metadata, origin_path=target_path)
+    cursor = conn.cursor()
+    metadata = get_all_metadata(cursor, path_like=f"%{file.filename}%")
+    if len(metadata) > 0:
+        raise HTTPException(status_code=400, detail="file already exists")
+    metadata = hash_file(abs_path)
+    save_file_metadata(cursor, metadata)
+    conn.commit()
+    cursor.close()
+
     return JSONResponse(content={"status": "success"})

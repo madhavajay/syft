@@ -25,6 +25,7 @@ dependencies = [
     "psutil>=6.0.0",
     "loguru>=0.7.2",
     "py-fast-rsync",
+    "python-multipart>=0.0.12",
 ]
 
 [project.optional-dependencies]

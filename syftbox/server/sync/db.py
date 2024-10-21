@@ -53,7 +53,7 @@ def save_file_metadata(conn: sqlite3.Connection, metadata: FileMetadata):
 
 
 def delete_file_metadata(conn: sqlite3.Connection, path: str):
-    conn.execute("DELETE FROM file_metadata WHERE path = ? LIMIT 1", (path,))
+    conn.execute("DELETE FROM file_metadata WHERE path = ?", (path,))
 
 
 def get_all_metadata(

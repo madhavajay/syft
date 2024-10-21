@@ -90,12 +90,17 @@ def test_delete_file(client: TestClient):
 
 
 def test_create_file(client: TestClient):
-    response = client.post(
-        "/sync/create",
-        json={"path": f"{TEST_DATASITE_NAME}/{TEST_FILE}"},
-    )
-
-    response.raise_for_status()
     snapshot_folder = client.app_state["server_settings"].snapshot_folder
-    path = Path(f"{snapshot_folder}/{TEST_DATASITE_NAME}/{TEST_FILE}")
+    new_fname = "new.txt"
+    contents = b"Some content"
+    path = Path(f"{snapshot_folder}/{TEST_DATASITE_NAME}/{new_fname}")
     assert not path.exists()
+
+    with open(path, "wb") as f:
+        f.write(contents)
+
+    with open(path, "rb") as f:
+        files = {"file": (f"{TEST_DATASITE_NAME}/{new_fname}", f.read())}
+        response = client.post("/sync/create", files=files)
+    response.raise_for_status()
+    assert path.exists()
