@@ -1,13 +1,15 @@
+import hashlib
 import httpx
 import py_fast_rsync
 
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
-from syftbox.client.plugins.sync.sync import FileChangeInfo
+from syftbox.client.plugins.sync.sync import FileChangeInfo, SyncSide
 
 from enum import Enum
 
+from syftbox.lib.lib import Client
 from syftbox.server.sync.hash import hash_file
-from syftbox.server.sync.models import FileMetadata
+from syftbox.server.sync.models import ApplyDiffRequest, DiffRequest, FileMetadata
 from pydantic import BaseModel
 
 
@@ -20,43 +22,160 @@ class SyncDecisionType(Enum):
 
 class SyncInstruction(BaseModel):
     operation: SyncDecisionType
+    diff: bytes | None
 
-class ModifiedSyncInstuction(BaseModel):
-    operation: SyncDecisionType = SyncDecisionType.MODIFY
+    # 1&2 (pull state from server)
+    # a) local sends signature of their current state to remote (get_diff)
+    # b) remote calculates difference and sends back to be updated blocks + desired hash
+    # diff = py_fast_rsync.diff(local_contents, remote_signature)
+    # c) check hash, apply locally
+
+    # 3 (push state to server)
+    # a) get signature from server (get metadata)
+    # b) calculate diff locally
+    # c) send diff and server applies + check (apply diff)
+
+
+# class ModifiedSyncInstuction(BaseModel):
+#     operation: SyncDecisionType = SyncDecisionType.MODIFY
+
+#     @classmethod
+#     def from_decision(cls):
+#         pass
+
+# original_state = b'''
+# a
+# b
+# c
+# e
+# '''
+
+# server = b'''
+# a
+# b
+# c
+# d  -> server change
+# '''
+
+# client = b'''
+# a
+# x -> client change
+# c
+# e
+# '''
+
+# server = b'''
+# a
+# b
+# c
+# d  -> server change
+# '''
+
+# 1. apply server state to local (in case of both modified)
+# 2. apply server state to local (only server modified)
+# 3. apply client state to server (only client modified)
+
+# 1&2
+# a) local sends signature of their current state to remote
+# b) remote calculates difference and sends back to be updated blocks + desired hash
+# diff = py_fast_rsync.diff(local_contents, remote_signature)
+# c) check hash, apply locally
+
+# 3
+# a) get signature from server
+# b) calculate diff locally
+# c) send diff and server applies + check
+
 
 class SyncDecision(BaseModel):
     operation: SyncDecisionType
-    diff: bytes | None
+    side_to_update: SyncSide
+    local_metadata: FileMetadata
+    remote_metadata: FileMetadata
 
-    @classmethod
-    def noop(cls):
-        return cls(SyncDecisionType.NOOP)
+    def execute(self, client):
+        if self.decision_type == SyncDecisionType.CREATE:
+            client.create(self.local_metadata.path, self.local_metadata.read())
+        elif self.decision_type == SyncDecisionType.DELETE:
+            client.delete(self.local_metadata.path)
+        else:
+            if self.side_to_update == SyncSide.LOCAL:
+                # pass local path and signature
+                diff_request = DiffRequest(
+                    path=self.local_metadata.path,
+                    signature=self.local_metadata.signature,
+                )
+                diff_result = client.get_diff(diff_request)
+                desired_hash = diff_result.hash
+                data_local = self.local_metadata.path.read()
+                result = py_fast_rsync.apply(data_local, diff_result.diff)
+                hash_result = hashlib.sha256(result).digest()
+                # TODO: fallback
+                assert hash_result == desired_hash
+                self.metadata.path.write(result)
+            elif self.side_to_update == SyncSide.REMOTE:
+                data_local = self.local_metadata.read()
+                diff = py_fast_rsync.diff(self.remote_metadata.signature, data_local)
+                hash_local = hashlib.sha256(data_local).digest()
+                # TODO: retries
+                apply_diff_request = ApplyDiffRequest(
+                    path=self.remote_metadata.path, diff=diff, expected_hash=hash_local
+                )
+                client.apply_diff(apply_diff_request)
 
+    # a) get signature from server
+    # b) calculate diff locally
+    # c) send diff and server applies + check
     @classmethod
-    def noop(cls):
-        return cls(SyncDecisionType.NOOP)
-
-    @classmethod
-    def create(cls):
-        return cls(SyncDecisionType.CREATE)
+    def noop(
+        cls,
+        local_state: FileMetadata,
+        remote_state: FileMetadata,
+        side_to_update: SyncSide,
+    ):
+        return cls(
+            SyncDecisionType.NOOP,
+            side_to_update=side_to_update,
+            local_metadata=local_state,
+            remote_state=remote_state,
+        )
 
     @classmethod
     def from_modified_states(
-        cls, current_state: FileMetadata, target_state: FileMetadata
+        cls,
+        local_state: FileMetadata,
+        remote_state: FileMetadata,
+        side_to_update: SyncSide,
     ):
         """Asssumes at least on of the states is modified"""
 
-        if target_state.is_empty:
-            return SyncDecision.delete
-        elif current_state.is_empty:
-            return SyncDecision.create()
-        else:
-            local_contents = current_state.read()
-            remote_contents = target_state.read()
-            diff = py_fast_rsync.diff(local_contents, remote_contents)
-            cls(SyncDecisionType.MODIFY, diff=diff)
+        delete = (
+            side_to_update == SyncSide.REMOTE
+            and local_state.is_empty
+            or side_to_update == SyncSide.LOCAL
+            and remote_state.is_empty
+        )
 
-        raise ValueError("This shouldnt happen")
+        create = (
+            side_to_update == SyncSide.REMOTE
+            and remote_state.is_empty
+            or side_to_update == SyncSide.LOCAL
+            and local_state.is_empty
+        )
+
+        if delete:
+            sync_decision_type = SyncDecisionType.DELETE
+        elif create:
+            sync_decision_type = SyncDecisionType.CREATE
+        else:
+            sync_decision_type = SyncDecisionType.MODIFY
+
+        return cls(
+            sync_decision_type,
+            side_to_update=side_to_update,
+            local_metadata=local_state,
+            remote_state=remote_state,
+        )
 
 
 class SyncDecisionTuple(BaseModel):
@@ -86,7 +205,9 @@ class SyncDecisionTuple(BaseModel):
             remote_decision = SyncDecision.noop()
             # we apply the server state locally
             local_decision = SyncDecision.from_modified_states(
-                current_state=current_local_state, target_state=current_remote_state
+                local_state=current_local_state,
+                remote_state=current_remote_state,
+                side_to_update=SyncSide.LOCAL,
             )
             return cls(remote_decision=remote_decision, local_decision=local_decision)
         else:
@@ -96,60 +217,24 @@ class SyncDecisionTuple(BaseModel):
                 return cls(
                     local_decision=SyncDecision.noop(),
                     remote_decision=SyncDecision.from_modified_states(
-                        current_state=current_remote_state,
-                        target_state=current_local_state,
+                        local_state=current_local_state,
+                        remote_state=current_remote_state,
+                        side_to_update=SyncSide.REMOTE,
                     ),
                 )
             else:
                 return cls(
                     local_decision=SyncDecision.from_modified_states(
-                        current_state=current_local_state,
-                        target_state=current_remote_state,
+                        local_state=current_local_state,
+                        remote_state=current_remote_state,
+                        side_to_update=SyncSide.LOCAL,
                     ),
                     remote_decision=SyncDecision.noop(),
                 )
 
-        # When is there a conflict?
-        # if both modified
-
-        # If we can assume there is no conflict? what can we say
-        # we just need to know who modified, if its us, we dont need to do anything
-        # if its the server, we need to update locally
-
-        # When is there a change locally?
-
-        # return SyncDecision.noop()
-
-    # @classmethod
-    # def local_from_states(cls, current_local_state: FileMetadata, previous_local_state: FileMetadata, current_server_state: FileMetadata):
-    #     local_change
-    #     local_exists_unchanged
-
-    #     if local_create:
-    #         if current_server_state.not_exists:
-    #             return SyncDecision.noop()
-    #         elif current_server_state != current_local_state:
-    #             pass
-    #             # we fall back to the server state?
-    #         else:
-    #             return SyncDecision.noop()
-    #     elif local_exists_unchanged:
-    #         if current_server_state == current_local_state:
-    #             return SyncDecision.noop()
-    #         elif current_server_state.not_exists:
-    #             return SyncDecision.delete
-    #         else:
-    #             return SyncDecision.modification
-    #     elif local_not_exists_unchanged:
-    #         if current_server_state.empty:
-    #             return SyncDecision.noop
-    #         else:
-    #             return SyncDecision.create
-    #     elif local_changed:
-
 
 class SyncConsumer:
-    def __init__(self, client: httpx.Client, queue: SyncQueue):
+    def __init__(self, client: Client, queue: SyncQueue):
         self.client = client
         self.queue = queue
 
@@ -161,26 +246,19 @@ class SyncConsumer:
             # - [ ] delete remote/local
             # - [ ] modify (conflict)
 
-    def process_filechange(self, item: SyncQueueItem) -> None:
+    def process_filechange(self, item: SyncQueueItem, client) -> None:
 
         path = item.data.path
         current_local_state: FileMetadata = self.get_current_local_state(path)
         previous_local_state = self.get_previous_local_state(path)
         # TODO, rename to remote
-        current_server_state = self.get_current_server_state()
+        current_server_state = self.get_current_server_state(client,)
 
         decision = SyncDecisionTuple.from_states(
             current_local_state, previous_local_state, current_server_state
         )
 
-        # process locally
-        # process serverside
-
-    def process_local_change(self, sync_decision):
-        pass
-
-    def process_server_change(self, sync_decision):
-        pass
+        decision.execute(self.client)
 
     def get_current_local_state(self, path) -> FileMetadata:
         return hash_file(path)
@@ -188,5 +266,5 @@ class SyncConsumer:
     def get_previous_local_state(self):
         pass
 
-    def get_current_server_state(self):
+    def get_current_server_state(self, ):
         pass
