@@ -2,11 +2,13 @@ import base64
 import hashlib
 import sqlite3
 import tempfile
+from pathlib import Path
 
 import py_fast_rsync
 from fastapi import APIRouter, Depends, HTTPException, Request
 from py_fast_rsync import signature
 
+from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.sync.db import get_all_metadata, get_db, move_with_transaction
 
 from .models import (
@@ -41,16 +43,17 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 def get_diff(
     req: DiffRequest,
     conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
 ) -> DiffResponse:
-    metadata_list = get_all_metadata(conn, path_like=f"%{req.path}%")
+    metadata_list = get_all_metadata(conn, path_like=f"{req.path}%")
     if len(metadata_list) == 0:
         raise HTTPException(status_code=404, detail="path not found")
     elif len(metadata_list) > 1:
         raise HTTPException(status_code=400, detail="too many files to get diff")
 
     metadata = metadata_list[0]
-
-    with open(metadata.path, "rb") as f:
+    abs_path = server_settings.snapshot_folder / metadata.path
+    with open(abs_path, "rb") as f:
         data = f.read()
 
     # TODO load from cache
@@ -61,6 +64,19 @@ def get_diff(
         diff=diff_bytes,
         hash=metadata.hash,
     )
+
+
+@router.post("/dir_state", response_model=list[FileMetadata])
+def dir_state(
+    dir: Path,
+    conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> list[FileMetadata]:
+    if dir.is_absolute():
+        raise HTTPException(status_code=400, detail="dir must be relative")
+
+    result = get_all_metadata(conn, path_like=f"{dir.as_posix()}%")
+    return result
 
 
 @router.post("/get_metadata", response_model=list[FileMetadata])
@@ -74,8 +90,10 @@ def get_metadata(
 def apply_diffs(
     req: ApplyDiffRequest,
     conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
 ) -> ApplyDiffResponse:
-    metadata_list = get_all_metadata(conn, path_like=f"%{req.path}%")
+    metadata_list = get_all_metadata(conn, path_like=f"{req.path}%")
+
     if len(metadata_list) == 0:
         raise HTTPException(status_code=404, detail="path not found")
     elif len(metadata_list) > 1:
@@ -85,7 +103,8 @@ def apply_diffs(
 
     metadata = metadata_list[0]
 
-    with open(metadata.path, "rb") as f:
+    abs_path = server_settings.snapshot_folder / metadata.path
+    with open(abs_path, "rb") as f:
         data = f.read()
     result = py_fast_rsync.apply(data, req.diff_bytes)
     sig = signature.calculate(result)
@@ -109,7 +128,7 @@ def apply_diffs(
     move_with_transaction(
         conn,
         metadata=new_metadata,
-        origin_path=metadata.path,
+        origin_path=abs_path,
     )
 
     return ApplyDiffResponse(

@@ -6,11 +6,11 @@ from loguru import logger
 
 from syftbox.client.plugins.sync.constants import (
     CLIENT_CHANGELOG_FOLDER,
-    IGNORE_FOLDERS,
 )
 from syftbox.client.plugins.sync.endpoints import get_remote_state
-from syftbox.lib import Client, DirState, FileInfo, hash_dir
+from syftbox.lib import Client, DirState, FileInfo
 from syftbox.server.models import SyftBaseModel
+from syftbox.server.sync.hash import hash_dir
 
 
 def is_permission_file(path: Path | str, check_exists: bool = False) -> bool:
@@ -88,7 +88,7 @@ class DatasiteState:
         self.changelog.save(self.changelog_file)
 
     def get_current_state(self) -> DirState:
-        return hash_dir(self.client.sync_folder, self.email, IGNORE_FOLDERS)
+        return hash_dir(self.path, root_dir=self.client.sync_folder)
 
     def get_out_of_sync_files(
         self,
@@ -101,7 +101,9 @@ class DatasiteState:
         TODO: we are not handling empty folders
         """
         local_state = self.get_current_state()
-        remote_state = get_remote_state(self.client, self.email)
+        remote_state = get_remote_state(
+            self.client.server_client, email=self.client.email, path=Path(self.email)
+        )
 
         all_changes = []
         all_files = set(local_state.tree.keys()) | set(remote_state.tree.keys())

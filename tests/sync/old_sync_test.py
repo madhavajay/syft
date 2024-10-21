@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 
 from syftbox.client.plugins.create_datasite import run as run_create_datasite_plugin
 from syftbox.client.plugins.init import run as run_init_plugin
-from syftbox.client.plugins.sync import do_sync
+from syftbox.client.plugins.old_sync import do_sync
 from syftbox.lib.lib import ClientConfig, SharedState, SyftPermission, perm_file_path
 from syftbox.server.server import app as server_app
 from syftbox.server.server import lifespan as server_lifespan

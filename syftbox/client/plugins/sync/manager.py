@@ -27,7 +27,7 @@ class SyncManager:
         self.queue.put(SyncQueueItem(priority=change.get_priority(), data=change))
 
     def get_datasites(self) -> list[DatasiteState]:
-        datasites_from_server = list_datasites(self.client)
+        datasites_from_server = list_datasites(self.client.server_client)
         datasites = [
             DatasiteState(client=self.client, email=email)
             for email in datasites_from_server

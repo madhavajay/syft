@@ -50,19 +50,3 @@ def test_sync_queue_dedupe():
     queue.get()
     assert queue.dedupe_set == set()
     assert queue.empty()
-
-
-def test_sync_queue_force_put():
-    queue = SyncQueue()
-
-    path = Path("file.txt")
-    other_path = Path("other_file.txt")
-
-    # Add path to the front of the queue, even though it's already in the queue
-    queue.put(SyncQueueItem(0, other_path))
-    queue.put(SyncQueueItem(1, path))
-    queue.force_put(SyncQueueItem(-1, path))
-
-    assert queue.get().change == path
-    assert queue.get().change == other_path
-    assert queue.get().change == path

@@ -16,7 +16,7 @@ class DiffRequest(BaseModel):
 
 
 class DiffResponse(BaseModel):
-    path: str
+    path: Path
     diff: str
     hash: str
 
@@ -64,6 +64,14 @@ class FileMetadata(BaseModel):
     signature: str
     file_size: int = 0  # limit file sizes?
     last_modified: datetime
+
+    @property
+    def signature_bytes(self) -> bytes:
+        return base64.b85decode(self.signature)
+
+    @property
+    def hash_bytes(self) -> bytes:
+        return base64.b85decode(self.hash)
 
 
 class SyncLog(BaseModel):
