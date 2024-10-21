@@ -157,6 +157,7 @@ async def lifespan(app: FastAPI, settings: ServerSettings | None = None):
     cur = con.cursor()
     for m in metadata:
         db.save_file_metadata(cur, m)
+
     cur.close()
     con.commit()
     con.close()
