@@ -1,5 +1,6 @@
 import base64
 import hashlib
+from pathlib import Path
 
 import py_fast_rsync
 from fastapi.testclient import TestClient
@@ -74,3 +75,27 @@ def test_syft_client_push_flow(client: TestClient):
     with open(f"{snapshot_folder}/{TEST_DATASITE_NAME}/{TEST_FILE}", "rb") as f:
         sha256local = hashlib.file_digest(f, "sha256").hexdigest()
     assert result["current_hash"] == expected_hash == sha256local
+
+
+def test_delete_file(client: TestClient):
+    response = client.post(
+        "/sync/delete",
+        json={"path": f"{TEST_DATASITE_NAME}/{TEST_FILE}"},
+    )
+
+    response.raise_for_status()
+    snapshot_folder = client.app_state["server_settings"].snapshot_folder
+    path = Path(f"{snapshot_folder}/{TEST_DATASITE_NAME}/{TEST_FILE}")
+    assert not path.exists()
+
+
+def test_create_file(client: TestClient):
+    response = client.post(
+        "/sync/create",
+        json={"path": f"{TEST_DATASITE_NAME}/{TEST_FILE}"},
+    )
+
+    response.raise_for_status()
+    snapshot_folder = client.app_state["server_settings"].snapshot_folder
+    path = Path(f"{snapshot_folder}/{TEST_DATASITE_NAME}/{TEST_FILE}")
+    assert not path.exists()

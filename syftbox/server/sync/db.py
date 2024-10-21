@@ -25,8 +25,7 @@ def get_db(path: str):
             hash TEXT NOT NULL,
             signature TEXT NOT NULL,
             file_size INTEGER NOT NULL,
-            last_modified TEXT NOT NULL
-        )
+            last_modified TEXT NOT NULL        )
         """)
     return conn
 
@@ -51,6 +50,10 @@ def save_file_metadata(conn: sqlite3.Connection, metadata: FileMetadata):
             metadata.last_modified.isoformat(),
         ),
     )
+
+
+def delete_file_metadata(conn: sqlite3.Connection, path: str):
+    conn.execute("DELETE FROM file_metadata WHERE path = ? LIMIT 1", (path,))
 
 
 def get_all_metadata(
@@ -107,11 +110,13 @@ def move_with_transaction(
 
         shutil.move(from_path, metadata.path)
 
-    except sqlite3.IntegrityError:
+    except sqlite3.IntegrityError as e:
         # Rollback the transaction in case of error
         conn.rollback()
         logger.error(f"Failed to update metadata for {metadata.path}. Rolled back.")
 
+        # raise the original error
+        raise e
     finally:
         # Clean up
         cursor.close()

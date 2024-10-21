@@ -42,6 +42,10 @@ class FileMetadataRequest(BaseModel):
     path_like: str = Field(description="Path to search for files, uses SQL LIKE syntax")
 
 
+class FileRequest(BaseModel):
+    path: str = Field(description="Path to search for files, uses SQL LIKE syntax")
+
+
 class ApplyDiffRequest(BaseModel):
     path: str
     diff: str
