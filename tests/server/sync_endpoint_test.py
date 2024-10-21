@@ -3,7 +3,9 @@ import hashlib
 
 import py_fast_rsync
 from fastapi.testclient import TestClient
+from py_fast_rsync import signature
 
+from syftbox.server.sync.models import DiffResponse
 from tests.server.conftest import TEST_DATASITE_NAME, TEST_FILE
 
 
@@ -16,6 +18,28 @@ def test_get_all_permissions(client: TestClient):
 
     response.raise_for_status()
     assert len(response.json())
+
+
+def test_get_diff(client: TestClient):
+    local_data = b"This is my local data"
+    sig = signature.calculate(local_data)
+    sig_b85 = base64.b85encode(sig).decode("utf-8")
+    response = client.post(
+        "/sync/get_diff",
+        json={
+            "path": f"{TEST_DATASITE_NAME}/{TEST_FILE}",
+            "signature": sig_b85,
+        },
+    )
+
+    response.raise_for_status()
+    diff_response = DiffResponse.model_validate(response.json())
+    remote_diff = diff_response.diff_bytes
+    probably_remote_data = py_fast_rsync.apply(local_data, remote_diff)
+
+    server_settings = client.app_state["server_settings"]
+    file_server_contents = server_settings.read(f"{TEST_DATASITE_NAME}/{TEST_FILE}")
+    assert file_server_contents == probably_remote_data
 
 
 def test_syft_client_push_flow(client: TestClient):

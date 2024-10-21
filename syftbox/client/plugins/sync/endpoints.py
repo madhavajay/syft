@@ -22,7 +22,7 @@ def list_datasites(client: Client) -> list[str]:
         "/list_datasites",
     )
 
-    data = handle_json_response(response)
+    data = handle_json_response("/list_datasites", response)
     return data["datasites"]
 
 
@@ -35,5 +35,5 @@ def get_remote_state(client: Client, path: Path) -> DirState:
         },
     )
 
-    response_data = handle_json_response(response)
+    response_data = handle_json_response("/dir_state", response)
     return DirState(**response_data["dir_state"])
