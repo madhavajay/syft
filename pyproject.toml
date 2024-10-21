@@ -68,7 +68,7 @@ syftbox = ["*.css", ".js", ".html", ".zip", ".sh"]
 pythonpath = ["."]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 exclude = ["data", "users", "build", "dist", ".venv"]
 
 [tool.ruff.lint]

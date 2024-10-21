@@ -5,7 +5,7 @@ from pathlib import Path
 
 import py_fast_rsync
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.sync.db import (
@@ -103,9 +103,7 @@ def apply_diffs(
     if len(metadata_list) == 0:
         raise HTTPException(status_code=404, detail="path not found")
     elif len(metadata_list) > 1:
-        raise HTTPException(
-            status_code=400, detail="found too many files to apply diff"
-        )
+        raise HTTPException(status_code=400, detail="found too many files to apply diff")
 
     metadata = metadata_list[0]
 
@@ -116,8 +114,7 @@ def apply_diffs(
 
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         temp_file.write(result)
-        temp_path = temp_file.name
-
+        temp_path = Path(temp_file.name)
     new_metadata = hash_file(temp_path)
 
     if new_metadata.hash != req.expected_hash:
@@ -130,15 +127,14 @@ def apply_diffs(
         origin_path=abs_path,
     )
 
-    return ApplyDiffResponse(
-        path=req.path, current_hash=new_metadata.sha256, previous_hash=metadata.hash
-    )
+    return ApplyDiffResponse(path=req.path, current_hash=new_metadata.hash, previous_hash=metadata.hash)
 
 
 @router.post("/delete", response_class=JSONResponse)
 def delete_file(
     req: FileRequest,
     conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
 ) -> JSONResponse:
     metadata_list = get_all_metadata(conn, path_like=f"%{req.path}%")
     if len(metadata_list) == 0:
@@ -149,7 +145,8 @@ def delete_file(
     metadata = metadata_list[0]
 
     delete_file_metadata(conn, metadata.path.as_posix())
-    Path(metadata.path).unlink(missing_ok=True)
+    abs_path = server_settings.snapshot_folder / metadata.path
+    Path(abs_path).unlink(missing_ok=True)
     return JSONResponse(content={"status": "success"})
 
 
@@ -170,9 +167,26 @@ def create_file(
     metadata = get_all_metadata(cursor, path_like=f"%{file.filename}%")
     if len(metadata) > 0:
         raise HTTPException(status_code=400, detail="file already exists")
-    metadata = hash_file(abs_path)
+    metadata = hash_file(abs_path, root_dir=server_settings.snapshot_folder)
     save_file_metadata(cursor, metadata)
     conn.commit()
     cursor.close()
 
     return JSONResponse(content={"status": "success"})
+
+
+@router.post("/download", response_class=FileResponse)
+def download_file(
+    req: FileRequest,
+    conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> FileResponse:
+    metadata_list = get_all_metadata(conn, path_like=f"%{req.path}%")
+    if len(metadata_list) == 0:
+        raise HTTPException(status_code=404, detail="path not found")
+    elif len(metadata_list) > 1:
+        raise HTTPException(status_code=400, detail="too many files to download")
+
+    metadata = metadata_list[0]
+    abs_path = server_settings.snapshot_folder / metadata.path
+    return FileResponse(abs_path)

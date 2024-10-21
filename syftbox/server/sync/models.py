@@ -2,6 +2,7 @@ import base64
 import enum
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -76,6 +77,11 @@ class FileMetadata(BaseModel):
     @property
     def hash_bytes(self) -> bytes:
         return base64.b85decode(self.hash)
+
+    def __eq__(self, value: Any):
+        if not isinstance(value, FileMetadata):
+            return False
+        return self.path == value.path and self.hash == value.hash
 
 
 class SyncLog(BaseModel):

@@ -1,16 +1,13 @@
 import os
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
-from loguru import logger
-
-from syftbox.client.plugins.sync.constants import (
-    CLIENT_CHANGELOG_FOLDER,
-)
 from syftbox.client.plugins.sync.endpoints import get_remote_state
-from syftbox.lib import Client, DirState, FileInfo
+from syftbox.lib import Client, DirState
 from syftbox.server.models import SyftBaseModel
 from syftbox.server.sync.hash import hash_dir
+from syftbox.server.sync.models import FileMetadata
 
 
 def is_permission_file(path: Path | str, check_exists: bool = False) -> bool:
@@ -29,14 +26,14 @@ class SyncSide(str, Enum):
 class FileChangeInfo(SyftBaseModel, frozen=True):
     path: Path
     side_last_modified: SyncSide
-    date_last_modified: float
-    num_bytes: int = 1  # TODO: get change size
+    date_last_modified: datetime
+    file_size: int = 1
 
     def get_priority(self) -> int:
         if is_permission_file(self.path):
             return 0
         else:
-            return max(1, self.num_bytes)
+            return max(1, self.file_size)
 
     def __lt__(self, other: "FileChangeInfo") -> bool:
         return self.path < other.path
@@ -49,45 +46,13 @@ class DatasiteState:
         """
         self.client = client
         self.email = email
-        self.setup()
 
     @property
     def path(self) -> Path:
         p = Path(self.client.sync_folder) / self.email
         return p.expanduser().resolve()
 
-    @property
-    def changelog_file(self) -> Path:
-        p = (
-            Path(self.client.sync_folder)
-            / CLIENT_CHANGELOG_FOLDER
-            / f"{self.email}_changelog.json"
-        )
-        return p.expanduser().resolve()
-
-    def setup(self):
-        if self.changelog_file.exists():
-            self.changelog = self.load_changelog()
-        else:
-            self.changelog = DirState(
-                tree={},
-                timestamp=0,
-                sync_folder=self.client.sync_folder,
-                sub_path=self.email,
-            )
-            self.changelog.save(self.changelog_file)
-
-    def load_changelog(self) -> DirState:
-        try:
-            return DirState.load(str(self.changelog_file))
-        except Exception as e:
-            logger.exception(f"Failed to load changelog {self.changelog_file}: {e}")
-
-    def set_changelog(self, state: DirState):
-        self.changelog = state
-        self.changelog.save(self.changelog_file)
-
-    def get_current_state(self) -> DirState:
+    def get_current_state(self) -> list[FileMetadata]:
         return hash_dir(self.path, root_dir=self.client.sync_folder)
 
     def get_out_of_sync_files(
@@ -101,23 +66,25 @@ class DatasiteState:
         TODO: we are not handling empty folders
         """
         local_state = self.get_current_state()
-        remote_state = get_remote_state(
-            self.client.server_client, email=self.client.email, path=Path(self.email)
-        )
+        remote_state = get_remote_state(self.client.server_client, email=self.client.email, path=Path(self.email))
 
+        local_state_dict = {file.path: file for file in local_state}
+        remote_state_dict = {file.path: file for file in remote_state}
+        all_files = set(local_state_dict.keys()) | set(remote_state_dict.keys())
         all_changes = []
-        all_files = set(local_state.tree.keys()) | set(remote_state.tree.keys())
+
         for afile in all_files:
-            local_info = local_state.tree.get(afile)
-            remote_info = remote_state.tree.get(afile)
+            local_info = local_state_dict.get(afile)
+            remote_info = remote_state_dict.get(afile)
             change_info = compare_fileinfo(afile, local_info, remote_info)
             if change_info is not None:
                 all_changes.append(change_info)
 
-        ignore_rules = get_ignore_rules(local_state)
+        # TODO implement ignore rules
+        # ignore_rules = get_ignore_rules(local_state)
+        # filtered_changes = filter_ignored_changes(all_changes, ignore_rules)
 
-        filtered_changes = filter_ignored_changes(all_changes, ignore_rules)
-        permission_changes, file_changes = split_permissions(filtered_changes)
+        permission_changes, file_changes = split_permissions(all_changes)
         # TODO debounce changes
         # filtered_changes = filter_recent_local_changes(filtered_changes)
 
@@ -139,8 +106,8 @@ def split_permissions(
 
 def compare_fileinfo(
     path: Path,
-    local_info: FileInfo | None,
-    remote_info: FileInfo | None,
+    local_info: FileMetadata | None,
+    remote_info: FileMetadata | None,
 ) -> FileChangeInfo | None:
     if local_info is None and remote_info is None:
         return
@@ -151,7 +118,7 @@ def compare_fileinfo(
             path=path,
             side_last_modified=SyncSide.REMOTE,
             date_last_modified=remote_info.last_modified,
-            num_bytes=remote_info.num_bytes,
+            file_size=remote_info.file_size,
         )
 
     if remote_info is None and local_info is not None:
@@ -160,7 +127,7 @@ def compare_fileinfo(
             path=path,
             side_last_modified=SyncSide.LOCAL,
             date_last_modified=local_info.last_modified,
-            num_bytes=local_info.num_bytes,
+            file_size=local_info.file_size,
         )
 
     if local_info.file_hash != remote_info.file_hash:
@@ -168,17 +135,17 @@ def compare_fileinfo(
         if local_info.last_modified > remote_info.last_modified:
             date_last_modified = local_info.last_modified
             side_last_modified = SyncSide.LOCAL
-            num_bytes = local_info.num_bytes
+            file_size = local_info.file_size
         else:
             date_last_modified = remote_info.last_modified
             side_last_modified = SyncSide.REMOTE
-            num_bytes = remote_info.num_bytes
+            file_size = remote_info.file_size
 
         return FileChangeInfo(
             path=path,
             side_last_modified=side_last_modified,
             date_last_modified=date_last_modified,
-            num_bytes=num_bytes,
+            file_size=file_size,
         )
 
 
