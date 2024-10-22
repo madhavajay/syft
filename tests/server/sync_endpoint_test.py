@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from py_fast_rsync import signature
 
 from syftbox.client.plugins.sync.endpoints import (
+    SyftNotFound,
     SyftServerError,
     apply_diff,
     get_diff,
@@ -167,6 +168,9 @@ def test_delete_file(client: TestClient):
     snapshot_folder = client.app_state["server_settings"].snapshot_folder
     path = Path(f"{snapshot_folder}/{TEST_DATASITE_NAME}/{TEST_FILE}")
     assert not path.exists()
+
+    with pytest.raises(SyftNotFound):
+        get_metadata(client, Path(TEST_DATASITE_NAME) / TEST_FILE)
 
 
 def test_create_file(client: TestClient):

@@ -154,7 +154,11 @@ def delete_file(
 
     metadata = metadata_list[0]
 
-    delete_file_metadata(conn, metadata.path.as_posix())
+    try:
+        delete_file_metadata(conn, metadata.path.as_posix())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    conn.commit()
     abs_path = server_settings.snapshot_folder / metadata.path
     Path(abs_path).unlink(missing_ok=True)
     return JSONResponse(content={"status": "success"})
@@ -200,6 +204,8 @@ def download_file(
 
     metadata = metadata_list[0]
     abs_path = server_settings.snapshot_folder / metadata.path
+    if not Path(abs_path).exists():
+        raise HTTPException(status_code=404, detail="file not found")
     return FileResponse(abs_path)
 
 

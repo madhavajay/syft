@@ -55,7 +55,10 @@ def save_file_metadata(conn: sqlite3.Connection, metadata: FileMetadata):
 
 
 def delete_file_metadata(conn: sqlite3.Connection, path: str):
-    conn.execute("DELETE FROM file_metadata WHERE path = ?", (path,))
+    cur = conn.execute("DELETE FROM file_metadata WHERE path = ?", (path,))
+    # get number of changes
+    if cur.rowcount != 1:
+        raise ValueError(f"Failed to delete metadata for {path}.")
 
 
 def get_all_metadata(conn: sqlite3.Connection, path_like: str | None = None) -> list[FileMetadata]:
