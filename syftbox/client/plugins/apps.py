@@ -3,12 +3,12 @@ import os
 import shutil
 import subprocess
 import threading
-from types import SimpleNamespace
-from datetime import datetime
 import time
+from datetime import datetime
+from types import SimpleNamespace
+from typing import Optional, Union
+
 from croniter import croniter
-
-
 from loguru import logger
 from typing_extensions import Any
 
@@ -84,7 +84,7 @@ def copy_default_apps(apps_path):
             logger.info(f"Copied default app: {app}")
 
 
-def dict_to_namespace(data) -> SimpleNamespace | list | Any:
+def dict_to_namespace(data) -> Union[SimpleNamespace, list, Any]:
     if isinstance(data, dict):
         return SimpleNamespace(
             **{key: dict_to_namespace(value) for key, value in data.items()}
@@ -95,7 +95,7 @@ def dict_to_namespace(data) -> SimpleNamespace | list | Any:
         return data
 
 
-def load_config(path: str) -> None | SimpleNamespace:
+def load_config(path: str) -> Optional[SimpleNamespace]:
     try:
         with open(path, "r") as f:
             data = json.load(f)
