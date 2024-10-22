@@ -56,9 +56,7 @@ def delete_file_metadata(conn: sqlite3.Connection, path: str):
     conn.execute("DELETE FROM file_metadata WHERE path = ?", (path,))
 
 
-def get_all_metadata(
-    conn: sqlite3.Connection, path_like: str | None = None
-) -> list[FileMetadata]:
+def get_all_metadata(conn: sqlite3.Connection, path_like: str | None = None) -> list[FileMetadata]:
     query = "SELECT * FROM file_metadata"
     params = ()
 
@@ -80,9 +78,17 @@ def get_all_metadata(
     ]
 
 
-def move_with_transaction(
-    conn: sqlite3.Connection, *, origin_path: str, metadata: FileMetadata
-):
+def get_all_datasites(conn: sqlite3.Connection) -> list[str]:
+    # INSTR(path, '/'): Finds the position of the first slash in the path.
+    cursor = conn.execute(
+        """SELECT DISTINCT SUBSTR(path, 1, INSTR(path, '/') - 1) AS root_folder
+        FROM file_metadata;
+        """
+    )
+    return [row[0] for row in cursor]
+
+
+def move_with_transaction(conn: sqlite3.Connection, *, origin_path: str, metadata: FileMetadata):
     """The file system and database do not share transactions,
     so this operation is not atomic.
     Ideally, files (blobs) should be immutable,

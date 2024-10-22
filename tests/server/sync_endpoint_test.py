@@ -111,17 +111,11 @@ def test_apply_diff(client: TestClient):
     expected_hash = hashlib.sha256(local_data).hexdigest()
 
     # Apply local_data to server
-    response = apply_diff(
-        client, Path(TEST_DATASITE_NAME) / TEST_FILE, diff, expected_hash
-    )
+    response = apply_diff(client, Path(TEST_DATASITE_NAME) / TEST_FILE, diff, expected_hash)
     assert response.current_hash == expected_hash
 
     # check file was written correctly
-    snapshot_file_path = (
-        client.app_state["server_settings"].snapshot_folder
-        / Path(TEST_DATASITE_NAME)
-        / TEST_FILE
-    )
+    snapshot_file_path = client.app_state["server_settings"].snapshot_folder / Path(TEST_DATASITE_NAME) / TEST_FILE
     remote_data = snapshot_file_path.read_bytes()
     assert local_data == remote_data
 
@@ -185,3 +179,9 @@ def test_create_file(client: TestClient):
         response = client.post("/sync/create", files=files)
     response.raise_for_status()
     assert path.exists()
+
+
+def test_list_datasites(client: TestClient):
+    response = client.post("/sync/datasites")
+
+    response.raise_for_status()

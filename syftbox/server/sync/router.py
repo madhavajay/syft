@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.sync.db import (
     delete_file_metadata,
+    get_all_datasites,
     get_all_metadata,
     get_db,
     move_with_transaction,
@@ -190,3 +191,8 @@ def download_file(
     metadata = metadata_list[0]
     abs_path = server_settings.snapshot_folder / metadata.path
     return FileResponse(abs_path)
+
+
+@router.post("/datasites", response_model=list[str])
+def get_datasites(conn: sqlite3.Connection = Depends(get_db_connection)) -> list[str]:
+    return get_all_datasites(conn)
