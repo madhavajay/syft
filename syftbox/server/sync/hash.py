@@ -11,7 +11,7 @@ from py_fast_rsync import signature
 from syftbox.server.sync.models import FileMetadata
 
 
-def hash_file(file_path: Path, root_dir: Path) -> FileMetadata:
+def hash_file(file_path: Path, root_dir: Path | None = None) -> FileMetadata:
     # ignore files larger then 100MB
     if file_path.stat().st_size > 100_000_000:
         logger.warning("File too large: %s", file_path)
@@ -23,9 +23,12 @@ def hash_file(file_path: Path, root_dir: Path) -> FileMetadata:
         # TODO: add support for streaming hashing
         data = f.read()
 
-    relative_path = file_path.relative_to(root_dir)
+    if root_dir is None:
+        path = file_path
+    else:
+        path = file_path.relative_to(root_dir)
     return FileMetadata(
-        path=relative_path,
+        path=path,
         hash=hashlib.sha256(data).hexdigest(),
         signature=base64.b85encode(signature.calculate(data)),
         file_size=len(data),
@@ -54,9 +57,7 @@ def hash_dir(dir: Path, root_dir: Path) -> list[FileMetadata]:
     return hash_files_parallel(files, root_dir)
 
 
-def collect_files(
-    dir: Path | str, pattern: str | re.Pattern | None = None
-) -> list[Path]:
+def collect_files(dir: Path | str, pattern: str | re.Pattern | None = None) -> list[Path]:
     """Recursively collect files in a directory
 
     Examples:

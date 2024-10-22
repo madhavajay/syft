@@ -132,9 +132,7 @@ def create_folders(folders: list[str]) -> None:
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI, settings: ServerSettings | None = None):
     # Startup
-    logger.info(
-        f"> Starting SyftBox Server {__version__}. Python {platform.python_version()}"
-    )
+    logger.info(f"> Starting SyftBox Server {__version__}. Python {platform.python_version()}")
     if settings is None:
         settings = ServerSettings()
     logger.info(settings)
@@ -157,6 +155,7 @@ async def lifespan(app: FastAPI, settings: ServerSettings | None = None):
     cur = con.cursor()
     for m in metadata:
         db.save_file_metadata(cur, m)
+
     cur.close()
     con.commit()
     con.close()
@@ -220,21 +219,15 @@ def get_file_list(directory: str | Path = ".") -> list[dict[str, Any]]:
         item_path = os.path.join(directory, item)
         is_dir = os.path.isdir(item_path)
         size = os.path.getsize(item_path) if not is_dir else "-"
-        mod_time = datetime.fromtimestamp(os.path.getmtime(item_path)).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        mod_time = datetime.fromtimestamp(os.path.getmtime(item_path)).strftime("%Y-%m-%d %H:%M:%S")
 
-        file_list.append(
-            {"name": item, "is_dir": is_dir, "size": size, "mod_time": mod_time}
-        )
+        file_list.append({"name": item, "is_dir": is_dir, "size": size, "mod_time": mod_time})
 
     return sorted(file_list, key=lambda x: (not x["is_dir"], x["name"].lower()))
 
 
 @app.get("/datasites", response_class=HTMLResponse)
-async def list_datasites(
-    request: Request, server_settings: ServerSettings = Depends(get_server_settings)
-):
+async def list_datasites(request: Request, server_settings: ServerSettings = Depends(get_server_settings)):
     files = get_file_list(server_settings.snapshot_folder)
     template_path = current_dir / "templates" / "datasites.html"
     html = ""
@@ -394,9 +387,7 @@ async def write(
 
 
 @app.post("/read", response_model=ReadResponse)
-async def read(
-    request: ReadRequest, server_settings: ServerSettings = Depends(get_server_settings)
-) -> ReadResponse:
+async def read(request: ReadRequest, server_settings: ServerSettings = Depends(get_server_settings)) -> ReadResponse:
     email = request.email
     change = request.change
     change.sync_folder = os.path.abspath(str(server_settings.snapshot_folder))
@@ -427,9 +418,7 @@ async def dir_state(
 
         # get the top level perm file
         try:
-            perm_tree = PermissionTree.from_path(
-                full_path, raise_on_corrupted_files=True
-            )
+            perm_tree = PermissionTree.from_path(full_path, raise_on_corrupted_files=True)
         except Exception as e:
             print(f"Failed to parse permission tree: {full_path}")
             raise e
@@ -521,9 +510,7 @@ def main() -> None:
 
     uvicorn_config["ssl_keyfile"] = args.ssl_keyfile if args.ssl_keyfile else None
     uvicorn_config["ssl_certfile"] = args.ssl_certfile if args.ssl_certfile else None
-    uvicorn_config["ssl_keyfile_password"] = (
-        args.ssl_keyfile_password if args.ssl_keyfile_password else None
-    )
+    uvicorn_config["ssl_keyfile_password"] = args.ssl_keyfile_password if args.ssl_keyfile_password else None
 
     uvicorn.run(**uvicorn_config)
 

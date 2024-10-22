@@ -1,15 +1,21 @@
 import base64
-import hashlib
 import sqlite3
 import tempfile
 from pathlib import Path
 
 import py_fast_rsync
-from fastapi import APIRouter, Depends, HTTPException, Request
-from py_fast_rsync import signature
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 
 from syftbox.server.settings import ServerSettings, get_server_settings
-from syftbox.server.sync.db import get_all_metadata, get_db, move_with_transaction
+from syftbox.server.sync.db import (
+    delete_file_metadata,
+    get_all_metadata,
+    get_db,
+    move_with_transaction,
+    save_file_metadata,
+)
+from syftbox.server.sync.hash import hash_file
 
 from .models import (
     ApplyDiffRequest,
@@ -18,6 +24,7 @@ from .models import (
     DiffResponse,
     FileMetadata,
     FileMetadataRequest,
+    FileRequest,
 )
 
 
@@ -56,7 +63,6 @@ def get_diff(
     with open(abs_path, "rb") as f:
         data = f.read()
 
-    # TODO load from cache
     diff = py_fast_rsync.diff(req.signature_bytes, data)
     diff_bytes = base64.b85encode(diff).decode("utf-8")
     return DiffResponse(
@@ -97,9 +103,7 @@ def apply_diffs(
     if len(metadata_list) == 0:
         raise HTTPException(status_code=404, detail="path not found")
     elif len(metadata_list) > 1:
-        raise HTTPException(
-            status_code=400, detail="found too many files to apply diff"
-        )
+        raise HTTPException(status_code=400, detail="found too many files to apply diff")
 
     metadata = metadata_list[0]
 
@@ -107,22 +111,14 @@ def apply_diffs(
     with open(abs_path, "rb") as f:
         data = f.read()
     result = py_fast_rsync.apply(data, req.diff_bytes)
-    sig = signature.calculate(result)
-    sha256 = hashlib.sha256(result).hexdigest()
-    if sha256 != req.expected_hash:
-        raise HTTPException(status_code=400, detail="expected_hash mismatch")
 
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         temp_file.write(result)
-        temp_path = temp_file.name
+        temp_path = Path(temp_file.name)
+    new_metadata = hash_file(temp_path)
 
-    new_metadata = FileMetadata(
-        path=temp_path,
-        hash=sha256,
-        signature=base64.b85encode(sig),
-        file_size=len(data),
-        last_modified=metadata.last_modified,
-    )
+    if new_metadata.hash != req.expected_hash:
+        raise HTTPException(status_code=400, detail="expected_hash mismatch")
 
     # move temp path to real path and update db
     move_with_transaction(
@@ -131,6 +127,66 @@ def apply_diffs(
         origin_path=abs_path,
     )
 
-    return ApplyDiffResponse(
-        path=req.path, current_hash=sha256, previous_hash=metadata.hash
-    )
+    return ApplyDiffResponse(path=req.path, current_hash=new_metadata.hash, previous_hash=metadata.hash)
+
+
+@router.post("/delete", response_class=JSONResponse)
+def delete_file(
+    req: FileRequest,
+    conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> JSONResponse:
+    metadata_list = get_all_metadata(conn, path_like=f"%{req.path}%")
+    if len(metadata_list) == 0:
+        raise HTTPException(status_code=404, detail="path not found")
+    elif len(metadata_list) > 1:
+        raise HTTPException(status_code=400, detail="too many files to delete")
+
+    metadata = metadata_list[0]
+
+    delete_file_metadata(conn, metadata.path.as_posix())
+    abs_path = server_settings.snapshot_folder / metadata.path
+    Path(abs_path).unlink(missing_ok=True)
+    return JSONResponse(content={"status": "success"})
+
+
+@router.post("/create", response_class=JSONResponse)
+def create_file(
+    file: UploadFile,
+    conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> JSONResponse:
+    #
+    relative_path = Path(file.filename)
+    abs_path = server_settings.snapshot_folder / relative_path
+    with open(abs_path, "wb") as f:
+        # better to use async aiosqlite
+        f.write(file.file.read())
+
+    cursor = conn.cursor()
+    metadata = get_all_metadata(cursor, path_like=f"%{file.filename}%")
+    if len(metadata) > 0:
+        raise HTTPException(status_code=400, detail="file already exists")
+    metadata = hash_file(abs_path, root_dir=server_settings.snapshot_folder)
+    save_file_metadata(cursor, metadata)
+    conn.commit()
+    cursor.close()
+
+    return JSONResponse(content={"status": "success"})
+
+
+@router.post("/download", response_class=FileResponse)
+def download_file(
+    req: FileRequest,
+    conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> FileResponse:
+    metadata_list = get_all_metadata(conn, path_like=f"%{req.path}%")
+    if len(metadata_list) == 0:
+        raise HTTPException(status_code=404, detail="path not found")
+    elif len(metadata_list) > 1:
+        raise HTTPException(status_code=400, detail="too many files to download")
+
+    metadata = metadata_list[0]
+    abs_path = server_settings.snapshot_folder / metadata.path
+    return FileResponse(abs_path)

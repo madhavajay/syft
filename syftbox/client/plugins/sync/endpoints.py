@@ -32,9 +32,7 @@ def list_datasites(client: httpx.Client) -> list[str]:
     return data["datasites"]
 
 
-def get_remote_state(
-    client: httpx.Client, email: str, path: Path
-) -> list[FileMetadata]:
+def get_remote_state(client: httpx.Client, email: str, path: Path) -> list[FileMetadata]:
     response = client.post(
         "/sync/dir_state",
         params={
@@ -74,9 +72,7 @@ def get_diff(client: httpx.Client, path: Path, signature: bytes) -> DiffResponse
     return DiffResponse(**response_data)
 
 
-def apply_diff(
-    client: httpx.Client, path: Path, diff: bytes, expected_hash: str
-) -> ApplyDiffResponse:
+def apply_diff(client: httpx.Client, path: Path, diff: bytes, expected_hash: str) -> ApplyDiffResponse:
     response = client.post(
         "/sync/apply_diff",
         json={
@@ -88,3 +84,34 @@ def apply_diff(
 
     response_data = handle_json_response("/sync/apply_diff", response)
     return ApplyDiffResponse(**response_data)
+
+
+def delete(client: httpx.Client, path: Path) -> None:
+    response = client.post(
+        "/sync/delete",
+        json={
+            "path": str(path),
+        },
+    )
+
+    response.raise_for_status()
+
+
+def create(client: httpx.Client, path: Path, data: bytes) -> None:
+    response = client.post("/sync/create", files={"file": (str(path), data, "text/plain")})
+    response = handle_json_response("/sync/create", response)
+    return
+
+
+def download(client: httpx.Client, path: Path) -> bytes:
+    response = client.get(
+        "/sync/download",
+        params={
+            "path": str(path),
+        },
+    )
+
+    if response.status != 200:
+        raise SyftNotFound(f"[/sync/download] not found on server: {path}")
+
+    return response.content
