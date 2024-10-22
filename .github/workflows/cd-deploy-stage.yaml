@@ -30,11 +30,11 @@ on:
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress
 concurrency:
-  group: deploy-stage
+  group: deploy-syftbox-stage
   cancel-in-progress: false
 
 jobs:
-  deploy-syftbox-server:
+  deploy-syftbox-stage:
     # runs-on: ubuntu-latest
     runs-on: syftbox-sh-linux-x64
 
@@ -56,16 +56,20 @@ jobs:
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SYFTBOX_STAGE_PRIVATE_KEY }}" > ~/.ssh/syftbox-stage.pem
-          chmod 600 ~/.ssh/syftbox.pem
+          echo "${{ secrets.SYFTBOX_STAGE_PRIVATE_KEY }}" > ~/.ssh/cert.pem
+          chmod 600 ~/.ssh/cert.pem
           ssh-keyscan -H "4.227.144.171" >> ~/.ssh/known_hosts
 
       - name: Deploy SyftBox (Local Wheel Build)
         if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'local' }} && github.event_name != 'pull_request'
         run: |
-          just upload-dev ~/.ssh/syftbox-stage.pem azureuser@4.227.144.171
+          just upload-dev ~/.ssh/cert.pem azureuser@4.227.144.171
 
       - name: Deploy SyftBox (PyPI ${{ inputs.version }})
         if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'pypi' }} && github.event_name != 'pull_request'
         run: |
-          just upload-pip ${{ inputs.version }} ~/.ssh/syftbox-stage.pem azureuser@4.227.144.171
+          just upload-pip ${{ inputs.version }} ~/.ssh/cert.pem azureuser@4.227.144.171
+
+      - name: Delete cert.pem
+        run: |
+          rm ~/.ssh/cert.pem
