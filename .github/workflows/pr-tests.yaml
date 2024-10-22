@@ -33,21 +33,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Tunshell on macos runner
-        if: startsWith(matrix.runner, 'syftbox-sh-mac')
+      - name: Install uv & other tools
         run: |
-          curl -sSf https://lets.tunshell.com/init.sh | sh -s -- T RHWgaCZLAZOFbP10F7PryB PUyKgoNeVrJJDoom87EMSS eu.relay.tunshell.com
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv --version
+          uv tool update-shell
+          uv tool install tox --with tox-uv
+          export PATH=$HOME/.local/bin:$PATH
+          tox --version
 
       - name: Set up Python ${{ matrix.python-version }}
+        if: startsWith(matrix.runner, 'syftbox-sh-linux')
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install pip packages
+      # challenge here is actions/setup-python@v5 requires write access to /Users/runner/hostedtoolcache
+      # but current custom macos runner does not allow writing to that dir (even sudo won't work)
+      # so we need to use this weird way to install python on macos
+      - name: Set up Python ${{ matrix.python-version }} (uv managed)
+        if: startsWith(matrix.runner, 'syftbox-sh-mac')
         run: |
-          python -m pip install --upgrade pip
-          pip install -U uv==0.4.25 tox tox-uv
-          uv --version
+          uv python install ${{ matrix.python-version }}
+          uv venv --python ${{ matrix.python-version }}
+          uv tool update-shell
+          source .venv/bin/activate
 
       - name: Get uv cache dir
         id: pip-cache
