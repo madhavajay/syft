@@ -24,12 +24,12 @@ def handle_json_response(endpoint: str, response: httpx.Response) -> Any:
 
 
 def list_datasites(client: httpx.Client) -> list[str]:
-    response = client.get(
-        "/list_datasites",
+    response = client.post(
+        "/sync/datasites",
     )
 
-    data = handle_json_response("/list_datasites", response)
-    return data["datasites"]
+    data = handle_json_response("/sync/datasites", response)
+    return data
 
 
 def get_remote_state(client: httpx.Client, email: str, path: Path) -> list[FileMetadata]:

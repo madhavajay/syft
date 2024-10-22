@@ -56,6 +56,9 @@ def assert_dirtree_exists(base_path: Path, tree: DirTree) -> None:
 def test_get_datasites(datasite_1: Client, datasite_2: Client):
     emails = {datasite_1.email, datasite_2.email}
     sync_service = SyncManager(datasite_1)
+    sync_service2 = SyncManager(datasite_2)
+    sync_service.run_single_thread()
+    sync_service2.run_single_thread()
 
     datasites = sync_service.get_datasites()
     assert {datasites[0].email, datasites[1].email} == emails

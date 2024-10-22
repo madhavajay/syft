@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -27,9 +27,6 @@ from syftbox.__version__ import __version__
 from syftbox.lib import (
     Jsonable,
     get_datasites,
-)
-from syftbox.server.models import (
-    ListDatasitesResponse,
 )
 from syftbox.server.settings import ServerSettings, get_server_settings
 
@@ -315,20 +312,6 @@ async def register(
     logger.info(f"> {email} registering: {token}, snapshot folder: {datasite_folder}")
 
     return JSONResponse({"status": "success", "token": token}, status_code=200)
-
-
-@app.get("/list_datasites", response_model=ListDatasitesResponse)
-async def datasites(
-    server_settings: ServerSettings = Depends(get_server_settings),
-) -> ListDatasitesResponse:
-    print("snapshot_folder", server_settings.snapshot_folder)
-    datasites = get_datasites(server_settings.snapshot_folder)
-    if isinstance(datasites, list):
-        return ListDatasitesResponse(
-            datasites=datasites,
-            status="success",
-        )
-    raise HTTPException(status_code=400, detail={"status": "error"})
 
 
 @app.get("/install.sh")
