@@ -1,11 +1,6 @@
 name: SyftBox PyPI Release
 
 on:
-  # todo - pr temporary
-  pull_request:
-    branches:
-      - main
-
   workflow_dispatch:
     inputs:
       bump_type:
@@ -25,8 +20,7 @@ on:
       dryrun:
         description: Dry Run. Will not push to PyPI.
         type: boolean
-        # todo - emporarly flipped to true
-        default: true
+        default: false
 
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress

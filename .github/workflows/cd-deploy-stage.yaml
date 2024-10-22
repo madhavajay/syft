@@ -1,11 +1,6 @@
 name: Deploy Stage
 
 on:
-  # todo - pr temporary
-  pull_request:
-    branches:
-      - main
-
   workflow_dispatch:
     inputs:
       build:
@@ -24,8 +19,7 @@ on:
       dryrun:
         description: Dry Run. Will not deploy to server.
         type: boolean
-        # todo - temporarly flipped to true
-        default: true
+        default: false
 
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress
