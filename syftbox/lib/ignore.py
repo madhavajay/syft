@@ -8,33 +8,36 @@ from syftbox.lib import Client
 IGNORE_FILENAME = "_.syftignore"
 
 DEFAULT_IGNORE = """
-# Syft specific
+# Syft
 /_.syftignore
 /.syft*
+/apps
+/staging
+/syft_changelog
 
-# Python specific
+# Python
 .ipynb_checkpoints/
 __pycache__/
 *.py[cod]
 .venv/
 
-# Temporary files created by text editors
-*.swp
-*.swo
-*.tmp
-.cache/
-
-# Jupyter notebook checkpoints
-.ipynb_checkpoints/
-
-# OS-specific files
+# OS-specific
 .DS_Store
 Icon
 
-# IDE/Editor specific files
+# IDE/Editor-specific
+*.swp
+*.swo
 .vscode/
 .idea/
 *.iml
+
+# General excludes
+*.tmp
+
+# excluded datasites
+# example:
+# /user_to_exclude@example.com/
 """
 
 
