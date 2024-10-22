@@ -26,6 +26,7 @@ from syftbox.server.models import (
     get_file_last_modified,
     get_file_size,
 )
+from syftbox.server.sync.models import FileMetadata
 
 from .exceptions import ClientConfigException
 
@@ -416,6 +417,24 @@ def filter_read_state(user_email: str, dir_state: DirState, perm_tree: Permissio
         ):
             filtered_tree[file_path] = file_info
     return filtered_tree
+
+
+def filter_metadata(
+    user_email: str,
+    metadata_list: list[FileMetadata],
+    perm_tree: PermissionTree,
+    snapshot_folder: Path,
+):
+    filtered_metadata = []
+    for metadata in metadata_list:
+        perm_file_at_path = perm_tree.permission_for_path((snapshot_folder / metadata.path).as_posix())
+        if (
+            user_email in perm_file_at_path.read
+            or "GLOBAL" in perm_file_at_path.read
+            or user_email in perm_file_at_path.admin
+        ):
+            filtered_metadata.append(metadata)
+    return filtered_metadata
 
 
 class ResettableTimer:

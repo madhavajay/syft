@@ -80,6 +80,16 @@ def get_all_metadata(conn: sqlite3.Connection, path_like: str | None = None) -> 
     ]
 
 
+def get_all_datasites(conn: sqlite3.Connection) -> list[str]:
+    # INSTR(path, '/'): Finds the position of the first slash in the path.
+    cursor = conn.execute(
+        """SELECT DISTINCT SUBSTR(path, 1, INSTR(path, '/') - 1) AS root_folder
+        FROM file_metadata;
+        """
+    )
+    return [row[0] for row in cursor]
+
+
 def move_with_transaction(
     conn: sqlite3.Connection, *, origin_path: Path, metadata: FileMetadata, server_settings: ServerSettings
 ):

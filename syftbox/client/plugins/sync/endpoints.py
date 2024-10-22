@@ -38,6 +38,7 @@ def get_remote_state(client: httpx.Client, email: str, path: Path) -> list[FileM
         params={
             "dir": str(path),
         },
+        headers={"email": email},
     )
 
     response_data = handle_json_response("/dir_state", response)

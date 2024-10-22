@@ -16,7 +16,7 @@ TEST_FILE = "test_file.txt"
 PERMFILE_FILE = "_.syftperm"
 PERMFILE_DICT = {
     "admin": [TEST_DATASITE_NAME],
-    "read": ["GLOBAL"],
+    "read": [TEST_DATASITE_NAME],
     "write": [TEST_DATASITE_NAME],
 }
 
