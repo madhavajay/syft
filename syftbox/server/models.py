@@ -207,6 +207,5 @@ def get_file_hash(file_path: str) -> str:
 
     hash = hashlib.md5()
     with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            hash.update(chunk)
+	hash = hashlib.file_digest(f, "md5")
     return hash.hexdigest()
