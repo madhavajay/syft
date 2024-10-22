@@ -27,6 +27,7 @@ dependencies = [
     "py-fast-rsync",
     "pathspec>=0.12.1",
     "python-multipart>=0.0.12",
+    "rich>=13.9.2",
 ]
 
 [project.optional-dependencies]

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from syftbox.client.plugins.sync.endpoints import get_remote_state
 from syftbox.lib import Client, DirState
+from syftbox.lib.ignore import filter_ignored_paths
 from syftbox.server.models import SyftBaseModel
 from syftbox.server.sync.hash import hash_dir
 from syftbox.server.sync.models import FileMetadata
@@ -71,9 +72,11 @@ class DatasiteState:
         local_state_dict = {file.path: file for file in local_state}
         remote_state_dict = {file.path: file for file in remote_state}
         all_files = set(local_state_dict.keys()) | set(remote_state_dict.keys())
+        all_files_filtered = filter_ignored_paths(client=self.client, paths=list(all_files))
+
         all_changes = []
 
-        for afile in all_files:
+        for afile in all_files_filtered:
             local_info = local_state_dict.get(afile)
             remote_info = remote_state_dict.get(afile)
             change_info = compare_fileinfo(afile, local_info, remote_info)
