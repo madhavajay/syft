@@ -50,6 +50,14 @@ repos:
     hooks:
       - id: prettier
 
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        name: "mypy"
+        always_run: true
+        files: ^default_apps/starter_app/main.py
+
   # - repo: meta
   #   hooks:
   #     - id: identity
