@@ -24,7 +24,7 @@ class SyncManager:
     def start(self):
         def _start(manager: SyncManager):
             while True:
-                manager.sync_unthreaded()
+                manager.run_single_thread()
 
         t = Thread(target=_start, args=[self])
         t.start()
@@ -43,16 +43,19 @@ class SyncManager:
 
         return datasites
 
-    def sync_unthreaded(self):
+    def enqueue_datasite_changes(self, datasite: DatasiteState):
+        permission_changes, file_changes = datasite.get_out_of_sync_files()
+        logger.debug(
+            f"Enqueuing {len(permission_changes)} permissions and {len(file_changes)} files for {datasite.email}"
+        )
+        for change in permission_changes + file_changes:
+            self.enqueue(change)
+
+    def run_single_thread(self):
         # NOTE first implementation will be unthreaded and just loop through all datasites
         self.datasites = self.get_datasites()
+        logger.debug(f"Syncing {len(self.datasites)} datasites: {[datasite.email for datasite in self.datasites]}")
 
         for datasite in self.datasites:
-            permission_changes, file_changes = datasite.get_out_of_sync_files()
-            logger.debug(
-                f"Enqueuing {len(permission_changes)} permissions and {len(file_changes)} files for {datasite.email}"
-            )
-            for change in permission_changes + file_changes:
-                self.enqueue(change)
-
+            self.enqueue_datasite_changes(datasite)
             self.consumer.consume_all()

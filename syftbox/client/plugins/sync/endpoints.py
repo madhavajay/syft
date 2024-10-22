@@ -48,7 +48,7 @@ def get_metadata(client: httpx.Client, path: Path) -> FileMetadata:
     response = client.post(
         "/sync/get_metadata",
         json={
-            "path_like": str(path),
+            "path_like": path.as_posix(),
         },
     )
 
@@ -104,14 +104,14 @@ def create(client: httpx.Client, path: Path, data: bytes) -> None:
 
 
 def download(client: httpx.Client, path: Path) -> bytes:
-    response = client.get(
+    response = client.post(
         "/sync/download",
-        params={
+        json={
             "path": str(path),
         },
     )
 
-    if response.status != 200:
-        raise SyftNotFound(f"[/sync/download] not found on server: {path}")
+    if response.status_code != 200:
+        raise SyftNotFound(f"[/sync/download] not found on server: {path}, {response.text}")
 
     return response.content

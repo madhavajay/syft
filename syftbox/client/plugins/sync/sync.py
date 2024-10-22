@@ -3,6 +3,8 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
+from loguru import logger
+
 from syftbox.client.plugins.sync.endpoints import get_remote_state
 from syftbox.lib import Client, DirState
 from syftbox.server.models import SyftBaseModel
@@ -52,8 +54,11 @@ class DatasiteState:
         p = Path(self.client.sync_folder) / self.email
         return p.expanduser().resolve()
 
-    def get_current_state(self) -> list[FileMetadata]:
+    def get_current_local_state(self) -> list[FileMetadata]:
         return hash_dir(self.path, root_dir=self.client.sync_folder)
+
+    def get_remote_state(self) -> list[FileMetadata]:
+        return get_remote_state(self.client.server_client, email=self.client.email, path=Path(self.email))
 
     def get_out_of_sync_files(
         self,
@@ -65,8 +70,17 @@ class DatasiteState:
         they will be handled by the server and consumer
         TODO: we are not handling empty folders
         """
-        local_state = self.get_current_state()
-        remote_state = get_remote_state(self.client.server_client, email=self.client.email, path=Path(self.email))
+        try:
+            local_state = self.get_current_local_state()
+        except Exception:
+            logger.exception(f"Failed to get local state for {self.email}")
+            return [], []
+
+        try:
+            remote_state = self.get_remote_state()
+        except Exception:
+            logger.exception(f"Failed to get remote state for {self.email}")
+            return [], []
 
         local_state_dict = {file.path: file for file in local_state}
         remote_state_dict = {file.path: file for file in remote_state}
@@ -76,7 +90,13 @@ class DatasiteState:
         for afile in all_files:
             local_info = local_state_dict.get(afile)
             remote_info = remote_state_dict.get(afile)
-            change_info = compare_fileinfo(afile, local_info, remote_info)
+
+            try:
+                change_info = compare_fileinfo(afile, local_info, remote_info)
+            except Exception:
+                logger.exception(f"Failed to compare file {afile}")
+                continue
+
             if change_info is not None:
                 all_changes.append(change_info)
 

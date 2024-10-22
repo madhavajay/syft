@@ -31,9 +31,7 @@ def wait_for_datasite_setup(client_config: ClientConfig, timeout=5):
     raise TimeoutError("Datasite setup took too long")
 
 
-def setup_datasite(
-    tmp_path: Path, server_client: TestClient, email: str
-) -> ClientConfig:
+def setup_datasite(tmp_path: Path, server_client: TestClient, email: str) -> ClientConfig:
     client_path = tmp_path / email
     client_path.unlink(missing_ok=True)
     client_path.mkdir(parents=True)

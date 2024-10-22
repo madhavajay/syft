@@ -115,17 +115,14 @@ def apply_diffs(
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         temp_file.write(result)
         temp_path = Path(temp_file.name)
+
     new_metadata = hash_file(temp_path)
 
     if new_metadata.hash != req.expected_hash:
         raise HTTPException(status_code=400, detail="expected_hash mismatch")
 
     # move temp path to real path and update db
-    move_with_transaction(
-        conn,
-        metadata=new_metadata,
-        origin_path=abs_path,
-    )
+    move_with_transaction(conn, metadata=new_metadata, origin_path=abs_path, server_settings=server_settings)
 
     return ApplyDiffResponse(path=req.path, current_hash=new_metadata.hash, previous_hash=metadata.hash)
 

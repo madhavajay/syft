@@ -186,9 +186,7 @@ class SyftPermission(Jsonable):
 
     @classmethod
     def theirs_with_my_read(cls, their_email, my_email: str) -> Self:
-        return cls(
-            admin=[their_email], read=[their_email, my_email], write=[their_email]
-        )
+        return cls(admin=[their_email], read=[their_email, my_email], write=[their_email])
 
     @classmethod
     def theirs_with_my_read_write(cls, their_email, my_email: str) -> Self:
@@ -296,9 +294,7 @@ def ignore_file(directory: str, root: str, filename: str) -> bool:
 
 
 def get_datasites(sync_folder: str | Path) -> list[str]:
-    sync_folder = (
-        str(sync_folder.resolve()) if isinstance(sync_folder, Path) else sync_folder
-    )
+    sync_folder = str(sync_folder.resolve()) if isinstance(sync_folder, Path) else sync_folder
     datasites = []
     folders = os.listdir(sync_folder)
     for folder in folders:
@@ -352,12 +348,8 @@ class PermissionTree(Jsonable):
 
         if corrupted_permission_files:
             if raise_on_corrupted_files:
-                raise ValueError(
-                    f"Found corrupted permission files: {corrupted_permission_files}"
-                )
-            logger.warning(
-                f"Found corrupted permission files: {corrupted_permission_files}"
-            )
+                raise ValueError(f"Found corrupted permission files: {corrupted_permission_files}")
+            logger.warning(f"Found corrupted permission files: {corrupted_permission_files}")
 
         return cls(
             root_perm=root_perm,
@@ -368,9 +360,7 @@ class PermissionTree(Jsonable):
 
     def has_corrupted_permission(self, path: str | Path) -> bool:
         path = Path(path).resolve()
-        corrupted_permission_paths = [
-            Path(p).parent.resolve() for p in self.corrupted_permission_files
-        ]
+        corrupted_permission_paths = [Path(p).parent.resolve() for p in self.corrupted_permission_files]
         for perm_path in corrupted_permission_paths:
             if path.is_relative_to(perm_path):
                 return True
@@ -489,11 +479,7 @@ class SharedState:
         if not syft_folder or not os.path.exists(syft_folder):
             return []
 
-        return [
-            folder
-            for folder in os.listdir(syft_folder)
-            if os.path.isdir(os.path.join(syft_folder, folder))
-        ]
+        return [folder for folder in os.listdir(syft_folder) if os.path.isdir(os.path.join(syft_folder, folder))]
 
 
 def get_root_data_path() -> Path:
@@ -507,9 +493,7 @@ def get_root_data_path() -> Path:
     return data_dir
 
 
-def autocache(
-    url: str, extension: str | None = None, cache: bool = True
-) -> Path | None:
+def autocache(url: str, extension: str | None = None, cache: bool = True) -> Path | None:
     try:
         data_path = get_root_data_path()
         file_hash = hashlib.sha256(url.encode("utf8")).hexdigest()
@@ -568,9 +552,7 @@ class Client(Jsonable):
     token: int | None = None
     server_url: str = "http://localhost:5001"
     email_token: str | None = None
-    autorun_plugins: list[str] | None = field(
-        default_factory=lambda: ["init", "create_datasite", "sync", "apps"]
-    )
+    autorun_plugins: list[str] | None = field(default_factory=lambda: ["init", "create_datasite", "sync", "apps"])
     _server_client: httpx.Client | None = None
 
     @property
@@ -597,7 +579,7 @@ class Client(Jsonable):
 
     @property
     def datasite_path(self) -> Path:
-        return os.path.join(self.sync_folder, self.email)
+        return Path(self.sync_folder) / self.email
 
     @property
     def manifest_path(self) -> Path:
@@ -636,9 +618,7 @@ class Client(Jsonable):
     def load(cls, filepath: str | None = None) -> Self:
         try:
             if filepath is None:
-                config_path = os.getenv(
-                    "SYFTBOX_CLIENT_CONFIG_PATH", DEFAULT_CONFIG_PATH
-                )
+                config_path = os.getenv("SYFTBOX_CLIENT_CONFIG_PATH", DEFAULT_CONFIG_PATH)
                 filepath = config_path
             return super().load(filepath)
         except Exception:

@@ -26,24 +26,18 @@ def create_random_file(client_config: ClientConfig, sub_path: str = "") -> Path:
 
 def assert_files_not_on_datasite(datasite: ClientConfig, files: list[Path]):
     for file in files:
-        assert not (
-            datasite.sync_folder / file
-        ).exists(), f"File {file} exists on datasite {datasite.email}"
+        assert not (datasite.sync_folder / file).exists(), f"File {file} exists on datasite {datasite.email}"
 
 
 def assert_files_on_datasite(datasite: ClientConfig, files: list[Path]):
     for file in files:
-        assert (
-            datasite.sync_folder / file
-        ).exists(), f"File {file} does not exist on datasite {datasite.email}"
+        assert (datasite.sync_folder / file).exists(), f"File {file} does not exist on datasite {datasite.email}"
 
 
 def assert_files_on_server(server_client: TestClient, files: list[Path]):
     server_settings: ServerSettings = server_client.app_state["server_settings"]
     for file in files:
-        assert (
-            server_settings.snapshot_folder / file
-        ).exists(), f"File {file} does not exist on server"
+        assert (server_settings.snapshot_folder / file).exists(), f"File {file} does not exist on server"
 
 
 def assert_dirtree_exists(base_path: Path, tree: DirTree) -> None:
@@ -104,3 +98,152 @@ def test_enqueue_changes(datasite_1: Client):
 
     for item in should_be_files:
         print(item.priority, item.data)
+
+
+def test_create_file(server_client: TestClient, datasite_1: Client, datasite_2: Client):
+    server_settings: ServerSettings = server_client.app_state["server_settings"]
+    sync_service = SyncManager(datasite_1)
+
+    # Create a file in datasite_1
+    tree = {
+        "folder1": {
+            "_.syftperm": SyftPermission.mine_with_public_read(datasite_1.email),
+            "file.txt": fake.text(max_nb_chars=1000),
+        },
+    }
+    create_dir_tree(Path(datasite_1.datasite_path), tree)
+
+    # changes are pushed to server
+    sync_service.run_single_thread()
+
+    # check if no changes are left
+    for datasite in sync_service.get_datasites():
+        out_of_sync_permissions, out_of_sync_files = datasite.get_out_of_sync_files()
+        assert not out_of_sync_files
+        assert not out_of_sync_permissions
+
+    # check if file exists on server
+    print(datasite_2.sync_folder)
+    datasite_snapshot = server_settings.snapshot_folder / datasite_1.email
+    assert_dirtree_exists(datasite_snapshot, tree)
+
+    # check if file exists on datasite_2
+    sync_client_2 = SyncManager(datasite_2)
+    sync_client_2.run_single_thread()
+    datasite_states = sync_client_2.get_datasites()
+    ds1_state = datasite_states[0]
+    assert ds1_state.email == datasite_1.email
+
+    print(ds1_state.get_out_of_sync_files())
+
+    print(f"datasites {[d.email for d in sync_client_2.get_datasites()]}")
+    sync_client_2.run_single_thread()
+
+    assert_files_on_datasite(datasite_2, [Path(datasite_1.email) / "folder1" / "file.txt"])
+
+
+def test_modify(server_client: TestClient, datasite_1: Client):
+    server_settings: ServerSettings = server_client.app_state["server_settings"]
+    sync_service_1 = SyncManager(datasite_1)
+
+    # Setup initial state
+    tree = {
+        "folder1": {
+            "_.syftperm": SyftPermission.mine_with_public_write(datasite_1.email),
+            "file.txt": "content",
+        },
+    }
+    create_dir_tree(Path(datasite_1.datasite_path), tree)
+    sync_service_1.run_single_thread()
+
+    # modify the file
+    file_path = datasite_1.datasite_path / "folder1" / "file.txt"
+    new_content = "modified"
+    file_path.write_text(new_content)
+    assert file_path.read_text() == new_content
+
+    sync_service_1.run_single_thread()
+
+    assert file_path.read_text() == new_content
+    assert (server_settings.snapshot_folder / datasite_1.email / "folder1" / "file.txt").read_text() == new_content
+
+
+def test_modify_with_conflict(server_client: TestClient, datasite_1: Client, datasite_2: Client):
+    sync_service_1 = SyncManager(datasite_1)
+    sync_service_2 = SyncManager(datasite_2)
+
+    # Setup initial state
+    tree = {
+        "folder1": {
+            "_.syftperm": SyftPermission.mine_with_public_write(datasite_1.email),
+            "file.txt": "content1",
+        },
+    }
+    create_dir_tree(Path(datasite_1.datasite_path), tree)
+    sync_service_1.run_single_thread()
+    sync_service_2.run_single_thread()
+
+    # modify the file both clients
+    file_path_1 = datasite_1.datasite_path / "folder1" / "file.txt"
+    new_content_1 = "modified1"
+    file_path_1.write_text(new_content_1)
+
+    file_path_2 = Path(datasite_2.sync_folder) / datasite_1.email / "folder1" / "file.txt"
+    new_content_2 = "modified2"
+    file_path_2.write_text(new_content_2)
+
+    assert new_content_1 != new_content_2
+    assert file_path_1.read_text() == new_content_1
+    assert file_path_2.read_text() == new_content_2
+
+    # first to server wins
+    sync_service_1.run_single_thread()
+    sync_service_2.run_single_thread()
+
+    assert file_path_1.read_text() == new_content_1
+    assert file_path_2.read_text() == new_content_1
+
+    # modify again, 2 syncs first
+    new_content_1 = fake.text(max_nb_chars=1000)
+    new_content_2 = fake.text(max_nb_chars=1000)
+    file_path_1.write_text(new_content_1)
+    file_path_2.write_text(new_content_2)
+    assert new_content_1 != new_content_2
+
+    assert file_path_1.read_text() == new_content_1
+    assert file_path_2.read_text() == new_content_2
+
+    sync_service_2.run_single_thread()
+    sync_service_1.run_single_thread()
+
+    assert file_path_1.read_text() == new_content_2
+    assert file_path_2.read_text() == new_content_2
+
+
+def test_delete_file(server_client: TestClient, datasite_1: Client, datasite_2: Client):
+    server_settings: ServerSettings = server_client.app_state["server_settings"]
+    sync_service_1 = SyncManager(datasite_1)
+    sync_service_2 = SyncManager(datasite_2)
+
+    # Setup initial state
+    tree = {
+        "folder1": {
+            "_.syftperm": SyftPermission.mine_with_public_write(datasite_1.email),
+            "file.txt": fake.text(max_nb_chars=1000),
+        },
+    }
+    create_dir_tree(Path(datasite_1.datasite_path), tree)
+    sync_service_1.run_single_thread()
+    sync_service_2.run_single_thread()
+
+    # delete the file
+    file_path = datasite_1.datasite_path / "folder1" / "file.txt"
+    file_path.unlink()
+
+    sync_service_1.run_single_thread()
+
+    # file is deleted on server
+    assert (server_settings.snapshot_folder / datasite_1.email / "folder1" / "file.txt").exists() is False
+
+    sync_service_2.run_single_thread()
+    assert (datasite_2.datasite_path / datasite_1.email / "folder1" / "file.txt").exists() is False

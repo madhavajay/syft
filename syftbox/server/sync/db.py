@@ -2,9 +2,11 @@ import os
 import shutil
 import sqlite3
 import tempfile
+from pathlib import Path
 
 from loguru import logger
 
+from syftbox.server.settings import ServerSettings
 from syftbox.server.sync.models import FileMetadata
 
 
@@ -56,9 +58,7 @@ def delete_file_metadata(conn: sqlite3.Connection, path: str):
     conn.execute("DELETE FROM file_metadata WHERE path = ?", (path,))
 
 
-def get_all_metadata(
-    conn: sqlite3.Connection, path_like: str | None = None
-) -> list[FileMetadata]:
+def get_all_metadata(conn: sqlite3.Connection, path_like: str | None = None) -> list[FileMetadata]:
     query = "SELECT * FROM file_metadata"
     params = ()
 
@@ -81,7 +81,7 @@ def get_all_metadata(
 
 
 def move_with_transaction(
-    conn: sqlite3.Connection, *, origin_path: str, metadata: FileMetadata
+    conn: sqlite3.Connection, *, origin_path: Path, metadata: FileMetadata, server_settings: ServerSettings
 ):
     """The file system and database do not share transactions,
     so this operation is not atomic.
@@ -100,7 +100,8 @@ def move_with_transaction(
     try:
         # Update database entry
         from_path = metadata.path
-        metadata.path = origin_path
+        relative_path = origin_path.relative_to(server_settings.snapshot_folder)
+        metadata.path = relative_path
         save_file_metadata(conn, metadata)
 
         conn.commit()
@@ -108,7 +109,7 @@ def move_with_transaction(
         # WARNING: between the move and the commit
         # the database will be in an inconsistent state
 
-        shutil.move(from_path, metadata.path)
+        shutil.move(from_path, origin_path)
 
     except sqlite3.IntegrityError as e:
         # Rollback the transaction in case of error

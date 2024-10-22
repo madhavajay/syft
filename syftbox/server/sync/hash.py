@@ -74,6 +74,8 @@ def collect_files(dir: Path | str, pattern: str | re.Pattern | None = None) -> l
 
     """
     dir = Path(dir)
+    if not dir.is_dir():
+        return []
     files = []
 
     # Compile the regex pattern if it's a string

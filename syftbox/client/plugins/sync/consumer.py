@@ -1,4 +1,3 @@
-import base64
 import hashlib
 import threading
 from enum import Enum
@@ -33,18 +32,18 @@ class SyncDecisionType(Enum):
 
 def update_local(client: Client, local_syncstate: FileMetadata, remote_syncstate: FileMetadata):
     diff = get_diff(client.server_client, local_syncstate.path, remote_syncstate.signature_bytes)
+    abs_path = client.sync_folder / local_syncstate.path
+    local_data = abs_path.read_bytes()
 
-    diff_bytes = base64.b85decode(diff.diff_bytes)
-
-    new_data = py_fast_rsync.apply(local_syncstate.read(), diff_bytes)
+    new_data = py_fast_rsync.apply(local_data, diff.diff_bytes)
     new_hash = hashlib.sha256(new_data).hexdigest()
 
     if new_hash != diff.hash:
         # TODO handle
         raise ValueError("hash mismatch")
 
-    abs_path = client.sync_folder / local_syncstate.path
     # TODO implement safe write with tempfile + rename
+    abs_path.parent.mkdir(parents=True, exist_ok=True)
     abs_path.write_bytes(new_data)
 
 
@@ -68,6 +67,7 @@ def delete_remote(client: Client, local_syncstate: FileMetadata):
 def create_local(client: Client, remote_syncstate: FileMetadata):
     abs_path = client.sync_folder / remote_syncstate.path
     content_bytes = download(client.server_client, remote_syncstate.path)
+    abs_path.parent.mkdir(parents=True, exist_ok=True)
     abs_path.write_bytes(content_bytes)
 
 
@@ -95,19 +95,13 @@ class SyncDecision(BaseModel):
         elif self.operation == SyncDecisionType.CREATE and to_local:
             create_local(client, self.remote_syncstate)
         elif self.operation == SyncDecisionType.DELETE and to_remote:
-            delete_remote(client, self.local_syncstate)
+            delete_remote(client, self.remote_syncstate)
         elif self.operation == SyncDecisionType.DELETE and to_local:
-            delete_local(client, self.remote_syncstate)
+            delete_local(client, self.local_syncstate)
         elif self.operation == SyncDecisionType.MODIFY and to_remote:
             update_remote(client, self.local_syncstate, self.remote_syncstate)
         elif self.operation == SyncDecisionType.MODIFY and to_local:
             update_local(client, self.local_syncstate, self.remote_syncstate)
-
-    def result_metadata(self):
-        if self.side_to_update == SyncSide.REMOTE:
-            return self.local_syncstate
-        else:
-            return self.remote_syncstate
 
     @classmethod
     def noop(
@@ -164,6 +158,13 @@ class SyncDecisionTuple(BaseModel):
     remote_decision: SyncDecision
     local_decision: SyncDecision
 
+    @property
+    def result_local_state(self):
+        if self.local_decision.operation == SyncDecisionType.NOOP:
+            return self.local_decision.local_syncstate
+        else:
+            return self.local_decision.remote_syncstate
+
     @classmethod
     def from_states(
         cls,
@@ -181,6 +182,10 @@ class SyncDecisionTuple(BaseModel):
         remote_modified = previous_local_syncstate != current_remote_syncstate
         in_sync = current_remote_syncstate == current_local_syncstate
         conflict = local_modified and remote_modified and not in_sync
+
+        logger.debug(
+            f"local_modified: {local_modified}, remote_modified: {remote_modified}, in_sync: {in_sync}, conflict: {conflict}"
+        )
 
         if in_sync:
             return cls(
@@ -263,22 +268,36 @@ class SyncConsumer:
             except Exception:
                 logger.exception(f"Failed to sync file {item.data.path}")
 
-    def process_filechange(self, item: SyncQueueItem) -> None:
+    def get_decisions(self, item: SyncQueueItem) -> SyncDecisionTuple:
         path = item.data.path
         current_local_syncstate: FileMetadata = self.get_current_local_syncstate(path)
         previous_local_syncstate = self.get_previous_local_syncstate(path)
         # TODO, rename to remote
-        current_server_state = self.get_current_server_state(
-            self.client,
+        current_server_state = self.get_current_server_state(path)
+
+        local_hash = current_local_syncstate.hash if current_local_syncstate else None
+        server_hash = current_server_state.hash if current_server_state else None
+        previous_local_hash = previous_local_syncstate.hash if previous_local_syncstate else None
+
+        logger.debug(
+            f"Processing {path} with local hash {local_hash}, server hash {server_hash}, previous local hash {previous_local_hash}"
         )
 
-        decisions = SyncDecisionTuple.from_states(
-            current_local_syncstate, previous_local_syncstate, current_server_state
-        )
+        return SyncDecisionTuple.from_states(current_local_syncstate, previous_local_syncstate, current_server_state)
 
-        decisions.remote_decision.execute(self.client)
-        result_state = decisions.local_decision.execute(self.client)
-        self.previous_state.insert(path, result_state)
+    def process_decision(self, path: Path, decision: SyncDecisionTuple):
+        decision.remote_decision.execute(self.client)
+        decision.local_decision.execute(self.client)
+        logger.debug(f"Saving state for {path}, {decision.result_local_state}")
+
+        self.previous_state.insert(path=path, state=decision.result_local_state)
+
+    def process_filechange(self, item: SyncQueueItem) -> None:
+        decisions = self.get_decisions(item)
+        logger.debug(
+            f"Processing {item.data.path} with decisions {decisions.local_decision.operation}, {decisions.remote_decision.operation}"
+        )
+        self.process_decision(item.data.path, decisions)
 
     def get_current_local_syncstate(self, path: Path) -> FileMetadata | None:
         abs_path = self.client.sync_folder / path
