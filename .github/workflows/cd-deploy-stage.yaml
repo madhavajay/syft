@@ -1,4 +1,4 @@
-name: Deploy Prod
+name: Deploy Stage
 
 on:
   # todo - pr temporary
@@ -8,8 +8,16 @@ on:
 
   workflow_dispatch:
     inputs:
+      build:
+        description: Deploy build from
+        type: choice
+        default: local
+        options:
+          - local
+          - pypi
+
       version:
-        description: "SyftBox Version to deploy"
+        description: SyftBox version to deploy if above is "pypi"
         type: string
         default: 0.1.12
 
@@ -22,7 +30,7 @@ on:
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress
 concurrency:
-  group: deploy-prod
+  group: deploy-stage
   cancel-in-progress: false
 
 jobs:
@@ -48,11 +56,16 @@ jobs:
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SYFTBOX_SERVER_PRIVATE_KEY }}" > ~/.ssh/syftbox.pem
+          echo "${{ secrets.SYFTBOX_STAGE_PRIVATE_KEY }}" > ~/.ssh/syftbox-stage.pem
           chmod 600 ~/.ssh/syftbox.pem
-          ssh-keyscan -H "172.210.40.183" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "4.227.144.171" >> ~/.ssh/known_hosts
 
-      - name: Deploy SyftBox Server
-        if: ${{ inputs.dryrun == false }}
+      - name: Deploy SyftBox (Local Wheel Build)
+        if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'local' }}
         run: |
-          just upload-pip ${{ inputs.version }} ~/.ssh/syftbox.pem azureuser@172.210.40.183
+          just upload-dev ~/.ssh/syftbox-stage.pem azureuser@4.227.144.171
+
+      - name: Deploy SyftBox (PyPI ${{ inputs.version }})
+        if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'pypi' }}
+        run: |
+          just upload-pip ${{ inputs.version }} ~/.ssh/syftbox-stage.pem azureuser@4.227.144.171
