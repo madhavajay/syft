@@ -205,8 +205,6 @@ def get_file_hash(file_path: str) -> str:
     #     sym_link_string = convert_to_symlink(file_path)
     #     return hashlib.md5(sym_link_string.encode("utf-8")).hexdigest()
     # else:
-
-    hash = hashlib.md5()
-    with open(file_path, "rb") as f:
-	hash = hashlib.file_digest(f, "md5")
-    return hash.hexdigest()
+    # TODO: we will run out of memory for very large files
+    with open(file_path, "rb") as file:
+        return hashlib.md5(file.read()).hexdigest()
