@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from threading import Thread
 
@@ -25,6 +26,7 @@ class SyncManager:
         def _start(manager: SyncManager):
             while True:
                 manager.run_single_thread()
+                time.sleep(1)
 
         t = Thread(target=_start, args=[self])
         t.start()
