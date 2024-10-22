@@ -38,11 +38,6 @@ jobs:
         with:
           version: "0.4.25"
 
-      - name: Install tox
-        run: |
-          uv tool install tox --with tox-uv
-          tox --version
-
       - name: Set up Python ${{ matrix.python-version }}
         if: startsWith(matrix.runner, 'syftbox-sh-linux')
         uses: actions/setup-python@v5
@@ -56,9 +51,17 @@ jobs:
         if: startsWith(matrix.runner, 'syftbox-sh-mac')
         run: |
           uv python install ${{ matrix.python-version }}
-          uv venv --python ${{ matrix.python-version }}
+          uv venv --python ${{ matrix.python-version }} .venv${{ matrix.python-version }}
           uv tool update-shell
-          source .venv/bin/activate
+          source $HOME/.profile
+          source .venv${{ matrix.python-version }}/bin/activate
+
+      - name: Install tox
+        run: |
+          # explicitly define which python version to use
+          # else we may end up picking system default which is not the same as the actions/setup-python
+          uv tool install tox --with tox-uv --python ${{ matrix.python-version }}
+          tox --version
 
       - name: Get uv cache dir
         id: pip-cache
