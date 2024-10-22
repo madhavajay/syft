@@ -72,10 +72,10 @@ get_python_command() {
 
     # check if either python3 or python is available
     # and echo the python one that works
-    if check_cmd python
-    then echo "python"
-    elif check_cmd python3
+    if check_cmd python3
     then echo "python3"
+    elif check_cmd python
+    then echo "python"
     fi
 }
 
