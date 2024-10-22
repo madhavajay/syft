@@ -77,6 +77,11 @@ jobs:
         run: |
           echo "Deploying SyftBox (Local Wheel Build)"
 
+      - name: Test if conditional pass 2
+        if: ${{ inputs.dryrun == false  && inputs.build == 'pypi'  && github.event_name != 'pull_request' }}
+        run: |
+          echo "Pass 2: Deploying SyftBox (Local Wheel Build)"
+
       # - name: Deploy SyftBox (Local Wheel Build)
       #   if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'local' }} && github.event_name != 'pull_request'
       #   run: |
