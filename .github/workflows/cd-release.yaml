@@ -91,11 +91,11 @@ jobs:
           just build
 
       - name: Push to pypi
-        if: ${{ inputs.dryrun == false }} && github.event_name != 'pull_request'
+        if: ${{ inputs.dryrun == false  && github.event_name != 'pull_request' }}
         run: |
           twine upload -u __token__ -p ${{ secrets.OM_SYFTBOX_PYPI_TOKEN }} dist/*
 
       - name: Push changes to SyftBox repo
-        if: ${{ inputs.dryrun == false }} && github.event_name != 'pull_request'
+        if: ${{ inputs.dryrun == false  && github.event_name != 'pull_request' }}
         run: |
           git push origin --follow-tags
