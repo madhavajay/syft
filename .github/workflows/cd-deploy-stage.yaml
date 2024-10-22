@@ -61,11 +61,11 @@ jobs:
           ssh-keyscan -H "4.227.144.171" >> ~/.ssh/known_hosts
 
       - name: Deploy SyftBox (Local Wheel Build)
-        if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'local' }}
+        if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'local' }} && github.event_name != 'pull_request'
         run: |
           just upload-dev ~/.ssh/syftbox-stage.pem azureuser@4.227.144.171
 
       - name: Deploy SyftBox (PyPI ${{ inputs.version }})
-        if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'pypi' }}
+        if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'pypi' }} && github.event_name != 'pull_request'
         run: |
           just upload-pip ${{ inputs.version }} ~/.ssh/syftbox-stage.pem azureuser@4.227.144.171

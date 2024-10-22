@@ -53,6 +53,6 @@ jobs:
           ssh-keyscan -H "172.210.40.183" >> ~/.ssh/known_hosts
 
       - name: Deploy SyftBox Server
-        if: ${{ inputs.dryrun == false }}
+        if: ${{ inputs.dryrun == false }} && github.event_name != 'pull_request'
         run: |
           just upload-pip ${{ inputs.version }} ~/.ssh/syftbox.pem azureuser@172.210.40.183
