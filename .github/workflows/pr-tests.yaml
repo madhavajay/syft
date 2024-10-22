@@ -33,20 +33,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/0.4.20/install.sh | sh
-          source $HOME/.cargo/env
-          uv --version
-
-      - name: Install Python and create venv
-        run: |
-          uv python install ${{ matrix.python-version }}
-          uv venv
-
       - name: Install pip packages
         run: |
-          uv pip  install -U tox tox-uv pytest
+          python -m pip install --upgrade pip
+          pip install -U uv==0.4.25 tox tox-uv
+          uv --version
 
       - name: Get uv cache dir
         id: pip-cache
@@ -58,12 +49,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.pip-cache.outputs.dir }}
-          key: ${{ runner.os }}-uv-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          key: pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
-            ${{ runner.os }}-uv-py${{ matrix.python-version }}-
+            pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-
 
       - name: Run unit tests
         env:
           TOX_PYTHON: python${{ matrix.python-version }}
         run: |
-          uv run tox -e syft.test.unit
+          tox -e syft.test.unit
