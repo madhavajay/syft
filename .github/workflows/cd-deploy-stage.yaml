@@ -21,6 +21,17 @@ on:
         type: boolean
         default: false
 
+  push:
+    branches:
+      - main # adjust this to match your main branch name
+    paths:
+      - "syftbox/**" # Python package files
+      - "default_apps/**" # Default Apps
+      - "pyproject.toml" # Project configuration
+      - "uv.lock" # Project lock
+      - "MANIFEST.in" # Wheel manifest
+      - "bumpversion.cfg" # Version
+
 # Prevents concurrent runs of the same workflow
 # while the previous run is still in progress
 concurrency:
@@ -60,12 +71,17 @@ jobs:
           ssh-keyscan -H "4.227.144.171" >> ~/.ssh/known_hosts
 
       - name: Deploy SyftBox (Local Wheel Build)
-        if: ${{ inputs.dryrun == false &&  inputs.build == 'local'  && github.event_name != 'pull_request' }}
+        # allow local deployment only on workflow_dispatch and non-PR push
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.dryrun == false && inputs.build == 'local') ||
+          (github.event_name == 'push' && github.event.pull_request == null)
         run: |
           just upload-dev ~/.ssh/cert.pem azureuser@4.227.144.171
 
       - name: Deploy SyftBox (PyPI ${{ inputs.version }})
-        if: ${{ inputs.dryrun == false  &&  inputs.build == 'pypi'  && github.event_name != 'pull_request' }}
+        # allow pypi deployment only on workflow_dispatch
+        if: |
+          (github.event_name == 'workflow_dispatch' && inputs.dryrun == false && inputs.build == 'pypi') || false
         run: |
           just upload-pip ${{ inputs.version }} ~/.ssh/cert.pem azureuser@4.227.144.171
 
