@@ -1,16 +1,14 @@
 import hashlib
-import httpx
-import py_fast_rsync
-
-from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
-from syftbox.client.plugins.sync.sync import FileChangeInfo, SyncSide
-
 from enum import Enum
 
+import py_fast_rsync
+from pydantic import BaseModel
+
+from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
+from syftbox.client.plugins.sync.sync import SyncSide
 from syftbox.lib.lib import Client
 from syftbox.server.sync.hash import hash_file
 from syftbox.server.sync.models import ApplyDiffRequest, DiffRequest, FileMetadata
-from pydantic import BaseModel
 
 
 class SyncDecisionType(Enum):
@@ -189,7 +187,6 @@ class SyncDecisionTuple(BaseModel):
         previous_local_state: FileMetadata,
         current_remote_state: FileMetadata,
     ):
-
         local_modified = current_local_state != previous_local_state
         # TODO, make sure local state always is synced with server state after syncing
         remote_modified = previous_local_state == current_remote_state
@@ -240,19 +237,20 @@ class SyncConsumer:
 
     def consume_all(self):
         while not self.queue.empty():
-            item = self.queue.get()
-            self.process_filechange(item)
-            # - [ ] create remote/local
-            # - [ ] delete remote/local
-            # - [ ] modify (conflict)
+            item = self.queue.get(timeout=0.1)
+            try:
+                self.process_filechange(item)
+            except Exception as e:
+                print(f"Failed to sync file {item.data.path}:\n{e}")
 
     def process_filechange(self, item: SyncQueueItem, client) -> None:
-
         path = item.data.path
         current_local_state: FileMetadata = self.get_current_local_state(path)
         previous_local_state = self.get_previous_local_state(path)
         # TODO, rename to remote
-        current_server_state = self.get_current_server_state(client,)
+        current_server_state = self.get_current_server_state(
+            client,
+        )
 
         decision = SyncDecisionTuple.from_states(
             current_local_state, previous_local_state, current_server_state
@@ -266,5 +264,7 @@ class SyncConsumer:
     def get_previous_local_state(self):
         pass
 
-    def get_current_server_state(self, ):
+    def get_current_server_state(
+        self,
+    ):
         pass

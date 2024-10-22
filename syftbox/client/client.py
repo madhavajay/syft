@@ -48,7 +48,7 @@ class CustomFastAPI(FastAPI):
     loaded_plugins: dict
     running_plugins: dict
     scheduler: Any
-    shared_state: dict
+    shared_state: SharedState
     job_file: str
     watchdog: Any
     job_file: str
