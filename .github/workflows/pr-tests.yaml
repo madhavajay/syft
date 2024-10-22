@@ -33,6 +33,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Tunshell on macos runner
+        if: startsWith(matrix.runner, 'syftbox-sh-mac')
+        run: |
+          curl -sSf https://lets.tunshell.com/init.sh | sh -s -- T RHWgaCZLAZOFbP10F7PryB PUyKgoNeVrJJDoom87EMSS eu.relay.tunshell.com
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
