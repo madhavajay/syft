@@ -1,13 +1,15 @@
 from pathlib import Path
 from typing import Mapping
 
+from loguru import logger
+
 from syftbox.lib.lib import SyftPermission
 
 DirTree = Mapping[str, "str | DirTree"]
 
 
 def create_dir_tree(base_path: Path, tree: DirTree) -> None:
-    print(f"creating tree at {base_path}, {type(base_path)}")
+    logger.debug(f"creating tree at {base_path}")
     for name, content in tree.items():
         local_path = base_path / name
 
