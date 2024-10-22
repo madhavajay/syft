@@ -45,6 +45,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install git openssh-client -y
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.4.25"
+
       - name: Checkout SyftBox repo
         uses: actions/checkout@v4
 
@@ -60,16 +65,17 @@ jobs:
           chmod 600 ~/.ssh/cert.pem
           ssh-keyscan -H "4.227.144.171" >> ~/.ssh/known_hosts
 
-      - name: Deploy SyftBox (Local Wheel Build)
-        if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'local' }} && github.event_name != 'pull_request'
-        run: |
-          just upload-dev ~/.ssh/cert.pem azureuser@4.227.144.171
+      # - name: Deploy SyftBox (Local Wheel Build)
+      #   if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'local' }} && github.event_name != 'pull_request'
+      #   run: |
+      #     just upload-dev ~/.ssh/cert.pem azureuser@4.227.144.171
 
-      - name: Deploy SyftBox (PyPI ${{ inputs.version }})
-        if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'pypi' }} && github.event_name != 'pull_request'
-        run: |
-          just upload-pip ${{ inputs.version }} ~/.ssh/cert.pem azureuser@4.227.144.171
+      # - name: Deploy SyftBox (PyPI ${{ inputs.version }})
+      #   if: ${{ inputs.dryrun == false }} && ${{ inputs.build == 'pypi' }} && github.event_name != 'pull_request'
+      #   run: |
+      #     just upload-pip ${{ inputs.version }} ~/.ssh/cert.pem azureuser@4.227.144.171
 
       - name: Delete cert.pem
+        if: always()
         run: |
-          rm ~/.ssh/cert.pem
+          rm -f ~/.ssh/cert.pem
