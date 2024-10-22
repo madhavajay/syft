@@ -38,6 +38,20 @@ jobs:
         with:
           version: "0.4.25"
 
+      - name: Get uv cache dir
+        id: pip-cache
+        shell: bash
+        run: |
+          echo "dir=$(uv cache dir)" >> $GITHUB_OUTPUT
+
+      - name: Load github cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pip-cache.outputs.dir }}
+          key: pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            pr-uv-${{ runner.os }}-py${{ matrix.python-version }}
+
       - name: Set up Python ${{ matrix.python-version }}
         if: startsWith(matrix.runner, 'syftbox-sh-linux')
         uses: actions/setup-python@v5
@@ -62,20 +76,6 @@ jobs:
           # else we may end up picking system default which is not the same as the actions/setup-python
           uv tool install tox --with tox-uv --python ${{ matrix.python-version }}
           tox --version
-
-      - name: Get uv cache dir
-        id: pip-cache
-        shell: bash
-        run: |
-          echo "dir=$(uv cache dir)" >> $GITHUB_OUTPUT
-
-      - name: Load github cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-
 
       - name: Run unit tests
         env:
