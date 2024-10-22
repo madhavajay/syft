@@ -52,10 +52,10 @@ jobs:
           chmod 600 ~/.ssh/cert.pem
           ssh-keyscan -H "172.210.40.183" >> ~/.ssh/known_hosts
 
-      # - name: Deploy SyftBox Server
-      #   if: ${{ inputs.dryrun == false }} && github.event_name != 'pull_request'
-      #   run: |
-      #     just upload-pip ${{ inputs.version }} ~/.ssh/cert.pem azureuser@172.210.40.183
+      - name: Deploy SyftBox Server
+        if: ${{ inputs.dryrun == false  && github.event_name != 'pull_request' }}
+        run: |
+          just upload-pip ${{ inputs.version }} ~/.ssh/cert.pem azureuser@172.210.40.183
 
       - name: Delete cert.pem
         if: always()
