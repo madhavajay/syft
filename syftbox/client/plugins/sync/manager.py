@@ -1,4 +1,5 @@
 from pathlib import Path
+from threading import Thread
 
 from loguru import logger
 
@@ -20,6 +21,14 @@ class SyncManager:
 
         self.setup()
 
+    def start(self):
+        def _start(manager: SyncManager):
+            while True:
+                manager.sync_unthreaded()
+
+        t = Thread(target=_start, args=[self])
+        t.start()
+
     def setup(self):
         self.change_log_folder.mkdir(exist_ok=True)
 
@@ -28,10 +37,9 @@ class SyncManager:
 
     def get_datasites(self) -> list[DatasiteState]:
         datasites_from_server = list_datasites(self.client.server_client)
-        datasites = [
-            DatasiteState(client=self.client, email=email)
-            for email in datasites_from_server
-        ]
+        datasites = [DatasiteState(client=self.client, email=email) for email in datasites_from_server]
+        if self.client.email not in datasites_from_server:
+            datasites.append(DatasiteState(client=self.client, email=self.client.email))
 
         return datasites
 

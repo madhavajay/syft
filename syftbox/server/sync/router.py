@@ -159,6 +159,7 @@ def create_file(
     #
     relative_path = Path(file.filename)
     abs_path = server_settings.snapshot_folder / relative_path
+    abs_path.parent.mkdir(exist_ok=True, parents=True)
     with open(abs_path, "wb") as f:
         # better to use async aiosqlite
         f.write(file.file.read())

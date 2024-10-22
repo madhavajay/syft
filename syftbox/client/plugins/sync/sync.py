@@ -130,7 +130,7 @@ def compare_fileinfo(
             file_size=local_info.file_size,
         )
 
-    if local_info.file_hash != remote_info.file_hash:
+    if local_info.hash != remote_info.hash:
         # File is different on both sides
         if local_info.last_modified > remote_info.last_modified:
             date_last_modified = local_info.last_modified

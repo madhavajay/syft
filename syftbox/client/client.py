@@ -34,6 +34,7 @@ from syftbox.client.fsevents import (
     FileSystemEvent,
     FSWatchdog,
 )
+from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils.error_reporting import make_error_report
 from syftbox.lib import (
     DEFAULT_CONFIG_PATH,
@@ -220,9 +221,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Run the web application with plugins.",
     )
-    parser.add_argument(
-        "--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path"
-    )
+    parser.add_argument("--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path")
     parser.add_argument("--sync_folder", type=str, help="sync folder path")
     parser.add_argument("--email", type=str, help="email")
     parser.add_argument("--port", type=int, default=8080, help="Port number")
@@ -263,9 +262,7 @@ def start_watchdog(app) -> FSWatchdog:
 @contextlib.asynccontextmanager
 async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None):
     # Startup
-    logger.info(
-        f"> Starting SyftBox Client: {__version__} Python {platform.python_version()}"
-    )
+    logger.info(f"> Starting SyftBox Client: {__version__} Python {platform.python_version()}")
 
     # client_config needs to be closed if it was created in this context
     # if it is passed as lifespan arg (eg for testing) it should be managed by the caller instead.
@@ -275,6 +272,8 @@ async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None
         client_config = load_or_create_config(args)
         close_client_config = True
     app.shared_state = SharedState(client_config=client_config)
+
+    logger.info(f"Connecting to {client_config.server_url}")
 
     # Clear the lock file on the first run if it exists
     job_file = client_config.config_path.replace(".json", ".sql")
@@ -293,19 +292,26 @@ async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None
     app.running_plugins = {}
     app.loaded_plugins = load_plugins(client_config)
     logger.info("> Loaded plugins:", sorted(list(app.loaded_plugins.keys())))
-    app.watchdog = start_watchdog(app)
+    # app.watchdog = start_watchdog(app)
 
     logger.info("> Starting autorun plugins:", sorted(client_config.autorun_plugins))
     for plugin in client_config.autorun_plugins:
         start_plugin(app, plugin)
 
+    start_syncing(app)
+
     yield  # This yields control to run the application
 
     logger.info("> Shutting down...")
     scheduler.shutdown()
-    app.watchdog.stop()
+    # app.watchdog.stop()
     if close_client_config:
         client_config.close()
+
+
+def start_syncing(app: CustomFastAPI):
+    manager = SyncManager(app.shared_state.client_config)
+    manager.start()
 
 
 def stop_scheduler(app: FastAPI):

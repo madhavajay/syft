@@ -18,7 +18,7 @@ class ServerSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="SYFTBOX_")
 
-    data_folder: Path = Path("data")
+    data_folder: Path = Path("data").resolve()
 
     @property
     def folders(self) -> list[Path]:

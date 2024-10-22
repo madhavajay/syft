@@ -1,12 +1,12 @@
 import base64
 import hashlib
-import json
 import threading
 from enum import Enum
 from pathlib import Path
 
 import py_fast_rsync
-from pydantic import BaseModel
+from loguru import logger
+from pydantic import BaseModel, model_validator
 
 from syftbox.client.plugins.sync.endpoints import (
     SyftServerError,
@@ -31,132 +31,132 @@ class SyncDecisionType(Enum):
     DELETE = 3
 
 
-def update_local(client: Client, local_metadata: FileMetadata, remote_metadata: FileMetadata):
-    diff = get_diff(client.server_client, local_metadata.path, remote_metadata.signature_bytes)
+def update_local(client: Client, local_syncstate: FileMetadata, remote_syncstate: FileMetadata):
+    diff = get_diff(client.server_client, local_syncstate.path, remote_syncstate.signature_bytes)
 
     diff_bytes = base64.b85decode(diff.diff_bytes)
 
-    new_data = py_fast_rsync.apply(local_metadata.read(), diff_bytes)
+    new_data = py_fast_rsync.apply(local_syncstate.read(), diff_bytes)
     new_hash = hashlib.sha256(new_data).hexdigest()
 
     if new_hash != diff.hash:
         # TODO handle
         raise ValueError("hash mismatch")
 
-    abs_path = client.sync_folder / local_metadata.path
+    abs_path = client.sync_folder / local_syncstate.path
     # TODO implement safe write with tempfile + rename
     abs_path.write_bytes(new_data)
 
 
-def update_remote(client: Client, local_metadata: FileMetadata, remote_metadata: FileMetadata):
-    abs_path = client.sync_folder / local_metadata.path
+def update_remote(client: Client, local_syncstate: FileMetadata, remote_syncstate: FileMetadata):
+    abs_path = client.sync_folder / local_syncstate.path
     local_data = abs_path.read_bytes()
 
-    diff = py_fast_rsync.diff(remote_metadata.signature_bytes, local_data)
-    apply_diff(client.server_client, local_metadata.path, diff, local_metadata.hash)
+    diff = py_fast_rsync.diff(remote_syncstate.signature_bytes, local_data)
+    apply_diff(client.server_client, local_syncstate.path, diff, local_syncstate.hash)
 
 
-def delete_local(client: Client, remote_metadata: FileMetadata):
-    abs_path = client.sync_folder / remote_metadata.path
+def delete_local(client: Client, remote_syncstate: FileMetadata):
+    abs_path = client.sync_folder / remote_syncstate.path
     abs_path.unlink()
 
 
-def delete_remote(client: Client, local_metadata: FileMetadata):
-    delete(client.server_client, local_metadata.path)
+def delete_remote(client: Client, local_syncstate: FileMetadata):
+    delete(client.server_client, local_syncstate.path)
 
 
-def create_local(client: Client, remote_metadata: FileMetadata):
-    abs_path = client.sync_folder / remote_metadata.path
-    content_bytes = download(client.server_client, remote_metadata.path)
+def create_local(client: Client, remote_syncstate: FileMetadata):
+    abs_path = client.sync_folder / remote_syncstate.path
+    content_bytes = download(client.server_client, remote_syncstate.path)
     abs_path.write_bytes(content_bytes)
 
 
-def create_remote(client: Client, local_metadata: FileMetadata):
-    abs_path = client.sync_folder / local_metadata.path
+def create_remote(client: Client, local_syncstate: FileMetadata):
+    abs_path = client.sync_folder / local_syncstate.path
     data = abs_path.read_bytes()
-    create(client.server_client, local_metadata.path, data)
+    create(client.server_client, local_syncstate.path, data)
 
 
 class SyncDecision(BaseModel):
     operation: SyncDecisionType
     side_to_update: SyncSide
-    local_metadata: FileMetadata | None
-    remote_metadata: FileMetadata | None
+    local_syncstate: FileMetadata | None
+    remote_syncstate: FileMetadata | None
 
     def execute(self, client: Client):
-        if self.decision_type == SyncDecisionType.NOOP:
+        if self.operation == SyncDecisionType.NOOP:
             return
 
         to_local = self.side_to_update == SyncSide.LOCAL
         to_remote = self.side_to_update == SyncSide.REMOTE
 
-        if self.decision_type == SyncDecisionType.CREATE and to_remote:
-            create_remote(client, self.local_metadata)
-        elif self.decision_type == SyncDecisionType.CREATE and to_local:
-            create_local(client, self.remote_metadata)
-        elif self.decision_type == SyncDecisionType.DELETE and to_remote:
-            delete_remote(client, self.local_metadata)
-        elif self.decision_type == SyncDecisionType.DELETE and to_local:
-            delete_local(client, self.remote_metadata)
-        elif self.decision_type == SyncDecisionType.MODIFY and to_remote:
-            update_remote(client, self.local_metadata, self.remote_metadata)
-        elif self.decision_type == SyncDecisionType.MODIFY and to_local:
-            update_local(client, self.local_metadata, self.remote_metadata)
+        if self.operation == SyncDecisionType.CREATE and to_remote:
+            create_remote(client, self.local_syncstate)
+        elif self.operation == SyncDecisionType.CREATE and to_local:
+            create_local(client, self.remote_syncstate)
+        elif self.operation == SyncDecisionType.DELETE and to_remote:
+            delete_remote(client, self.local_syncstate)
+        elif self.operation == SyncDecisionType.DELETE and to_local:
+            delete_local(client, self.remote_syncstate)
+        elif self.operation == SyncDecisionType.MODIFY and to_remote:
+            update_remote(client, self.local_syncstate, self.remote_syncstate)
+        elif self.operation == SyncDecisionType.MODIFY and to_local:
+            update_local(client, self.local_syncstate, self.remote_syncstate)
 
     def result_metadata(self):
         if self.side_to_update == SyncSide.REMOTE:
-            return self.local_metadata
+            return self.local_syncstate
         else:
-            return self.remote_metadata
+            return self.remote_syncstate
 
     @classmethod
     def noop(
         cls,
-        local_state: FileMetadata,
-        remote_state: FileMetadata,
+        local_syncstate: FileMetadata,
+        remote_syncstate: FileMetadata,
     ):
         return cls(
-            SyncDecisionType.NOOP,
+            operation=SyncDecisionType.NOOP,
             side_to_update=SyncSide.LOCAL,
-            local_metadata=local_state,
-            remote_state=remote_state,
+            local_syncstate=local_syncstate,
+            remote_syncstate=remote_syncstate,
         )
 
     @classmethod
     def from_modified_states(
         cls,
-        local_state: FileMetadata | None,
-        remote_state: FileMetadata | None,
+        local_syncstate: FileMetadata | None,
+        remote_syncstate: FileMetadata | None,
         side_to_update: SyncSide,
     ):
         """Asssumes at least on of the states is modified"""
 
         delete = (
             side_to_update == SyncSide.REMOTE
-            and local_state is None
+            and local_syncstate is None
             or side_to_update == SyncSide.LOCAL
-            and remote_state is None
+            and remote_syncstate is None
         )
 
         create = (
             side_to_update == SyncSide.REMOTE
-            and remote_state is None
+            and remote_syncstate is None
             or side_to_update == SyncSide.LOCAL
-            and local_state is None
+            and local_syncstate is None
         )
 
         if delete:
-            sync_decision_type = SyncDecisionType.DELETE
+            operation = SyncDecisionType.DELETE
         elif create:
-            sync_decision_type = SyncDecisionType.CREATE
+            operation = SyncDecisionType.CREATE
         else:
-            sync_decision_type = SyncDecisionType.MODIFY
+            operation = SyncDecisionType.MODIFY
 
         return cls(
-            sync_decision_type,
+            operation=operation,
             side_to_update=side_to_update,
-            local_metadata=local_state,
-            remote_state=remote_state,
+            local_syncstate=local_syncstate,
+            remote_syncstate=remote_syncstate,
         )
 
 
@@ -167,19 +167,19 @@ class SyncDecisionTuple(BaseModel):
     @classmethod
     def from_states(
         cls,
-        current_local_state: FileMetadata | None,
-        previous_local_state: FileMetadata | None,
-        current_remote_state: FileMetadata | None,
+        current_local_syncstate: FileMetadata | None,
+        previous_local_syncstate: FileMetadata | None,
+        current_remote_syncstate: FileMetadata | None,
     ):
         def noop() -> SyncDecision:
             return SyncDecision.noop(
-                local_state=current_local_state,
-                remote_state=current_remote_state,
+                local_syncstate=current_local_syncstate,
+                remote_syncstate=current_remote_syncstate,
             )
 
-        local_modified = current_local_state != previous_local_state
-        remote_modified = previous_local_state != current_remote_state
-        in_sync = current_remote_state == current_local_state
+        local_modified = current_local_syncstate != previous_local_syncstate
+        remote_modified = previous_local_syncstate != current_remote_syncstate
+        in_sync = current_remote_syncstate == current_local_syncstate
         conflict = local_modified and remote_modified and not in_sync
 
         if in_sync:
@@ -192,8 +192,8 @@ class SyncDecisionTuple(BaseModel):
             remote_decision = noop()
             # we apply the server state locally
             local_decision = SyncDecision.from_modified_states(
-                local_state=current_local_state,
-                remote_state=current_remote_state,
+                local_syncstate=current_local_syncstate,
+                remote_syncstate=current_remote_syncstate,
                 side_to_update=SyncSide.LOCAL,
             )
             return cls(remote_decision=remote_decision, local_decision=local_decision)
@@ -204,16 +204,16 @@ class SyncDecisionTuple(BaseModel):
                 return cls(
                     local_decision=noop(),
                     remote_decision=SyncDecision.from_modified_states(
-                        local_state=current_local_state,
-                        remote_state=current_remote_state,
+                        local_syncstate=current_local_syncstate,
+                        remote_syncstate=current_remote_syncstate,
                         side_to_update=SyncSide.REMOTE,
                     ),
                 )
             else:
                 return cls(
                     local_decision=SyncDecision.from_modified_states(
-                        local_state=current_local_state,
-                        remote_state=current_remote_state,
+                        local_syncstate=current_local_syncstate,
+                        remote_syncstate=current_remote_syncstate,
                         side_to_update=SyncSide.LOCAL,
                     ),
                     remote_decision=noop(),
@@ -224,8 +224,16 @@ class LocalState(BaseModel):
     path: Path
     states: dict[Path, FileMetadata] = {}
 
+    @model_validator(mode="after")
+    def init_dir(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        return self
+
     def insert(self, path: Path, state: FileMetadata):
-        self.states[path] = state
+        if state is None:
+            self.states.pop(path, None)
+        else:
+            self.states[path] = state
         self.save()
 
     def save(self):
@@ -236,14 +244,15 @@ class LocalState(BaseModel):
         with threading.Lock():
             if self.path.exists():
                 data = self.path.read_text()
-                self.states = {k: FileMetadata(**v) for k, v in json.loads(data).items()}
+                loaded_state = self.model_validate_json(data)
+                self.states = loaded_state.states
 
 
 class SyncConsumer:
     def __init__(self, client: Client, queue: SyncQueue):
         self.client = client
         self.queue = queue
-        self.previous_state = LocalState(path=Path(client.sync_folder) / ".syft" / "local_state.json")
+        self.previous_state = LocalState(path=Path(client.sync_folder) / ".syft" / "local_syncstate.json")
         self.previous_state.load()
 
     def consume_all(self):
@@ -251,31 +260,33 @@ class SyncConsumer:
             item = self.queue.get(timeout=0.1)
             try:
                 self.process_filechange(item)
-            except Exception as e:
-                print(f"Failed to sync file {item.data.path}:\n{e}")
+            except Exception:
+                logger.exception(f"Failed to sync file {item.data.path}")
 
-    def process_filechange(self, item: SyncQueueItem, client) -> None:
+    def process_filechange(self, item: SyncQueueItem) -> None:
         path = item.data.path
-        current_local_state: FileMetadata = self.get_current_local_state(path)
-        previous_local_state = self.get_previous_local_state(path)
+        current_local_syncstate: FileMetadata = self.get_current_local_syncstate(path)
+        previous_local_syncstate = self.get_previous_local_syncstate(path)
         # TODO, rename to remote
         current_server_state = self.get_current_server_state(
-            client,
+            self.client,
         )
 
-        decisions = SyncDecisionTuple.from_states(current_local_state, previous_local_state, current_server_state)
+        decisions = SyncDecisionTuple.from_states(
+            current_local_syncstate, previous_local_syncstate, current_server_state
+        )
 
-        decisions.remote_decision.execute(client)
-        result_state = decisions.local_decision.execute(client)
+        decisions.remote_decision.execute(self.client)
+        result_state = decisions.local_decision.execute(self.client)
         self.previous_state.insert(path, result_state)
 
-    def get_current_local_state(self, path: Path) -> FileMetadata | None:
+    def get_current_local_syncstate(self, path: Path) -> FileMetadata | None:
         abs_path = self.client.sync_folder / path
         if not abs_path.is_file():
             return None
         return hash_file(abs_path, root_dir=self.client.sync_folder)
 
-    def get_previous_local_state(self, path: Path) -> FileMetadata | None:
+    def get_previous_local_syncstate(self, path: Path) -> FileMetadata | None:
         return self.previous_state.states.get(path, None)
 
     def get_current_server_state(self, path: Path) -> FileMetadata | None:

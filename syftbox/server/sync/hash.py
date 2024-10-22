@@ -11,35 +11,39 @@ from py_fast_rsync import signature
 from syftbox.server.sync.models import FileMetadata
 
 
-def hash_file(file_path: Path, root_dir: Path | None = None) -> FileMetadata:
+def hash_file(file_path: Path, root_dir: Path | None = None) -> FileMetadata | None:
     # ignore files larger then 100MB
-    if file_path.stat().st_size > 100_000_000:
-        logger.warning("File too large: %s", file_path)
-        return str(file_path), None
+    try:
+        if file_path.stat().st_size > 100_000_000:
+            logger.warning("File too large: %s", file_path)
+            return str(file_path), None
 
-    with open(file_path, "rb") as f:
-        # not ideal for large files
-        # but py_fast_rsync does not support files yet.
-        # TODO: add support for streaming hashing
-        data = f.read()
+        with open(file_path, "rb") as f:
+            # not ideal for large files
+            # but py_fast_rsync does not support files yet.
+            # TODO: add support for streaming hashing
+            data = f.read()
 
-    if root_dir is None:
-        path = file_path
-    else:
-        path = file_path.relative_to(root_dir)
-    return FileMetadata(
-        path=path,
-        hash=hashlib.sha256(data).hexdigest(),
-        signature=base64.b85encode(signature.calculate(data)),
-        file_size=len(data),
-        last_modified=file_path.stat().st_mtime,
-    )
+        if root_dir is None:
+            path = file_path
+        else:
+            path = file_path.relative_to(root_dir)
+        return FileMetadata(
+            path=path,
+            hash=hashlib.sha256(data).hexdigest(),
+            signature=base64.b85encode(signature.calculate(data)),
+            file_size=len(data),
+            last_modified=file_path.stat().st_mtime,
+        )
+    except Exception:
+        logger.error(f"Failed to hash file {file_path}")
+        return None
 
 
 def hash_files_parallel(files: list[Path], root_dir: Path) -> list[FileMetadata]:
     with ProcessPoolExecutor() as executor:
         results = list(executor.map(partial(hash_file, root_dir=root_dir), files))
-    return results
+    return [r for r in results if r is not None]
 
 
 def hash_files(files: list[Path], root_dir: Path) -> list[FileMetadata]:
