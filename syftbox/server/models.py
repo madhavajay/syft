@@ -1,11 +1,10 @@
 import hashlib
 import os
 from enum import Enum
-from typing import Optional
 
 from loguru import logger
 from pydantic import BaseModel
-from typing_extensions import Self
+from typing_extensions import Optional, Self
 
 
 class SyftBaseModel(BaseModel):

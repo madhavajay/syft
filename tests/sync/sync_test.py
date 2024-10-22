@@ -11,12 +11,12 @@ import time
 from collections.abc import Generator
 from functools import partial
 from pathlib import Path
-from typing import Mapping, Union
 
 import faker
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from typing_extensions import Mapping, Union
 
 from syftbox.client.plugins.create_datasite import run as run_create_datasite_plugin
 from syftbox.client.plugins.init import run as run_init_plugin

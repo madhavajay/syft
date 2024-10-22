@@ -6,11 +6,10 @@ import threading
 import time
 from datetime import datetime
 from types import SimpleNamespace
-from typing import Optional, Union
 
 from croniter import croniter
 from loguru import logger
-from typing_extensions import Any
+from typing_extensions import Any, Optional, Union
 
 from syftbox.lib import (
     SyftPermission,

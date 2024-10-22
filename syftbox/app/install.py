@@ -8,9 +8,8 @@ import subprocess
 from pathlib import Path
 from tempfile import mkdtemp
 from types import SimpleNamespace
-from typing import Optional
 
-from typing_extensions import Any, Tuple
+from typing_extensions import Any, Optional, Tuple
 
 from syftbox.lib.lib import ClientConfig
 

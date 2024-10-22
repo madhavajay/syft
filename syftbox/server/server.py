@@ -8,7 +8,6 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Union
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -21,7 +20,7 @@ from fastapi.responses import (
 )
 from jinja2 import Template
 from loguru import logger
-from typing_extensions import Any, Optional
+from typing_extensions import Any, Optional, Union
 
 from syftbox.__version__ import __version__
 from syftbox.lib import (

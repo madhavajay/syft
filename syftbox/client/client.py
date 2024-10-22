@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from pathlib import Path
-from typing import Optional
 
 import uvicorn
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -28,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from loguru import logger
 from pydantic import BaseModel
-from typing_extensions import Any
+from typing_extensions import Any, Optional
 
 from syftbox import __version__
 from syftbox.client.utils.error_reporting import make_error_report
