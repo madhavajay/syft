@@ -93,6 +93,11 @@ def test_get_remote_state(client: TestClient):
         assert m.path.parent == Path(TEST_DATASITE_NAME)
 
 
+def test_get_remote_state_perms(client: TestClient):
+    metadata = get_remote_state(client, "random@user.com", Path(TEST_DATASITE_NAME))
+    assert not metadata
+
+
 def test_get_metadata(client: TestClient):
     metadata = get_metadata(client, Path(TEST_DATASITE_NAME) / TEST_FILE)
     assert metadata.path == Path(TEST_DATASITE_NAME) / TEST_FILE
