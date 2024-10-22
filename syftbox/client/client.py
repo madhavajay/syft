@@ -29,11 +29,6 @@ from pydantic import BaseModel
 from typing_extensions import Any
 
 from syftbox import __version__
-from syftbox.client.fsevents import (
-    AnyFileSystemEventHandler,
-    FileSystemEvent,
-    FSWatchdog,
-)
 from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils.error_reporting import make_error_report
 from syftbox.lib import (
@@ -100,7 +95,7 @@ def load_plugins(client_config: ClientConfig) -> dict[str, Plugin]:
     loaded_plugins = {}
     if os.path.exists(PLUGINS_DIR) and os.path.isdir(PLUGINS_DIR):
         for item in os.listdir(PLUGINS_DIR):
-            if item.endswith(".py") and not item.startswith("__"):
+            if item.endswith(".py") and not item.startswith("__") and "sync" not in item:
                 plugin_name = item[:-3]
                 try:
                     module = importlib.import_module(f"plugins.{plugin_name}")
@@ -176,6 +171,9 @@ def run_plugin(plugin_name, *args, **kwargs):
 
 
 def start_plugin(app: CustomFastAPI, plugin_name: str):
+    if "sync" in plugin_name:
+        return
+
     if plugin_name not in app.loaded_plugins:
         raise HTTPException(
             status_code=400,
@@ -243,22 +241,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def start_watchdog(app) -> FSWatchdog:
-    def sync_on_event(event: FileSystemEvent):
-        run_plugin("sync", event)
-
-    watch_dir = Path(app.shared_state.client_config.sync_folder)
-    watch_dir.mkdir(parents=True, exist_ok=True)
-    event_handler = AnyFileSystemEventHandler(
-        watch_dir,
-        callbacks=[sync_on_event],
-        ignored=WATCHDOG_IGNORE,
-    )
-    watchdog = FSWatchdog(watch_dir, event_handler)
-    watchdog.start()
-    return watchdog
-
-
 @contextlib.asynccontextmanager
 async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None):
     # Startup
@@ -292,7 +274,6 @@ async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None
     app.running_plugins = {}
     app.loaded_plugins = load_plugins(client_config)
     logger.info("> Loaded plugins:", sorted(list(app.loaded_plugins.keys())))
-    # app.watchdog = start_watchdog(app)
 
     logger.info("> Starting autorun plugins:", sorted(client_config.autorun_plugins))
     for plugin in client_config.autorun_plugins:
@@ -304,7 +285,6 @@ async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None
 
     logger.info("> Shutting down...")
     scheduler.shutdown()
-    # app.watchdog.stop()
     if close_client_config:
         client_config.close()
 
