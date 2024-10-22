@@ -4,9 +4,10 @@ import tempfile
 from pathlib import Path
 
 import py_fast_rsync
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
+from syftbox.lib.lib import PermissionTree, filter_metadata
 from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.sync.db import (
     delete_file_metadata,
@@ -78,12 +79,23 @@ def dir_state(
     dir: Path,
     conn: sqlite3.Connection = Depends(get_db_connection),
     server_settings: ServerSettings = Depends(get_server_settings),
+    email: str = Header(),
 ) -> list[FileMetadata]:
     if dir.is_absolute():
         raise HTTPException(status_code=400, detail="dir must be relative")
 
-    result = get_all_metadata(conn, path_like=f"{dir.as_posix()}%")
-    return result
+    metadata = get_all_metadata(conn, path_like=f"{dir.as_posix()}%")
+    full_path = server_settings.snapshot_folder / dir
+    # get the top level perm file
+    try:
+        perm_tree = PermissionTree.from_path(full_path, raise_on_corrupted_files=True)
+    except Exception as e:
+        print(f"Failed to parse permission tree: {dir}")
+        raise e
+
+    # filter the read state for this user by the perm tree
+    filtered_metadata = filter_metadata(email, metadata, perm_tree, server_settings.snapshot_folder)
+    return filtered_metadata
 
 
 @router.post("/get_metadata", response_model=list[FileMetadata])
