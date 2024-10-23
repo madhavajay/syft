@@ -135,7 +135,7 @@ async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
     logger.info(f"> Collecting Files from {settings.snapshot_folder.absolute()}")
     files = hash.collect_files(settings.snapshot_folder.absolute())
     logger.info("> Hashing files")
-    metadata = hash.hash_files_parallel(files, settings.snapshot_folder)
+    metadata = hash.hash_files(files, settings.snapshot_folder)
     logger.info(f"> Updating file hashes at {settings.file_db_path.absolute()}")
     con = db.get_db(settings.file_db_path.absolute())
     cur = con.cursor()
