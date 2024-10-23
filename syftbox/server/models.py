@@ -41,7 +41,7 @@ class FileChange(SyftBaseModel):
     sub_path: str
     file_hash: str
     last_modified: float
-    sync_folder: str | None = None
+    sync_folder: Optional[str] = None
 
     @property
     def kind_write(self) -> bool:
@@ -79,7 +79,7 @@ class FileChange(SyftBaseModel):
     def is_directory(self) -> bool:
         return os.path.isdir(self.full_path)
 
-    def read(self) -> bytes | None:
+    def read(self) -> Optional[bytes]:
         # if is_symlink(self.full_path):
         #     # write a text file with a syftlink
         #     data = convert_to_symlink(self.full_path).encode("utf-8")

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import Request
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing_extensions import Self
+from typing_extensions import Self, Union
 
 
 class ServerSettings(BaseSettings):
@@ -33,7 +33,7 @@ class ServerSettings(BaseSettings):
         return self.data_folder / "users.json"
 
     @classmethod
-    def from_data_folder(cls, data_folder: Path | str) -> Self:
+    def from_data_folder(cls, data_folder: Union[Path, str]) -> Self:
         data_folder = Path(data_folder)
         return cls(
             data_folder=data_folder,

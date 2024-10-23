@@ -3,10 +3,13 @@ import os
 import shutil
 import subprocess
 import threading
+import time
+from datetime import datetime
 from types import SimpleNamespace
 
+from croniter import croniter
 from loguru import logger
-from typing_extensions import Any
+from typing_extensions import Any, Optional, Union
 
 from syftbox.lib import (
     SyftPermission,
@@ -80,7 +83,7 @@ def copy_default_apps(apps_path):
             logger.info(f"Copied default app: {app}")
 
 
-def dict_to_namespace(data) -> SimpleNamespace | list | Any:
+def dict_to_namespace(data) -> Union[SimpleNamespace, list, Any]:
     if isinstance(data, dict):
         return SimpleNamespace(
             **{key: dict_to_namespace(value) for key, value in data.items()}
@@ -91,7 +94,7 @@ def dict_to_namespace(data) -> SimpleNamespace | list | Any:
         return data
 
 
-def load_config(path: str) -> None | SimpleNamespace:
+def load_config(path: str) -> Optional[SimpleNamespace]:
     try:
         with open(path, "r") as f:
             data = json.load(f)
@@ -147,27 +150,59 @@ def output_published(app_output, published_output) -> bool:
 
 
 def run_custom_app_config(client_config, app_config, path):
-    import time
-
-    env = os.environ.copy()  # Copy the current environment
+    env = os.environ.copy()
     app_name = os.path.basename(path)
 
+    # Update environment with any custom variables in app_config
     app_envs = getattr(app_config.app, "env", {})
     if not isinstance(app_envs, dict):
         app_envs = vars(app_envs)
-
     env.update(app_envs)
-    while True:
-        logger.info(f"👟 Running {app_name}")
-        _ = subprocess.run(
-            app_config.app.run.command,
-            cwd=path,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
+
+    # Retrieve the cron-style schedule from app_config
+    cron_iter = None
+    interval = None
+    cron_schedule = getattr(app_config.app.run, "schedule", None)
+    if cron_schedule is not None:
+        base_time = datetime.now()
+        cron_iter = croniter(cron_schedule, base_time)
+    elif getattr(app_config.app.run, "interval", None) is not None:
+        interval = app_config.app.run.interval
+    else:
+        raise Exception(
+            "There's no schedule configuration. Please add schedule or interval in your app config.json"
         )
-        time.sleep(int(app_config.app.run.interval))
+
+    while True:
+        current_time = datetime.now()
+        logger.info(
+            f"👟 Running {app_name} at scheduled time {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        try:
+            result = subprocess.run(
+                app_config.app.run.command,
+                cwd=path,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            logger.info(result.stdout)
+            logger.error(result.stderr)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error running {app_name}: {e}")
+            logger.error(e.stderr)
+
+        if cron_iter is not None:
+            # Schedule the next exection
+            next_execution = cron_iter.get_next(datetime)
+            time_to_wait = int((next_execution - current_time).total_seconds())
+            logger.info(
+                f"⏲ Waiting for scheduled time. Current time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}, Next execution: {next_execution.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        else:
+            time_to_wait = int(interval)
+        time.sleep(time_to_wait)
 
 
 def run_app(client_config, path):

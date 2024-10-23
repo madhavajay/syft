@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import mkdtemp
 from types import SimpleNamespace
 
-from typing_extensions import Any, Tuple
+from typing_extensions import Any, Optional, Tuple
 
 from syftbox.lib.lib import ClientConfig
 
@@ -449,7 +449,7 @@ def run_pre_install(app_config: SimpleNamespace):
     )
 
 
-def run_post_install(app_config: SimpleNamespace):
+def run_post_install(app_config: SimpleNamespace, app_path: str):
     """
     Runs post-installation commands specified in the application configuration.
 
@@ -480,10 +480,9 @@ def run_post_install(app_config: SimpleNamespace):
 
     subprocess.run(
         app_config.app.post_install,
+        cwd=app_path,
         check=True,
         text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
     )
 
 
@@ -630,7 +629,7 @@ def update_app_config_file(app_path: str, sanitized_git_path: str, app_config) -
         json.dump(app_json_config, json_file, indent=4)
 
 
-def check_app_config(tmp_clone_path) -> SimpleNamespace | None:
+def check_app_config(tmp_clone_path) -> Optional[SimpleNamespace]:
     try:
         app_config_path = Path(tmp_clone_path) / "config.json"
         if os.path.exists(app_config_path):
@@ -650,7 +649,7 @@ def check_app_config(tmp_clone_path) -> SimpleNamespace | None:
     return None
 
 
-def install(client_config: ClientConfig) -> None | Tuple[str, Exception]:
+def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
     """
     Installs an application by cloning the repository, checking compatibility, and running installation scripts.
 
@@ -760,7 +759,7 @@ def install(client_config: ClientConfig) -> None | Tuple[str, Exception]:
         # Handles: Exceptions from post-install command execution
         if app_config:
             step = "Running post-install commands"
-            run_post_install(app_config)
+            run_post_install(app_config, app_config_path)
 
         # NOTE:
         # Updates the apps.json file

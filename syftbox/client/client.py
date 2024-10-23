@@ -4,6 +4,7 @@ import contextlib
 import importlib
 import os
 import platform
+import subprocess
 import sys
 import time
 import types
@@ -26,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from loguru import logger
 from pydantic import BaseModel
-from typing_extensions import Any
+from typing_extensions import Any, Optional
 
 from syftbox import __version__
 from syftbox.client.plugins.sync.manager import SyncManager
@@ -74,6 +75,22 @@ class Plugin:
     module: types.ModuleType
     schedule: int
     description: str
+
+
+def open_sync_folder(folder_path):
+    """Open the folder specified by `folder_path` in the default file explorer."""
+    logger.info(f"Opening your sync folder: {folder_path}")
+    try:
+        if platform.system() == "Darwin":  # macOS
+            subprocess.run(["open", folder_path])
+        elif platform.system() == "Windows":  # Windows
+            subprocess.run(["explorer", folder_path])
+        elif platform.system() == "Linux":  # Linux
+            subprocess.run(["xdg-open", folder_path])
+        else:
+            logger.warning(f"Unsupported OS for opening folders: {platform.system()}")
+    except Exception as e:
+        logger.error(f"Failed to open folder {folder_path}: {e}")
 
 
 def process_folder_input(user_input, default_path):
@@ -220,6 +237,9 @@ def parse_args():
         description="Run the web application with plugins.",
     )
     parser.add_argument("--config_path", type=str, default=DEFAULT_CONFIG_PATH, help="config path")
+
+    parser.add_argument("--debug", action="store_true", help="debug mode")
+
     parser.add_argument("--sync_folder", type=str, help="sync folder path")
     parser.add_argument("--email", type=str, help="email")
     parser.add_argument("--port", type=int, default=8080, help="Port number")
@@ -242,9 +262,13 @@ def parse_args():
 
 
 @contextlib.asynccontextmanager
-async def lifespan(app: CustomFastAPI, client_config: ClientConfig | None = None):
+async def lifespan(app: CustomFastAPI, client_config: Optional[ClientConfig] = None):
     # Startup
     logger.info(f"> Starting SyftBox Client: {__version__} Python {platform.python_version()}")
+
+    config_path = os.environ.get("SYFTBOX_CLIENT_CONFIG_PATH")
+    if config_path:
+        client_config = ClientConfig.load(config_path)
 
     # client_config needs to be closed if it was created in this context
     # if it is passed as lifespan arg (eg for testing) it should be managed by the caller instead.
@@ -464,6 +488,7 @@ def get_syftbox_src_path():
 def main() -> None:
     args = parse_args()
     client_config = load_or_create_config(args)
+    open_sync_folder(client_config.sync_folder)
     error_config = make_error_report(client_config)
 
     if args.command == "report":
@@ -481,7 +506,7 @@ def main() -> None:
     logger.info("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
     logger.info("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
 
-    debug = True
+    debug = True if args.debug else False
     port = client_config.port
     max_attempts = 10  # Maximum number of port attempts
 

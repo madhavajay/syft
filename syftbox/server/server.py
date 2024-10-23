@@ -21,7 +21,7 @@ from fastapi.responses import (
 )
 from jinja2 import Template
 from loguru import logger
-from typing_extensions import Any, Optional
+from typing_extensions import Any, Optional, Union
 
 from syftbox.__version__ import __version__
 from syftbox.lib import (
@@ -116,7 +116,7 @@ def create_folders(folders: list[str]) -> None:
 
 
 @contextlib.asynccontextmanager
-async def lifespan(app: FastAPI, settings: ServerSettings | None = None):
+async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
     # Startup
     logger.info(f"> Starting SyftBox Server {__version__}. Python {platform.python_version()}")
     if settings is None:
@@ -196,7 +196,7 @@ async def get_wheel(path: str):
     return filename
 
 
-def get_file_list(directory: str | Path = ".") -> list[dict[str, Any]]:
+def get_file_list(directory: Union[str, Path] = ".") -> list[dict[str, Any]]:
     # TODO rewrite with pathlib
     directory = str(directory)
 
