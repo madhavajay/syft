@@ -221,12 +221,11 @@ def clone_repository(sanitized_git_path: str) -> str:
             ["git", "clone", repo_url, temp_clone_path],
             check=True,
             text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
         )
         return temp_clone_path
     except subprocess.CalledProcessError as e:
-        raise e
+        raise RuntimeError(e.stderr)
 
 
 def dict_to_namespace(data: Any) -> Any:
@@ -411,13 +410,14 @@ def move_repository_to_syftbox(
     return output_path
 
 
-def run_pre_install(app_config: SimpleNamespace):
+def run_pre_install(app_config: SimpleNamespace, app_path: str):
     """
     Runs pre-installation commands specified in the application configuration.
 
     Args:
         app_config (SimpleNamespace): The configuration object for the application, which is expected to have an `app`
                                       attribute with a `pre_install` attribute containing a list of commands to run.
+        app_path (string): The file path to the app folder.
 
     Returns:
         None: This function does not return any value.
@@ -440,13 +440,16 @@ def run_pre_install(app_config: SimpleNamespace):
     if len(getattr(app_config.app, "pre_install", [])) == 0:
         return
 
-    subprocess.run(
-        app_config.app.pre_install,
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    try:
+        subprocess.run(
+            app_config.app.pre_install,
+            cwd=app_path,
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(e.stderr)
 
 
 def run_post_install(app_config: SimpleNamespace, app_path: str):
@@ -478,12 +481,16 @@ def run_post_install(app_config: SimpleNamespace, app_path: str):
     if len(getattr(app_config.app, "post_install", [])) == 0:
         return
 
-    subprocess.run(
-        app_config.app.post_install,
-        cwd=app_path,
-        check=True,
-        text=True,
-    )
+    try:
+        subprocess.run(
+            app_config.app.post_install,
+            cwd=app_path,
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(e.stderr)
 
 
 def check_os_compatibility(app_config) -> None:
@@ -570,7 +577,7 @@ def get_current_commit(app_path: str) -> str:
         )
         return commit_hash
     except subprocess.CalledProcessError as e:
-        return f"Error: {e.output.decode('utf-8')}"
+        return "local"
 
 
 def update_app_config_file(app_path: str, sanitized_git_path: str, app_config) -> None:
@@ -612,17 +619,24 @@ def update_app_config_file(app_path: str, sanitized_git_path: str, app_config) -
 
     app_json_path = conf_path + "/app.json"
     app_json_config = {}
+
     if os.path.exists(app_json_path):
         # Read from it.
-        app_json_config = vars(load_config(app_json_path))
+        with open(app_json_path, "r") as app_json_file:
+            app_json_config = json.load(app_json_file)
 
     app_version = None
     if getattr(app_config.app, "version", None) is not None:
         app_version = app_config.app.version
 
+    current_commit = get_current_commit(normalized_app_path)
+    if current_commit == "local":
+        app_version = "dev"
+
     app_json_config[sanitized_git_path] = {
-        "commit": get_current_commit(normalized_app_path),
+        "commit": current_commit,
         "version": app_version,
+        "path": app_path,
     }
 
     with open(app_json_path, "w") as json_file:
@@ -702,6 +716,7 @@ def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
         # Returns: Sanitized repository path.
         step = "Checking app name"
 
+        sanitized_path = args.repository
         if not os.path.exists(args.repository):
             sanitized_path = sanitize_git_path(args.repository)
 
@@ -752,7 +767,7 @@ def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
         # Handles: Exceptions from pre-install command execution
         if app_config:
             step = "Running pre-install commands"
-            run_pre_install(app_config)
+            run_pre_install(app_config, app_config_path)
 
         # NOTE:
         # Executes config.json post-install command list
