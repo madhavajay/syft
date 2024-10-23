@@ -16,7 +16,7 @@ from syftbox.client.plugins.sync.endpoints import (
     get_remote_state,
 )
 from syftbox.server.sync.models import DiffResponse
-from tests.server.conftest import TEST_DATASITE_NAME, TEST_FILE
+from tests.unit.server.conftest import TEST_DATASITE_NAME, TEST_FILE
 
 
 def test_get_all_permissions(client: TestClient):
