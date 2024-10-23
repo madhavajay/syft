@@ -206,8 +206,7 @@ ssh keyfile remote="user@0.0.0.0":
 # remove all local files & directories
 [group('utils')]
 reset:
-    # 'users' is the old directory
-    rm -rf ./users ./.clients ./data ./dist *.whl
+    rm -rf ./.clients ./data ./dist ./.e2e
 
 [group('utils')]
 run-jupyter jupyter_args="":
