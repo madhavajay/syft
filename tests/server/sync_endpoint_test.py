@@ -52,6 +52,18 @@ def test_get_diff_2(client: TestClient):
     assert file_server_contents == probably_remote_data
 
 
+def file_digest(file_path, algorithm="sha256"):
+    # because this doesnt work in python <=3.10, we implement it manually
+    hash_func = hashlib.new(algorithm)
+
+    with open(file_path, "rb") as file:
+        # Read the file in chunks to handle large files efficiently
+        for chunk in iter(lambda: file.read(4096), b""):
+            hash_func.update(chunk)
+
+    return hash_func.hexdigest()
+
+
 def test_syft_client_push_flow(client: TestClient):
     response = client.post(
         "/sync/get_metadata",
@@ -81,8 +93,7 @@ def test_syft_client_push_flow(client: TestClient):
 
     result = response.json()
     snapshot_folder = client.app_state["server_settings"].snapshot_folder
-    with open(f"{snapshot_folder}/{TEST_DATASITE_NAME}/{TEST_FILE}", "rb") as f:
-        sha256local = hashlib.file_digest(f, "sha256").hexdigest()
+    sha256local = file_digest(f"{snapshot_folder}/{TEST_DATASITE_NAME}/{TEST_FILE}", "sha256")
     assert result["current_hash"] == expected_hash == sha256local
 
 
