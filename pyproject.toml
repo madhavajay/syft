@@ -56,9 +56,6 @@ dev-dependencies = [
     "pytest>=8.3.3",
 ]
 
-[tool.uv.sources]
-py-fast-rsync = { git = "https://github.com/OpenMined/py_fast_rsync.git", rev = "main" }
-
 [tool.setuptools]
 packages = { find = {} }    # Use the find directive as a table
 include-package-data = true # Include package data
