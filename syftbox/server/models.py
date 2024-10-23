@@ -1,10 +1,11 @@
 import hashlib
 import os
 from enum import Enum
+from pathlib import Path
 
 from loguru import logger
 from pydantic import BaseModel
-from typing_extensions import Optional, Self
+from typing_extensions import Optional, Self, Union
 
 
 class SyftBaseModel(BaseModel):
@@ -12,7 +13,9 @@ class SyftBaseModel(BaseModel):
         # used until we remote Jsonable from the code base
         return self.model_dump(mode="json")
 
-    def save(self, path: str) -> bool:
+    def save(self, path: Union[str, Path]) -> dict:
+        if isinstance(path, Path):
+            path = str(path)
         with open(path, "w") as f:
             f.write(self.model_dump_json())
         return self.model_dump(mode="json")
@@ -174,6 +177,7 @@ class ReadRequest(BaseModel):
 class FileInfo(SyftBaseModel):
     file_hash: str
     last_modified: float
+    num_bytes: int
 
 
 class DirState(SyftBaseModel):
@@ -196,6 +200,10 @@ class DirStateResponse(SyftBaseModel):
 
 def get_file_last_modified(file_path: str) -> float:
     return os.path.getmtime(file_path)
+
+
+def get_file_size(file_path: str) -> int:
+    return os.path.getsize(file_path)
 
 
 def get_file_hash(file_path: str) -> str:

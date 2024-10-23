@@ -16,9 +16,7 @@ class ErrorReport(BaseModel):
     client_syftbox_version: str = __version__
     python_version: str = sys.version
     platform: str = platform()
-    timestamp: datetime.datetime = Field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
+    timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     @classmethod
     def from_client_config(cls, client_config: ClientConfig):
