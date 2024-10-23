@@ -247,3 +247,8 @@ def test_delete_file(server_client: TestClient, datasite_1: Client, datasite_2: 
 
     sync_service_2.run_single_thread()
     assert (datasite_2.datasite_path / datasite_1.email / "folder1" / "file.txt").exists() is False
+
+    # Check if the metadata is gone
+    remote_state_1 = sync_service_1.get_datasites()[0].get_remote_state()
+    remote_paths = {metadata.path for metadata in remote_state_1}
+    assert Path(datasite_1.email) / "folder1" / "file.txt" not in remote_paths
