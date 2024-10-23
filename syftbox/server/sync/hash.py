@@ -48,7 +48,8 @@ def hash_files_parallel(files: list[Path], root_dir: Path) -> list[FileMetadata]
 
 
 def hash_files(files: list[Path], root_dir: Path) -> list[FileMetadata]:
-    return [hash_file(file, root_dir) for file in files]
+    result = [hash_file(file, root_dir) for file in files]
+    return [r for r in result if r is not None]
 
 
 def hash_dir(dir: Path, root_dir: Path) -> list[FileMetadata]:
@@ -59,7 +60,7 @@ def hash_dir(dir: Path, root_dir: Path) -> list[FileMetadata]:
     returned Paths are relative to root_dir.
     """
     files = collect_files(dir)
-    return hash_files_parallel(files, root_dir)
+    return hash_files(files, root_dir)
 
 
 def collect_files(dir: Union[Path, str], pattern: Union[str, re.Pattern, None] = None) -> list[Path]:
