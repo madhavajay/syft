@@ -90,10 +90,10 @@ do_e2e() {
     start_client user2 8081
 
     echo Kickstarting ring
-    ring_init user1 user2 & pids+=($!)
+    ring_init user1 user2
 
-    # Will kill after 5mins
-    sleep 280 # kill after 5 minutes
+    # expect to finish within the timeframe
+    sleep 120
 }
 
 trap cleanup SIGINT EXIT TERM
