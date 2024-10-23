@@ -1,10 +1,9 @@
 from pathlib import Path
 
-from syftbox.client.plugins.sync.constants import IGNORE_FILENAME
 from syftbox.client.plugins.sync.sync import DatasiteState
 from syftbox.client.utils.dir_tree import create_dir_tree
 from syftbox.client.utils.display import display_file_tree
-from syftbox.lib.ignore import filter_ignored_paths
+from syftbox.lib.ignore import IGNORE_FILENAME, filter_ignored_paths
 from syftbox.lib.lib import Client
 
 ignore_file = """
