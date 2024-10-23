@@ -5,7 +5,7 @@ from pathlib import Path
 
 from loguru import logger
 from pydantic import BaseModel
-from typing_extensions import Optional, Self
+from typing_extensions import Optional, Self, Union
 
 
 class SyftBaseModel(BaseModel):
@@ -13,7 +13,7 @@ class SyftBaseModel(BaseModel):
         # used until we remote Jsonable from the code base
         return self.model_dump(mode="json")
 
-    def save(self, path: str | Path) -> dict:
+    def save(self, path: Union[str, Path]) -> dict:
         if isinstance(path, Path):
             path = str(path)
         with open(path, "w") as f:

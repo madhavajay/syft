@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Optional, Union
 
 from loguru import logger
 
@@ -13,7 +14,7 @@ from syftbox.server.sync.hash import hash_dir
 from syftbox.server.sync.models import FileMetadata
 
 
-def is_permission_file(path: Path | str, check_exists: bool = False) -> bool:
+def is_permission_file(path: Union[Path, str], check_exists: bool = False) -> bool:
     path = Path(path)
     if check_exists and not path.is_file():
         return False
@@ -129,9 +130,9 @@ def split_permissions(
 
 def compare_fileinfo(
     path: Path,
-    local_info: FileMetadata | None,
-    remote_info: FileMetadata | None,
-) -> FileChangeInfo | None:
+    local_info: Optional[FileMetadata],
+    remote_info: Optional[FileMetadata],
+) -> Optional[FileChangeInfo]:
     if local_info is None and remote_info is None:
         return
 

@@ -1,13 +1,14 @@
 import threading
 from dataclasses import dataclass
 from queue import PriorityQueue
+from typing import Optional
 
 from syftbox.client.plugins.sync.sync import FileChangeInfo
 
 
 @dataclass(order=True)
 class SyncQueueItem:
-    priority: int | float
+    priority: int
     data: FileChangeInfo
 
 
@@ -25,15 +26,13 @@ class SyncQueue:
         # Lock is required to make put/get atomic when threading is used
         self.lock = threading.Lock()
 
-    def put(
-        self, item: SyncQueueItem, block: bool = False, timeout: float | None = None
-    ) -> None:
+    def put(self, item: SyncQueueItem, block: bool = False, timeout: Optional[float] = None) -> None:
         with self.lock:
             if item.data not in self.dedupe_set:
                 self.queue.put(item, block=block, timeout=timeout)
                 self.dedupe_set.add(item.data)
 
-    def get(self, block: bool = False, timeout: float | None = None) -> SyncQueueItem:
+    def get(self, block: bool = False, timeout: Optional[float] = None) -> SyncQueueItem:
         with self.lock:
             item: SyncQueueItem = self.queue.get(block=block, timeout=timeout)
             self.dedupe_set.discard(item.data)

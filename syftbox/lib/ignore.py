@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import pathspec
 from loguru import logger
@@ -48,7 +49,7 @@ def create_default_ignore_file(client: Client) -> None:
         ignore_file.write_text(DEFAULT_IGNORE)
 
 
-def get_ignore_rules(client: Client) -> pathspec.PathSpec | None:
+def get_ignore_rules(client: Client) -> Optional[pathspec.PathSpec]:
     ignore_file = Path(client.sync_folder) / IGNORE_FILENAME
     if ignore_file.is_file():
         with open(ignore_file) as f:

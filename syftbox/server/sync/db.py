@@ -3,6 +3,7 @@ import shutil
 import sqlite3
 import tempfile
 from pathlib import Path
+from typing import Optional
 
 from loguru import logger
 
@@ -61,7 +62,7 @@ def delete_file_metadata(conn: sqlite3.Connection, path: str):
         raise ValueError(f"Failed to delete metadata for {path}.")
 
 
-def get_all_metadata(conn: sqlite3.Connection, path_like: str | None = None) -> list[FileMetadata]:
+def get_all_metadata(conn: sqlite3.Connection, path_like: Optional[str] = None) -> list[FileMetadata]:
     query = "SELECT * FROM file_metadata"
     params = ()
 

@@ -2,6 +2,7 @@ import hashlib
 import threading
 from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 import py_fast_rsync
 from loguru import logger
@@ -80,8 +81,8 @@ def create_remote(client: Client, local_syncstate: FileMetadata):
 class SyncDecision(BaseModel):
     operation: SyncDecisionType
     side_to_update: SyncSide
-    local_syncstate: FileMetadata | None
-    remote_syncstate: FileMetadata | None
+    local_syncstate: Optional[FileMetadata]
+    remote_syncstate: Optional[FileMetadata]
 
     def execute(self, client: Client):
         if self.operation == SyncDecisionType.NOOP:
@@ -119,8 +120,8 @@ class SyncDecision(BaseModel):
     @classmethod
     def from_modified_states(
         cls,
-        local_syncstate: FileMetadata | None,
-        remote_syncstate: FileMetadata | None,
+        local_syncstate: Optional[FileMetadata],
+        remote_syncstate: Optional[FileMetadata],
         side_to_update: SyncSide,
     ):
         """Asssumes at least on of the states is modified"""
@@ -168,9 +169,9 @@ class SyncDecisionTuple(BaseModel):
     @classmethod
     def from_states(
         cls,
-        current_local_syncstate: FileMetadata | None,
-        previous_local_syncstate: FileMetadata | None,
-        current_remote_syncstate: FileMetadata | None,
+        current_local_syncstate: Optional[FileMetadata],
+        previous_local_syncstate: Optional[FileMetadata],
+        current_remote_syncstate: Optional[FileMetadata],
     ):
         def noop() -> SyncDecision:
             return SyncDecision.noop(
@@ -299,16 +300,16 @@ class SyncConsumer:
         )
         self.process_decision(item.data.path, decisions)
 
-    def get_current_local_syncstate(self, path: Path) -> FileMetadata | None:
+    def get_current_local_syncstate(self, path: Path) -> Optional[FileMetadata]:
         abs_path = self.client.sync_folder / path
         if not abs_path.is_file():
             return None
         return hash_file(abs_path, root_dir=self.client.sync_folder)
 
-    def get_previous_local_syncstate(self, path: Path) -> FileMetadata | None:
+    def get_previous_local_syncstate(self, path: Path) -> Optional[FileMetadata]:
         return self.previous_state.states.get(path, None)
 
-    def get_current_server_state(self, path: Path) -> FileMetadata | None:
+    def get_current_server_state(self, path: Path) -> Optional[FileMetadata]:
         try:
             return get_metadata(self.client.server_client, path)
         except SyftServerError:

@@ -1,11 +1,11 @@
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Union
 
 from loguru import logger
 
 from syftbox.lib.lib import SyftPermission
 
-DirTree = Mapping[str, "str | DirTree"]
+DirTree = Mapping[str, "Union[str, DirTree]"]
 
 
 def create_dir_tree(base_path: Path, tree: DirTree) -> None:
