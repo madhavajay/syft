@@ -147,18 +147,16 @@ def is_repo_accessible(repo_url: str) -> bool:
         This will return `True` if the repository is accessible, or `False` if it is not.
     """
     try:
+        env = os.environ.copy()
+        env["GIT_TERMINAL_PROMPT"] = "0"
         subprocess.run(
             ["git", "ls-remote", repo_url],
             check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            timeout=2,
+            env=env,
+            capture_output=True,
         )
         return True
     except subprocess.CalledProcessError:
-        return False
-    except subprocess.TimeoutExpired:
         return False
 
 
@@ -203,12 +201,12 @@ def clone_repository(sanitized_git_path: str) -> str:
             "git cli isn't installed. Please, follow the instructions"
             + " to install git according to your OS. (eg. brew install git)"
         )
-
     repo_url = f"https://github.com/{sanitized_git_path}.git"
     if not is_repo_accessible(repo_url):
         raise ValueError(
             "The provided repository path doesn't seems to be accessible. Please check it out."
         )
+
     # Clone repository in /tmp
     tmp_path = mkdtemp(prefix="syftbox_app_")
     temp_clone_path = Path(tmp_path, sanitized_git_path.split("/")[-1])
