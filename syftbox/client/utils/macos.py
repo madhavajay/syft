@@ -1,6 +1,7 @@
 import subprocess
 from pathlib import Path
-from typing import Optional
+
+from typing_extensions import Optional
 
 ASSETS_FOLDER = Path(__file__).parents[2] / "assets"
 ICONS_PKG = ASSETS_FOLDER / "icon.zip"

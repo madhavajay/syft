@@ -1,7 +1,6 @@
 from pathlib import Path
-from typing import Callable
 
-from typing_extensions import TypeAlias
+from typing_extensions import Callable, TypeAlias
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 

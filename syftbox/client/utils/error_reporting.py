@@ -1,10 +1,10 @@
 import datetime
 import sys
 from platform import platform
-from typing import Optional
 
 import requests
 from pydantic import BaseModel, Field
+from typing_extensions import Optional
 
 from syftbox.__version__ import __version__
 from syftbox.lib.lib import ClientConfig

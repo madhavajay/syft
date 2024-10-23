@@ -53,7 +53,7 @@
 # [tool.uv.sources]
 # syftbox = { path = "/Users/madhavajay/dev/syft", editable = true }
 # ///
-from typing import Optional
+from typing_extensions import Optional
 
 __name__ = "netflix_stats"
 __author__ = "madhava@openmined.org"

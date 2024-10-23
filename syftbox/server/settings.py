@@ -1,9 +1,8 @@
 from pathlib import Path
-from typing import Union
 
 from fastapi import Request
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing_extensions import Self
+from typing_extensions import Self, Union
 
 
 class ServerSettings(BaseSettings):

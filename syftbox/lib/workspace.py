@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import Union
+
+from typing_extensions import Union
 
 DEFAULT_WORKSPACE_DIR = Path("~/.syftbox")
 
