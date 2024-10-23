@@ -2,7 +2,7 @@ import base64
 import enum
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -35,8 +35,8 @@ class SignatureError(str, enum.Enum):
 
 class SignatureResponse(BaseModel):
     path: str
-    signature: str | None = None
-    error: SignatureError | None = None
+    signature: Optional[str] = None
+    error: Optional[SignatureError] = None
 
 
 class FileMetadataRequest(BaseModel):

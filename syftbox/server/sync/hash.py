@@ -4,6 +4,7 @@ import re
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from pathlib import Path
+from typing import Optional, Union
 
 from loguru import logger
 from py_fast_rsync import signature
@@ -11,7 +12,7 @@ from py_fast_rsync import signature
 from syftbox.server.sync.models import FileMetadata
 
 
-def hash_file(file_path: Path, root_dir: Path | None = None) -> FileMetadata | None:
+def hash_file(file_path: Path, root_dir: Optional[Path] = None) -> Optional[FileMetadata]:
     # ignore files larger then 100MB
     try:
         if file_path.stat().st_size > 100_000_000:
@@ -61,7 +62,7 @@ def hash_dir(dir: Path, root_dir: Path) -> list[FileMetadata]:
     return hash_files_parallel(files, root_dir)
 
 
-def collect_files(dir: Path | str, pattern: str | re.Pattern | None = None) -> list[Path]:
+def collect_files(dir: Union[Path, str], pattern: Union[str, re.Pattern, None] = None) -> list[Path]:
     """Recursively collect files in a directory
 
     Examples:
