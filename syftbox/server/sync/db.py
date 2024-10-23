@@ -12,7 +12,7 @@ from syftbox.server.sync.models import FileMetadata
 
 # @contextlib.contextmanager
 def get_db(path: str):
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, check_same_thread=False)
 
     with conn:
         conn.execute("PRAGMA cache_size=10000;")

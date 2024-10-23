@@ -571,7 +571,7 @@ class Client(Jsonable):
     token: int | None = None
     server_url: str = "http://localhost:5001"
     email_token: str | None = None
-    autorun_plugins: list[str] | None = field(default_factory=lambda: ["init", "create_datasite", "sync", "apps"])
+    autorun_plugins: list[str] | None = field(default_factory=lambda: ["init", "create_datasite", "apps"])
     _server_client: httpx.Client | None = None
 
     @property

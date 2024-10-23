@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -26,21 +26,7 @@ from typing_extensions import Any, Optional
 from syftbox.__version__ import __version__
 from syftbox.lib import (
     Jsonable,
-    PermissionTree,
-    bintostr,
-    filter_read_state,
     get_datasites,
-    hash_dir,
-    strtobin,
-)
-from syftbox.server.models import (
-    DirStateRequest,
-    DirStateResponse,
-    ListDatasitesResponse,
-    ReadRequest,
-    ReadResponse,
-    WriteRequest,
-    WriteResponse,
 )
 from syftbox.server.settings import ServerSettings, get_server_settings
 
@@ -326,130 +312,6 @@ async def register(
     logger.info(f"> {email} registering: {token}, snapshot folder: {datasite_folder}")
 
     return JSONResponse({"status": "success", "token": token}, status_code=200)
-
-
-@app.post("/write", response_model=WriteResponse)
-async def write(
-    request: WriteRequest,
-    server_settings: ServerSettings = Depends(get_server_settings),
-) -> WriteResponse:
-    try:
-        email = request.email
-        change = request.change
-        reason = "ok"
-
-        change.sync_folder = os.path.abspath(str(server_settings.snapshot_folder))
-        result = True
-        accepted = True
-        if change.newer():
-            if change.kind_write:
-                if request.is_directory:
-                    # Handle empty directory
-                    os.makedirs(change.full_path, exist_ok=True)
-                    result = True
-                else:
-                    bin_data = strtobin(request.data)
-                    result = change.write(bin_data)
-            elif change.kind_delete:
-                if change.hash_equal_or_none():
-                    result = change.delete()
-                else:
-                    reason = f"> 🔥 {change.kind} hash doesnt match so ignore {change}"
-                    logger.info(reason)
-                    accepted = False
-            else:
-                raise Exception(f"Unknown type of change kind. {change.kind}")
-        else:
-            reason = f"> 🔥 {change.kind} is older so ignore {change}"
-            logger.info(reason)
-            accepted = False
-
-        if result:
-            logger.info(f"> {email} {change.kind}: {change.internal_path}")
-            return WriteResponse(
-                status="success",
-                change=change,
-                accepted=accepted,
-                reason=reason,
-            )
-        return WriteResponse(
-            status="error",
-            change=change,
-            accepted=accepted,
-            reason=reason,
-        ), 400
-    except Exception as e:
-        logger.info("Exception writing", e)
-        raise HTTPException(
-            status_code=400,
-            detail=f"Exception writing {e}",
-        )
-
-
-@app.post("/read", response_model=ReadResponse)
-async def read(request: ReadRequest, server_settings: ServerSettings = Depends(get_server_settings)) -> ReadResponse:
-    email = request.email
-    change = request.change
-    change.sync_folder = os.path.abspath(str(server_settings.snapshot_folder))
-    logger.info(f"> {email} {change.kind}: {change.internal_path}")
-    # TODO: handle permissions, create and delete
-    data = None
-    if change.kind_write and not change.is_directory():
-        data = bintostr(change.read())
-    return ReadResponse(
-        status="success",
-        change=change.model_dump(mode="json"),
-        data=data,
-        is_directory=change.is_directory(),
-    )
-
-
-@app.post("/dir_state", response_model=DirStateResponse)
-async def dir_state(
-    request: DirStateRequest,
-    server_settings: ServerSettings = Depends(get_server_settings),
-) -> DirStateResponse:
-    try:
-        email = request.email
-        sub_path = request.sub_path
-        snapshot_folder = str(server_settings.snapshot_folder)
-        full_path = os.path.join(snapshot_folder, sub_path)
-        remote_dir_state = hash_dir(snapshot_folder, sub_path)
-
-        # get the top level perm file
-        try:
-            perm_tree = PermissionTree.from_path(full_path, raise_on_corrupted_files=True)
-        except Exception as e:
-            print(f"Failed to parse permission tree: {full_path}")
-            raise e
-
-        # filter the read state for this user by the perm tree
-        read_state = filter_read_state(email, remote_dir_state, perm_tree)
-        remote_dir_state.tree = read_state
-
-        if remote_dir_state:
-            return DirStateResponse(
-                sub_path=sub_path,
-                dir_state=remote_dir_state,
-                status="success",
-            )
-        raise HTTPException(status_code=400, detail={"status": "error"})
-    except Exception as e:
-        logger.exception("Failed to run /dir_state", e)
-
-
-@app.get("/list_datasites", response_model=ListDatasitesResponse)
-async def datasites(
-    server_settings: ServerSettings = Depends(get_server_settings),
-) -> ListDatasitesResponse:
-    print("snapshot_folder", server_settings.snapshot_folder)
-    datasites = get_datasites(server_settings.snapshot_folder)
-    if isinstance(datasites, list):
-        return ListDatasitesResponse(
-            datasites=datasites,
-            status="success",
-        )
-    raise HTTPException(status_code=400, detail={"status": "error"})
 
 
 @app.get("/install.sh")
