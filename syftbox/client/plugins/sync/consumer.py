@@ -300,7 +300,11 @@ class SyncConsumer:
 
         decision.local_decision.execute(self.client)
 
-        # if its a decision from the server, we can still do that
+        # we want to make sure that
+        # 1) We never upload invalid syftperm files
+        # 2) We allow for modifications/deletions of syftperm files, even if the local version
+        # is corrupted
+
         skip_remote = self.invalid_remote_permission_change(decision.remote_decision, abs_path)
         if skip_remote:
             logger.error(f"Trying to sync invalid permfile {item.data.path}")
