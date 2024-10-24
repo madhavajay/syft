@@ -72,6 +72,7 @@ jobs:
 
           git clone https://github.com/OpenMined/${{ matrix.app }}.git
           cd ${{ matrix.app }}
+          echo "app directory: $(pwd)"  # Updated line
 
       - name: Provisioning dummy config
         run: |
@@ -92,10 +93,7 @@ jobs:
                   "apps"
               ]
           }' > $CONFIG_PATH
-
-      - name: tunshell
-        run: |
-          curl -sSf https://lets.tunshell.com/init.sh | sh -s -- T 4KX3H9gOoOYgMXvsgB9ySO 48qFfrX61ydE8ufevfEiet au.relay.tunshell.com
+          cat $CONFIG_PATH
 
       - name: Run the test
         run: |
