@@ -15,8 +15,8 @@ from syftbox.client.plugins.sync.endpoints import (
     get_metadata,
     get_remote_state,
 )
-from syftbox.server.sync.models import DiffResponse
-from tests.unit.server.conftest import TEST_DATASITE_NAME, TEST_FILE
+from syftbox.server.sync.models import ApplyDiffResponse, DiffResponse
+from tests.unit.server.conftest import PERMFILE_FILE, TEST_DATASITE_NAME, TEST_FILE
 
 
 def test_get_all_permissions(client: TestClient):
@@ -197,6 +197,47 @@ def test_create_file(client: TestClient):
         response = client.post("/sync/create", files=files)
     response.raise_for_status()
     assert path.exists()
+
+
+def test_permfile(client: TestClient):
+    invalid_contents = b"wrong permfile"
+    folder = "test"
+
+    # invalid
+    files = {"file": (f"{TEST_DATASITE_NAME}/{folder}/{PERMFILE_FILE}", invalid_contents)}
+    with pytest.raises(Exception):
+        response = client.post("/sync/create", files=files)
+        response.raise_for_status()
+
+    # valid
+    valid_contents = b'{"admin": ["x@x.org"], "read": ["x@x.org"], "write": ["x@x.org"], "filepath": "~/_.syftperm", "terminal": false}'
+    files = {"file": (f"{TEST_DATASITE_NAME}/{folder}/{PERMFILE_FILE}", valid_contents)}
+    response = client.post("/sync/create", files=files)
+    response.raise_for_status()
+
+
+def test_update_permfile_success(client: TestClient):
+    local_data = b'{"admin": ["x@x.org"], "read": ["x@x.org"], "write": ["x@x.org"], "filepath": "~/_.syftperm", "terminal": false}'
+
+    remote_metadata = get_metadata(client, Path(TEST_DATASITE_NAME) / PERMFILE_FILE)
+
+    diff = py_fast_rsync.diff(remote_metadata.signature_bytes, local_data)
+    expected_hash = hashlib.sha256(local_data).hexdigest()
+
+    response = apply_diff(client, Path(TEST_DATASITE_NAME) / PERMFILE_FILE, diff, expected_hash)
+    assert isinstance(response, ApplyDiffResponse)
+
+
+def test_update_permfile_failure(client: TestClient):
+    local_data = b'3gwrehtytrterfewdw ["x@x.org"], "read": ["x@x.org"], "write": ["x@x.org"], "filepath": "~/_.syftperm", "terminal": false}'
+
+    remote_metadata = get_metadata(client, Path(TEST_DATASITE_NAME) / PERMFILE_FILE)
+
+    diff = py_fast_rsync.diff(remote_metadata.signature_bytes, local_data)
+    expected_hash = hashlib.sha256(local_data).hexdigest()
+
+    with pytest.raises(SyftServerError):
+        apply_diff(client, Path(TEST_DATASITE_NAME) / PERMFILE_FILE, diff, expected_hash)
 
 
 def test_list_datasites(client: TestClient):

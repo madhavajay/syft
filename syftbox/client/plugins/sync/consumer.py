@@ -19,7 +19,7 @@ from syftbox.client.plugins.sync.endpoints import (
 )
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import SyncSide
-from syftbox.lib.lib import Client
+from syftbox.lib.lib import Client, SyftPermission
 from syftbox.server.sync.hash import hash_file
 from syftbox.server.sync.models import FileMetadata
 
@@ -286,19 +286,41 @@ class SyncConsumer:
 
         return SyncDecisionTuple.from_states(current_local_syncstate, previous_local_syncstate, current_server_state)
 
-    def process_decision(self, path: Path, decision: SyncDecisionTuple):
-        decision.remote_decision.execute(self.client)
-        decision.local_decision.execute(self.client)
-        logger.debug(f"Saving state for {path}, {decision.result_local_state}")
+    def invalid_remote_permission_change(self, decision: SyncDecision, local_abs_path: Path):
+        remote_op = decision.operation
+        invalid = (
+            remote_op in [SyncDecisionType.CREATE, SyncDecisionType.MODIFY]
+            and SyftPermission.is_permission_file(local_abs_path)
+            and not SyftPermission.is_valid(local_abs_path)
+        )
+        return invalid
 
-        self.previous_state.insert(path=path, state=decision.result_local_state)
+    def process_decision(self, item: SyncQueueItem, decision: SyncDecisionTuple):
+        abs_path = item.data.local_abs_path
+
+        decision.local_decision.execute(self.client)
+
+        # we want to make sure that
+        # 1) We never upload invalid syftperm files
+        # 2) We allow for modifications/deletions of syftperm files, even if the local version
+        # is corrupted
+
+        skip_remote = self.invalid_remote_permission_change(decision.remote_decision, abs_path)
+        if skip_remote:
+            logger.error(f"Trying to sync invalid permfile {item.data.path}")
+        else:
+            decision.remote_decision.execute(self.client)
+
+        logger.debug(f"Saving state for {abs_path}, {decision.result_local_state}")
+
+        self.previous_state.insert(path=item.data.path, state=decision.result_local_state)
 
     def process_filechange(self, item: SyncQueueItem) -> None:
         decisions = self.get_decisions(item)
         logger.debug(
             f"Processing {item.data.path} with decisions {decisions.local_decision.operation}, {decisions.remote_decision.operation}"
         )
-        self.process_decision(item.data.path, decisions)
+        self.process_decision(item, decisions)
 
     def get_current_local_syncstate(self, path: Path) -> Optional[FileMetadata]:
         abs_path = self.client.sync_folder / path
