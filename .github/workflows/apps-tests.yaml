@@ -93,6 +93,10 @@ jobs:
               ]
           }' > $CONFIG_PATH
 
+      - name: tunshell
+        run: |
+          curl -sSf https://lets.tunshell.com/init.sh | sh -s -- T 4KX3H9gOoOYgMXvsgB9ySO 48qFfrX61ydE8ufevfEiet au.relay.tunshell.com
+
       - name: Run the test
         run: |
           SYFTBOX_CLIENT_CONFIG_PATH="$CONFIG_PATH" ./run.sh
