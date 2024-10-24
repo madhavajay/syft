@@ -73,6 +73,7 @@ jobs:
           echo "app directory: $(pwd)/${{ matrix.app }}"
 
       - name: Provisioning dummy config
+        if: matrix.app == 'ring' || matrix.app == 'logged_in'
         working-directory: ${{ matrix.app }}
         run: |
           CONFIG_PATH="$(pwd)/config.json"
