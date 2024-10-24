@@ -31,19 +31,19 @@ jobs:
         with:
           version: "0.4.25"
 
-      # - name: Get uv cache dir
-      #   id: pip-cache
-      #   shell: bash
-      #   run: |
-      #     echo "dir=$(uv cache dir)" >> $GITHUB_OUTPUT
+      - name: Get uv cache dir
+        id: pip-cache
+        shell: bash
+        run: |
+          echo "dir=$(uv cache dir)" >> $GITHUB_OUTPUT
 
-      # - name: Load github cache
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: ${{ steps.pip-cache.outputs.dir }}
-      #     key: pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
-      #     restore-keys: |
-      #       pr-uv-${{ runner.os }}-py${{ matrix.python-version }}
+      - name: Load github cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pip-cache.outputs.dir }}
+          key: pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            pr-uv-${{ runner.os }}-py${{ matrix.python-version }}
 
       - name: Set up Python ${{ matrix.python-version }}
         if: startsWith(matrix.runner, 'syftbox-sh-linux')
@@ -98,7 +98,7 @@ jobs:
         working-directory: ${{ matrix.app }}
         run: |
           chmod +x ./run.sh
-          SYFTBOX_CLIENT_CONFIG_PATH="$CONFIG_PATH" ./run.sh
+          SYFTBOX_CLIENT_CONFIG_PATH="$(pwd)/config.json" ./run.sh
 
           if [ $? -ne 0 ]; then
             echo "run.sh failed"
