@@ -28,7 +28,7 @@ class FileChangeInfo(SyftBaseModel, frozen=True):
     file_size: int = 1
 
     @property
-    def local_abs_path(self):
+    def local_abs_path(self) -> Path:
         return self.local_sync_folder / self.path
 
     def get_priority(self) -> int:
