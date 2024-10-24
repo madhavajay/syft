@@ -66,15 +66,15 @@ jobs:
 
       - name: Cloning the app
         run: |
-          if [ -d "github_app_updater" ]; then
-            rm -rf github_app_updater
+          if [ -d "${{ matrix.app }}" ]; then
+            rm -rf ${{ matrix.app }}
           fi
 
           git clone https://github.com/OpenMined/${{ matrix.app }}.git
-          cd ${{ matrix.app }}
           echo "app directory: $(pwd)"  # Updated line
 
       - name: Provisioning dummy config
+        working-directory: ${{ matrix.app }}
         run: |
           CONFIG_PATH="$(pwd)/config.json"
           SYNC_FOLDER="$(pwd)/sync/"
@@ -96,6 +96,7 @@ jobs:
           cat $CONFIG_PATH
 
       - name: Run the test
+        working-directory: ${{ matrix.app }}
         run: |
           SYFTBOX_CLIENT_CONFIG_PATH="$CONFIG_PATH" ./run.sh
 
