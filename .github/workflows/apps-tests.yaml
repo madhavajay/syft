@@ -1,0 +1,71 @@
+name: Apps Tests
+description: "This workflow tests if the apps' 'run.sh' scripts works by themselves (without syftbox)."
+
+on:
+  workflow_dispatch:
+    inputs:
+      none:
+        description: "Run Apps Manually"
+        required: false
+
+  workflow_call:
+
+  # todo - to test - to be removed after testing
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  pr-tests:
+    strategy:
+      max-parallel: 99
+      matrix:
+        runner: [syftbox-sh-linux-x64, syftbox-sh-mac-arm64]
+        python-version: ["3.12", "3.11", "3.10", "3.9"]
+        app: ["ring", "github_app_updater", "logged_in"]
+      fail-fast: false
+
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.4.25"
+
+      - name: Get uv cache dir
+        id: pip-cache
+        shell: bash
+        run: |
+          echo "dir=$(uv cache dir)" >> $GITHUB_OUTPUT
+
+      - name: Load github cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pip-cache.outputs.dir }}
+          key: pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            pr-uv-${{ runner.os }}-py${{ matrix.python-version }}
+
+      - name: Set up Python ${{ matrix.python-version }}
+        if: startsWith(matrix.runner, 'syftbox-sh-linux')
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # challenge here is actions/setup-python@v5 requires write access to /Users/runner/hostedtoolcache
+      # but current custom macos runner does not allow writing to that dir (even sudo won't work)
+      # so we need to use this weird way to install python on macos
+      - name: Set up Python ${{ matrix.python-version }} (uv managed)
+        if: startsWith(matrix.runner, 'syftbox-sh-mac')
+        run: |
+          uv python install ${{ matrix.python-version }}
+          uv venv --python ${{ matrix.python-version }} .venv${{ matrix.python-version }}
+          uv tool update-shell
+          source $HOME/.profile
+          source .venv${{ matrix.python-version }}/bin/activate
+
+      - name: Run the test
+        run: |
+          git clone https://github.com/OpenMined/${{ matrix.app }}.git
+          cd ${matrix.app}
+          ./run.sh
