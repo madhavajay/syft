@@ -119,6 +119,6 @@ def main(parser, args_list) -> None:
             # we should make this a type
             if isinstance(result, tuple):
                 step, exception = result
-                logger.info(f"Error during {step}: ", str(exception))
+                logger.info(f"Error during {step}: {str(exception)}")
     else:
         parser.print_help()
