@@ -32,19 +32,19 @@ jobs:
         with:
           version: "0.4.25"
 
-      - name: Get uv cache dir
-        id: pip-cache
-        shell: bash
-        run: |
-          echo "dir=$(uv cache dir)" >> $GITHUB_OUTPUT
+      # - name: Get uv cache dir
+      #   id: pip-cache
+      #   shell: bash
+      #   run: |
+      #     echo "dir=$(uv cache dir)" >> $GITHUB_OUTPUT
 
-      - name: Load github cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            pr-uv-${{ runner.os }}-py${{ matrix.python-version }}
+      # - name: Load github cache
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: ${{ steps.pip-cache.outputs.dir }}
+      #     key: pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+      #     restore-keys: |
+      #       pr-uv-${{ runner.os }}-py${{ matrix.python-version }}
 
       - name: Set up Python ${{ matrix.python-version }}
         if: startsWith(matrix.runner, 'syftbox-sh-linux')
@@ -64,8 +64,40 @@ jobs:
           source $HOME/.profile
           source .venv${{ matrix.python-version }}/bin/activate
 
-      - name: Run app test
+      - name: Cloning the app
         run: |
+          if [ -d "github_app_updater" ]; then
+            rm -rf github_app_updater
+          fi
+
           git clone https://github.com/OpenMined/${{ matrix.app }}.git
           cd ${{ matrix.app }}
-          ./run.sh
+
+      - name: Provisioning dummy config
+        run: |
+          CONFIG_PATH="$(pwd)/config.json"
+          SYNC_FOLDER="$(pwd)/sync/"
+          echo '{
+              "config_path": "'"$CONFIG_PATH"'",
+              "sync_folder": "'"$SYNC_FOLDER"'",
+              "port": 8011,
+              "email": "alice@openmined.org",
+              "token": null,
+              "server_url": "http://localhost:5001",
+              "email_token": null,
+              "autorun_plugins": [
+                  "init",
+                  "create_datasite",
+                  "sync",
+                  "apps"
+              ]
+          }' > $CONFIG_PATH
+
+      - name: Run the test
+        run: |
+          SYFTBOX_CLIENT_CONFIG_PATH="$CONFIG_PATH" ./run.sh
+
+          if [ $? -ne 0 ]; then
+            echo "run.sh failed"
+            exit 1
+          fi
