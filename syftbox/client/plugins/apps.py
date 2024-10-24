@@ -47,8 +47,8 @@ def find_and_run_script(task_path, extra_args):
 
             # logger.info("✅ Script run.sh executed successfully.")
             return result
-        except Exception as e:
-            logger.info(f"Error running shell script {e}")
+        except subprocess.CalledProcessError as e:
+            logger.info(f"Error running shell script: {str(e.stderr)}")
     else:
         raise FileNotFoundError(f"run.sh not found in {task_path}")
 
@@ -178,8 +178,7 @@ def run_custom_app_config(client_config, app_config, path):
             logger.info(result.stdout)
             logger.error(result.stderr)
         except subprocess.CalledProcessError as e:
-            logger.error(f"Error running {app_name}: {e}")
-            logger.error(e.stderr)
+            logger.error(f"Error running {app_name}: {e.stderr}")
 
         if cron_iter is not None:
             # Schedule the next exection
