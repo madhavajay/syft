@@ -1,5 +1,4 @@
 name: Apps Tests
-description: "This workflow tests if the apps' 'run.sh' scripts works by themselves (without syftbox)."
 
 on:
   workflow_dispatch:
@@ -71,7 +70,7 @@ jobs:
           fi
 
           git clone https://github.com/OpenMined/${{ matrix.app }}.git
-          echo "app directory: $(pwd)"  # Updated line
+          echo "app directory: $(pwd)/${{ matrix.app }}"
 
       - name: Provisioning dummy config
         working-directory: ${{ matrix.app }}
@@ -98,6 +97,7 @@ jobs:
       - name: Run the test
         working-directory: ${{ matrix.app }}
         run: |
+          chmod +x ./run.sh
           SYFTBOX_CLIENT_CONFIG_PATH="$CONFIG_PATH" ./run.sh
 
           if [ $? -ne 0 ]; then
