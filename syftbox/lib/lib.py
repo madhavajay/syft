@@ -91,16 +91,17 @@ class Jsonable:
         return self.to_dict()[key]
 
     @classmethod
-    def load(cls, filepath: str) -> Self:
+    def load(cls, file_or_bytes: str | Path | bytes) -> Self:
         try:
-            with open(filepath) as f:
-                data = f.read()
-                d = json.loads(data)
-                return cls(**d)
+            if isinstance(file_or_bytes, (str, Path)):
+                with open(file_or_bytes) as f:
+                    data = f.read()
+            else:
+                data = file_or_bytes
+            d = json.loads(data)
+            return cls(**d)
         except Exception as e:
             raise e
-            logger.info(f"Unable to load jsonable file: {filepath}. {e}")
-        return None
 
     def save(self, filepath: str) -> None:
         d = self.to_dict()
@@ -123,6 +124,21 @@ class SyftPermission(Jsonable):
             read=[email],
             write=[email],
         )
+
+    @staticmethod
+    def is_permission_file(path: Union[Path, str], check_exists: bool = False) -> bool:
+        path = Path(path)
+        if check_exists and not path.is_file():
+            return False
+        return path.name == "_.syftperm"
+
+    @classmethod
+    def is_valid(cls, path_or_bytes: str | Path | bytes):
+        try:
+            SyftPermission.load(path_or_bytes)
+            return True
+        except Exception:
+            return False
 
     def has_read_permission(self, email: str) -> bool:
         return email in self.read or USER_GROUP_GLOBAL in self.read

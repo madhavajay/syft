@@ -7,7 +7,7 @@ import py_fast_rsync
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
-from syftbox.lib.lib import PermissionTree, filter_metadata
+from syftbox.lib.lib import PermissionTree, SyftPermission, filter_metadata
 from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.sync.db import (
     delete_file_metadata,
@@ -125,6 +125,9 @@ def apply_diffs(
         data = f.read()
     result = py_fast_rsync.apply(data, req.diff_bytes)
 
+    if SyftPermission.is_permission_file(metadata.path) and not SyftPermission.is_valid(result):
+        raise HTTPException(status_code=400, detail="invalid syftpermission contents, skipped writing")
+
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         temp_file.write(result)
         temp_path = Path(temp_file.name)
@@ -135,7 +138,12 @@ def apply_diffs(
         raise HTTPException(status_code=400, detail="expected_hash mismatch")
 
     # move temp path to real path and update db
-    move_with_transaction(conn, metadata=new_metadata, origin_path=abs_path, server_settings=server_settings)
+    move_with_transaction(
+        conn,
+        metadata=new_metadata,
+        origin_path=abs_path,
+        server_settings=server_settings,
+    )
 
     return ApplyDiffResponse(path=req.path, current_hash=new_metadata.hash, previous_hash=metadata.hash)
 
@@ -173,10 +181,17 @@ def create_file(
     #
     relative_path = Path(file.filename)
     abs_path = server_settings.snapshot_folder / relative_path
+
+    contents = file.file.read()
+
+    if SyftPermission.is_permission_file(relative_path) and not SyftPermission.is_valid(contents):
+        raise HTTPException(status_code=400, detail="invalid syftpermission contents, skipped writing")
+
     abs_path.parent.mkdir(exist_ok=True, parents=True)
+
     with open(abs_path, "wb") as f:
         # better to use async aiosqlite
-        f.write(file.file.read())
+        f.write(contents)
 
     cursor = conn.cursor()
     metadata = get_all_metadata(cursor, path_like=f"{file.filename}")

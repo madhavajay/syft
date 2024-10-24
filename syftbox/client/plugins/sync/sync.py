@@ -2,24 +2,17 @@ import os
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 from loguru import logger
 
 from syftbox.client.plugins.sync.endpoints import get_remote_state
 from syftbox.lib import Client, DirState
 from syftbox.lib.ignore import filter_ignored_paths
+from syftbox.lib.lib import SyftPermission
 from syftbox.server.models import SyftBaseModel
 from syftbox.server.sync.hash import hash_dir
 from syftbox.server.sync.models import FileMetadata
-
-
-def is_permission_file(path: Union[Path, str], check_exists: bool = False) -> bool:
-    path = Path(path)
-    if check_exists and not path.is_file():
-        return False
-
-    return path.name == "_.syftperm"
 
 
 class SyncSide(str, Enum):
@@ -28,13 +21,18 @@ class SyncSide(str, Enum):
 
 
 class FileChangeInfo(SyftBaseModel, frozen=True):
+    local_sync_folder: Path
     path: Path
     side_last_modified: SyncSide
     date_last_modified: datetime
     file_size: int = 1
 
+    @property
+    def local_abs_path(self):
+        return self.local_sync_folder / self.path
+
     def get_priority(self) -> int:
-        if is_permission_file(self.path):
+        if SyftPermission.is_permission_file(self.path):
             return 0
         else:
             return max(1, self.file_size)
@@ -96,7 +94,7 @@ class DatasiteState:
             remote_info = remote_state_dict.get(afile)
 
             try:
-                change_info = compare_fileinfo(afile, local_info, remote_info)
+                change_info = compare_fileinfo(self.client.sync_folder, afile, local_info, remote_info)
             except Exception:
                 logger.exception(f"Failed to compare file {afile}")
                 continue
@@ -121,7 +119,7 @@ def split_permissions(
     permissions = []
     files = []
     for change in changes:
-        if is_permission_file(change.path):
+        if SyftPermission.is_permission_file(change.path):
             permissions.append(change)
         else:
             files.append(change)
@@ -129,6 +127,7 @@ def split_permissions(
 
 
 def compare_fileinfo(
+    local_sync_folder: Path,
     path: Path,
     local_info: Optional[FileMetadata],
     remote_info: Optional[FileMetadata],
@@ -139,6 +138,7 @@ def compare_fileinfo(
     if local_info is None and remote_info is not None:
         # File only exists on remote
         return FileChangeInfo(
+            local_sync_folder=local_sync_folder,
             path=path,
             side_last_modified=SyncSide.REMOTE,
             date_last_modified=remote_info.last_modified,
@@ -148,6 +148,7 @@ def compare_fileinfo(
     if remote_info is None and local_info is not None:
         # File only exists on local
         return FileChangeInfo(
+            local_sync_folder=local_sync_folder,
             path=path,
             side_last_modified=SyncSide.LOCAL,
             date_last_modified=local_info.last_modified,
@@ -166,6 +167,7 @@ def compare_fileinfo(
             file_size = remote_info.file_size
 
         return FileChangeInfo(
+            local_sync_folder=local_sync_folder,
             path=path,
             side_last_modified=side_last_modified,
             date_last_modified=date_last_modified,
