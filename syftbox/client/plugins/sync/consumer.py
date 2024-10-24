@@ -19,7 +19,7 @@ from syftbox.client.plugins.sync.endpoints import (
 )
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import SyncSide
-from syftbox.lib.lib import Client
+from syftbox.lib.lib import Client, SyftPermission
 from syftbox.server.sync.hash import hash_file
 from syftbox.server.sync.models import FileMetadata
 
@@ -294,6 +294,12 @@ class SyncConsumer:
         self.previous_state.insert(path=path, state=decision.result_local_state)
 
     def process_filechange(self, item: SyncQueueItem) -> None:
+        if SyftPermission.is_permission_file(item.data.local_abs_path) and not SyftPermission.is_valid(
+            item.data.local_abs_path
+        ):
+            logger.error(f"Trying to sync invalid permfile {item.data.path}")
+            return
+
         decisions = self.get_decisions(item)
         logger.debug(
             f"Processing {item.data.path} with decisions {decisions.local_decision.operation}, {decisions.remote_decision.operation}"

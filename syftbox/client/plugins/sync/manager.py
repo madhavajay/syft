@@ -48,9 +48,11 @@ class SyncManager:
     def enqueue_datasite_changes(self, datasite: DatasiteState):
         try:
             permission_changes, file_changes = datasite.get_out_of_sync_files()
-            logger.debug(
-                f"Enqueuing {len(permission_changes)} permissions and {len(file_changes)} files for {datasite.email}"
-            )
+            total = len(permission_changes) + len(file_changes)
+            if total != 0:
+                logger.debug(
+                    f"Enqueuing {len(permission_changes)} permissions and {len(file_changes)} files for {datasite.email}"
+                )
         except Exception as e:
             logger.error(f"Failed to get out of sync files for {datasite.email}. Reason: {e}")
             permission_changes, file_changes = [], []
