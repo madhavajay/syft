@@ -10,6 +10,6 @@ on:
         required: false
 
 jobs:
-  call-pr-tests-linting:
+  call-apps-tests:
     if: github.repository == 'OpenMined/syft' # don't run on forks
     uses: OpenMined/syft/.github/workflows/apps-tests.yaml@main

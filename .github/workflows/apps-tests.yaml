@@ -16,7 +16,7 @@ on:
       - main
 
 jobs:
-  pr-tests:
+  apps-tests:
     strategy:
       max-parallel: 99
       matrix:
@@ -64,8 +64,8 @@ jobs:
           source $HOME/.profile
           source .venv${{ matrix.python-version }}/bin/activate
 
-      - name: Run the test
+      - name: Run app test
         run: |
           git clone https://github.com/OpenMined/${{ matrix.app }}.git
-          cd ${matrix.app}
+          cd ${{ matrix.app }}
           ./run.sh
