@@ -21,7 +21,7 @@ jobs:
       matrix:
         runner: [syftbox-sh-linux-x64, syftbox-sh-mac-arm64]
         python-version: ["3.12", "3.11", "3.10", "3.9"]
-        app: ["ring"] # let's start with ring for now
+        app: ["ring", "NetworkRegistry"] # let's start with ring for now
         # app: ["ring", "github_app_updater", "logged_in"]
       fail-fast: false
 
@@ -65,13 +65,10 @@ jobs:
           source .venv${{ matrix.python-version }}/bin/activate
 
       - name: Cloning the app
-        run: |
-          if [ -d "${{ matrix.app }}" ]; then
-            rm -rf ${{ matrix.app }}
-          fi
-
-          git clone https://github.com/OpenMined/${{ matrix.app }}.git
-          echo "app directory: $(pwd)/${{ matrix.app }}"
+        uses: actions/checkout@v4
+        with:
+          repository: OpenMined/${{ matrix.app }}
+          path: ${{ matrix.app }}
 
       - name: Provisioning dummy config
         working-directory: ${{ matrix.app }}
