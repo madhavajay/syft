@@ -219,9 +219,9 @@ class SyncDecisionTuple(BaseModel):
         in_sync = current_remote_syncstate == current_local_syncstate
         conflict = local_modified and remote_modified and not in_sync
 
-        logger.debug(
-            f"local_modified: {local_modified}, remote_modified: {remote_modified}, in_sync: {in_sync}, conflict: {conflict}"
-        )
+        # logger.debug(
+        #     f"local_modified: {local_modified}, remote_modified: {remote_modified}, in_sync: {in_sync}, conflict: {conflict}"
+        # )
 
         if in_sync:
             return cls(
@@ -278,8 +278,11 @@ class LocalState(BaseModel):
         self.save()
 
     def save(self):
-        with threading.Lock():
-            self.path.write_text(self.model_dump_json())
+        try:
+            with threading.Lock():
+                self.path.write_text(self.model_dump_json())
+        except Exception:
+            logger.exception(f"Failed to save {self.path}")
 
     def load(self):
         with threading.Lock():
@@ -297,13 +300,13 @@ class SyncConsumer:
         self.previous_state.load()
 
     def consume_all(self):
-        download_items = self.queue.get_all(
-            where=lambda item: self.get_decisions(item).local_decision.action_type == SyncActionType.CREATE_LOCAL
-        )
-        if download_items:
-            self.batch_download(download_items)
-
         while not self.queue.empty():
+            download_items = self.queue.get_all(
+                where=lambda item: self.get_decisions(item).local_decision.action_type == SyncActionType.CREATE_LOCAL
+            )
+            if download_items:
+                self.batch_download(download_items)
+
             item = self.queue.get(timeout=0.1)
             try:
                 self.process_filechange(item)
@@ -325,13 +328,13 @@ class SyncConsumer:
         # TODO, rename to remote
         current_server_state = self.get_current_server_state(path)
 
-        local_hash = current_local_syncstate.hash if current_local_syncstate else None
-        server_hash = current_server_state.hash if current_server_state else None
-        previous_local_hash = previous_local_syncstate.hash if previous_local_syncstate else None
+        # local_hash = current_local_syncstate.hash if current_local_syncstate else None
+        # server_hash = current_server_state.hash if current_server_state else None
+        # previous_local_hash = previous_local_syncstate.hash if previous_local_syncstate else None
 
-        logger.debug(
-            f"Processing {path} with local hash {local_hash}, server hash {server_hash}, previous local hash {previous_local_hash}"
-        )
+        # logger.debug(
+        #     f"Processing {path} with local hash {local_hash}, server hash {server_hash}, previous local hash {previous_local_hash}"
+        # )
 
         return SyncDecisionTuple.from_states(current_local_syncstate, previous_local_syncstate, current_server_state)
 

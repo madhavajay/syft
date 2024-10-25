@@ -6,7 +6,7 @@ from io import BytesIO
 from pathlib import Path
 
 import py_fast_rsync
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from loguru import logger
 
@@ -264,4 +264,4 @@ async def get_files(
             continue
         all_metadata.append(metadata)
     zip_bytes = create_zip_from_files(all_metadata, server_settings)
-    return StreamingResponse(zip_bytes, media_type="application/zip")
+    return Response(content=zip_bytes.read(), media_type="application/zip")

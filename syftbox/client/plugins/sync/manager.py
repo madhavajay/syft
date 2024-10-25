@@ -67,4 +67,5 @@ class SyncManager:
 
         for datasite in self.datasites:
             self.enqueue_datasite_changes(datasite)
-            self.consumer.consume_all()
+
+        self.consumer.consume_all()
