@@ -1,4 +1,6 @@
 import base64
+import zipfile
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -116,3 +118,14 @@ def download(client: httpx.Client, path: Path) -> bytes:
         raise SyftNotFound(f"[/sync/download] not found on server: {path}, {response.text}")
 
     return response.content
+
+
+def download_snapshot(client_config, paths: list[str]) -> None:
+    response = client_config.server_client.post(
+        "/sync/download_bulk",
+        json={"paths": paths},
+        headers={"email": client_config.email},
+    )
+    response.raise_for_status()
+    zip_file = zipfile.ZipFile(BytesIO(response.content))
+    zip_file.extractall(client_config.sync_folder)

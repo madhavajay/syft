@@ -1,5 +1,7 @@
 import base64
 import hashlib
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 import py_fast_rsync
@@ -244,3 +246,14 @@ def test_list_datasites(client: TestClient):
     response = client.post("/sync/datasites")
 
     response.raise_for_status()
+
+
+def test_download_snapshot(client: TestClient):
+    metadata = get_remote_state(client, TEST_DATASITE_NAME, Path(TEST_DATASITE_NAME))
+    paths = [m.path.as_posix() for m in metadata]
+    response = client.post("/sync/download_bulk", headers={"email": TEST_DATASITE_NAME}, json={"paths": paths})
+
+    response.raise_for_status()
+
+    zip_file = zipfile.ZipFile(BytesIO(response.content))
+    assert len(zip_file.filelist) == 3

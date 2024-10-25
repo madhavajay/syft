@@ -47,6 +47,10 @@ class FileRequest(BaseModel):
     path: str = Field(description="Path to search for files, uses SQL LIKE syntax")
 
 
+class BatchFileRequest(BaseModel):
+    paths: list[str]
+
+
 class ApplyDiffRequest(BaseModel):
     path: str
     diff: str
