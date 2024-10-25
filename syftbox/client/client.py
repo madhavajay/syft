@@ -297,9 +297,9 @@ async def lifespan(app: CustomFastAPI, client_config: Optional[ClientConfig] = N
     app.scheduler = scheduler
     app.running_plugins = {}
     app.loaded_plugins = load_plugins(client_config)
-    logger.info("> Loaded plugins:", sorted(list(app.loaded_plugins.keys())))
+    logger.info(f"> Loaded plugins: {sorted(list(app.loaded_plugins.keys()))}")
 
-    logger.info("> Starting autorun plugins:", sorted(client_config.autorun_plugins))
+    logger.info(f"> Starting autorun plugins: {sorted(client_config.autorun_plugins)}")
     for plugin in client_config.autorun_plugins:
         start_plugin(app, plugin)
 
@@ -503,8 +503,8 @@ def main() -> None:
     os.environ["SYFTBOX_DATASITE"] = client_config.email
     os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = client_config.config_path
 
-    logger.info("Dev Mode: ", os.environ.get("SYFTBOX_DEV"))
-    logger.info("Wheel: ", os.environ.get("SYFTBOX_WHEEL"))
+    logger.info(f"Dev Mode:  {os.environ.get('SYFTBOX_DEV')}")
+    logger.info(f"Wheel: {os.environ.get('SYFTBOX_WHEEL')}")
 
     debug = True if args.debug else False
     port = client_config.port

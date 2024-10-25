@@ -5,7 +5,6 @@ import faker
 from fastapi.testclient import TestClient
 
 from syftbox.client.plugins.sync.manager import SyncManager, SyncQueueItem
-from syftbox.client.plugins.sync.sync import is_permission_file
 from syftbox.client.utils.dir_tree import DirTree, create_dir_tree
 from syftbox.lib import Client
 from syftbox.lib.lib import ClientConfig, SyftPermission
@@ -96,8 +95,8 @@ def test_enqueue_changes(datasite_1: Client):
     should_be_permissions = items_from_queue[: len(out_of_sync_permissions)]
     should_be_files = items_from_queue[len(out_of_sync_permissions) :]
 
-    assert all(is_permission_file(item.data.path) for item in should_be_permissions)
-    assert all(not is_permission_file(item.data.path) for item in should_be_files)
+    assert all(SyftPermission.is_permission_file(item.data.path) for item in should_be_permissions)
+    assert all(not SyftPermission.is_permission_file(item.data.path) for item in should_be_files)
 
     for item in should_be_files:
         print(item.priority, item.data)
