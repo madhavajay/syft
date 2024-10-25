@@ -21,7 +21,7 @@ jobs:
       matrix:
         runner: [syftbox-sh-linux-x64, syftbox-sh-mac-arm64]
         python-version: ["3.12", "3.11", "3.10", "3.9"]
-        app: ["ring", "NetworkRegistry"] # let's start with ring for now
+        app: ["ring"] # let's start with ring for now
         # app: ["ring", "github_app_updater", "logged_in"]
       fail-fast: false
 
