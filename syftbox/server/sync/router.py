@@ -250,7 +250,6 @@ async def get_files(
     req: BatchFileRequest,
     conn: sqlite3.Connection = Depends(get_db_connection),
     server_settings: ServerSettings = Depends(get_server_settings),
-    email: str = Header(),
 ) -> StreamingResponse:
     all_metadata = []
     for path in req.paths:

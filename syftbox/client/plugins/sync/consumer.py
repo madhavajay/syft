@@ -1,6 +1,9 @@
+import enum
 import hashlib
 import threading
+import zipfile
 from enum import Enum
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -14,6 +17,7 @@ from syftbox.client.plugins.sync.endpoints import (
     create,
     delete,
     download,
+    download_bulk,
     get_diff,
     get_metadata,
 )
@@ -72,10 +76,27 @@ def create_local(client: Client, remote_syncstate: FileMetadata):
     abs_path.write_bytes(content_bytes)
 
 
+def create_local_batch(client: Client, remote_syncstates: list[FileMetadata]):
+    paths = [str(remote_syncstate.data.path) for remote_syncstate in remote_syncstates]
+    content_bytes = download_bulk(client.server_client, paths)
+    zip_file = zipfile.ZipFile(BytesIO(content_bytes))
+    zip_file.extractall(client.sync_folder, pwd=client.sync_folder)
+
+
 def create_remote(client: Client, local_syncstate: FileMetadata):
     abs_path = client.sync_folder / local_syncstate.path
     data = abs_path.read_bytes()
     create(client.server_client, local_syncstate.path, data)
+
+
+class SyncActionType(Enum):
+    NOOP = enum.auto()
+    CREATE_REMOTE = enum.auto()
+    CREATE_LOCAL = enum.auto()
+    DELETE_REMOTE = enum.auto()
+    DELETE_LOCAL = enum.auto()
+    MODIFY_REMOTE = enum.auto()
+    MODIFY_LOCAL = enum.auto()
 
 
 class SyncDecision(BaseModel):
@@ -88,21 +109,35 @@ class SyncDecision(BaseModel):
         if self.operation == SyncDecisionType.NOOP:
             return
 
-        to_local = self.side_to_update == SyncSide.LOCAL
-        to_remote = self.side_to_update == SyncSide.REMOTE
-
-        if self.operation == SyncDecisionType.CREATE and to_remote:
+        if self.action_type == SyncActionType.CREATE_REMOTE:
             create_remote(client, self.local_syncstate)
-        elif self.operation == SyncDecisionType.CREATE and to_local:
+        elif self.action_type == SyncActionType.CREATE_LOCAL:
             create_local(client, self.remote_syncstate)
-        elif self.operation == SyncDecisionType.DELETE and to_remote:
+        elif self.action_type == SyncActionType.DELETE_REMOTE:
             delete_remote(client, self.remote_syncstate)
-        elif self.operation == SyncDecisionType.DELETE and to_local:
+        elif self.action_type == SyncActionType.DELETE_LOCAL:
             delete_local(client, self.local_syncstate)
-        elif self.operation == SyncDecisionType.MODIFY and to_remote:
+        elif self.action_type == SyncActionType.MODIFY_REMOTE:
             update_remote(client, self.local_syncstate, self.remote_syncstate)
-        elif self.operation == SyncDecisionType.MODIFY and to_local:
+        elif self.action_type == SyncActionType.MODIFY_LOCAL:
             update_local(client, self.local_syncstate, self.remote_syncstate)
+
+    @property
+    def action_type(self):
+        if self.operation == SyncDecisionType.NOOP:
+            return SyncActionType.NOOP
+        if self.operation == SyncDecisionType.CREATE and self.side_to_update == SyncSide.LOCAL:
+            return SyncActionType.CREATE_LOCAL
+        elif self.operation == SyncDecisionType.CREATE and self.side_to_update == SyncSide.REMOTE:
+            return SyncActionType.CREATE_REMOTE
+        elif self.operation == SyncDecisionType.DELETE and self.side_to_update == SyncSide.LOCAL:
+            return SyncActionType.DELETE_LOCAL
+        elif self.operation == SyncDecisionType.DELETE and self.side_to_update == SyncSide.REMOTE:
+            return SyncActionType.DELETE_REMOTE
+        elif self.operation == SyncDecisionType.MODIFY and self.side_to_update == SyncSide.LOCAL:
+            return SyncActionType.MODIFY_LOCAL
+        elif self.operation == SyncDecisionType.MODIFY and self.side_to_update == SyncSide.REMOTE:
+            return SyncActionType.MODIFY_REMOTE
 
     @classmethod
     def noop(
@@ -262,12 +297,26 @@ class SyncConsumer:
         self.previous_state.load()
 
     def consume_all(self):
+        download_items = self.queue.get_all(
+            where=lambda item: self.get_decisions(item).local_decision.action_type == SyncActionType.CREATE_LOCAL
+        )
+        if download_items:
+            self.batch_download(download_items)
+
         while not self.queue.empty():
             item = self.queue.get(timeout=0.1)
             try:
                 self.process_filechange(item)
             except Exception:
                 logger.exception(f"Failed to sync file {item.data.path}")
+
+    def batch_download(self, download_items: list[SyncQueueItem]):
+        create_local_batch(self.client, download_items)
+        for item in download_items:
+            self.previous_state.insert(
+                path=item.data.path,
+                state=self.get_decisions(item).result_local_state,
+            )
 
     def get_decisions(self, item: SyncQueueItem) -> SyncDecisionTuple:
         path = item.data.path
