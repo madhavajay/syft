@@ -97,7 +97,7 @@ def load_config(path: str) -> Optional[SimpleNamespace]:
 
 def run_apps(client_config):
     # create the directory
-    apps_path = client_config.sync_folder + "/" + "apps"
+    apps_path = str(client_config.sync_folder / "apps")
     os.makedirs(apps_path, exist_ok=True)
 
     # Copy default apps if they don't exist
@@ -166,6 +166,7 @@ def run_custom_app_config(client_config, app_config, path):
     while True:
         current_time = datetime.now()
         logger.info(f"👟 Running {app_name} at scheduled time {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Running command: {app_config.app.run.command}")
         try:
             result = subprocess.run(
                 app_config.app.run.command,
