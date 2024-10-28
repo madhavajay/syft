@@ -129,7 +129,7 @@ def download(client: httpx.Client, path: Path) -> bytes:
     return response.content
 
 
-def download_bulk(client: httpx.Client, paths: list[str]) -> None:
+def download_bulk(client: httpx.Client, paths: list[str]) -> bytes:
     response = client.post(
         "/sync/download_bulk",
         json={"paths": paths},

@@ -13,6 +13,7 @@ from syftbox.client.plugins.sync.endpoints import (
     SyftNotFound,
     SyftServerError,
     apply_diff,
+    download_bulk,
     get_diff,
     get_metadata,
     get_remote_state,
@@ -251,9 +252,6 @@ def test_list_datasites(client: TestClient):
 def test_download_snapshot(client: TestClient):
     metadata = get_remote_state(client, TEST_DATASITE_NAME, Path(TEST_DATASITE_NAME))
     paths = [m.path.as_posix() for m in metadata]
-    response = client.post("/sync/download_bulk", headers={"email": TEST_DATASITE_NAME}, json={"paths": paths})
-
-    response.raise_for_status()
-
-    zip_file = zipfile.ZipFile(BytesIO(response.content))
+    data = download_bulk(client, paths)
+    zip_file = zipfile.ZipFile(BytesIO(data))
     assert len(zip_file.filelist) == 3

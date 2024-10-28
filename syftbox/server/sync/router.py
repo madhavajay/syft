@@ -238,9 +238,8 @@ def create_zip_from_files(file_metadatas: list[FileMetadata], server_settings: S
     memory_file = BytesIO()
     with zipfile.ZipFile(memory_file, "w") as zf:
         for file_path in file_paths:
-            if file_path.is_file():
-                with open(file_path, "rb") as file:
-                    zf.writestr(file_path.relative_to(server_settings.snapshot_folder).as_posix(), file.read())
+            with open(file_path, "rb") as file:
+                zf.writestr(file_path.relative_to(server_settings.snapshot_folder).as_posix(), file.read())
     memory_file.seek(0)
     return memory_file
 
@@ -259,9 +258,9 @@ async def get_files(
             continue
         metadata = metadata_list[0]
         abs_path = server_settings.snapshot_folder / metadata.path
-        if not Path(abs_path).exists():
+        if not Path(abs_path).exists() or not Path(abs_path).is_file():
             logger.warning(f"File not found: {abs_path}")
             continue
         all_metadata.append(metadata)
-    zip_bytes = create_zip_from_files(all_metadata, server_settings)
-    return Response(content=zip_bytes.read(), media_type="application/zip")
+    zip_file = create_zip_from_files(all_metadata, server_settings)
+    return Response(content=zip_file.read(), media_type="application/zip")
