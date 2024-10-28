@@ -306,6 +306,7 @@ class SyncConsumer:
             item = self.queue.get(timeout=0.1)
             if self.get_decisions(item).local_decision.action_type == SyncActionType.CREATE_LOCAL:
                 batched_items[SyncActionType.CREATE_LOCAL].append(item)
+                continue
 
             try:
                 self.process_filechange(item)
