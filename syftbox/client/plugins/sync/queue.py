@@ -38,7 +38,7 @@ class SyncQueue:
             self.dedupe_set.discard(item.data)
             return item
 
-    def get_all(self, where: Callable | None = None) -> list[SyncQueueItem]:
+    def get_all(self, where: Optional[Callable] = None) -> list[SyncQueueItem]:
         with self.lock:
             items = [item for item in self.queue.queue if (not where or where(item))]
             return items
