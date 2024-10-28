@@ -1,7 +1,7 @@
 import threading
 from dataclasses import dataclass
 from queue import PriorityQueue
-from typing import Callable, Optional
+from typing import Optional
 
 from syftbox.client.plugins.sync.sync import FileChangeInfo
 
@@ -37,11 +37,6 @@ class SyncQueue:
             item: SyncQueueItem = self.queue.get(block=block, timeout=timeout)
             self.dedupe_set.discard(item.data)
             return item
-
-    def get_all(self, where: Optional[Callable] = None) -> list[SyncQueueItem]:
-        with self.lock:
-            items = [item for item in self.queue.queue if (not where or where(item))]
-            return items
 
     def empty(self) -> bool:
         return self.queue.empty()

@@ -2,10 +2,11 @@ import enum
 import hashlib
 import threading
 import zipfile
+from collections import defaultdict
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import py_fast_rsync
 from loguru import logger
@@ -300,18 +301,20 @@ class SyncConsumer:
         self.previous_state.load()
 
     def consume_all(self):
+        batched_items: Dict[SyncActionType, list[SyncQueueItem]] = defaultdict(list)
         while not self.queue.empty():
-            download_items = self.queue.get_all(
-                where=lambda item: self.get_decisions(item).local_decision.action_type == SyncActionType.CREATE_LOCAL
-            )
-            if download_items:
-                self.batch_download(download_items)
-
             item = self.queue.get(timeout=0.1)
+            if self.get_decisions(item).local_decision.action_type == SyncActionType.CREATE_LOCAL:
+                batched_items[SyncActionType.CREATE_LOCAL].append(item)
+
             try:
                 self.process_filechange(item)
             except Exception:
                 logger.exception(f"Failed to sync file {item.data.path}")
+
+        download_items = batched_items[SyncActionType.CREATE_LOCAL]
+        if download_items:
+            self.batch_download(download_items)
 
     def batch_download(self, download_items: list[SyncQueueItem]):
         create_local_batch(self.client, download_items)
