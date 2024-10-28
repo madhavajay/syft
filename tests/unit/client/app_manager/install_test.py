@@ -51,7 +51,7 @@ def test_clone_repository_to_an_existent_path():
     assert os.path.exists(temp_path)
 
     # Second call must clone it again without any exception (replaces the old one).
-    temp_path = clone_repository(path)
+    temp_path = clone_repository(path, "main")
     shutil.rmtree(temp_path)
 
 
