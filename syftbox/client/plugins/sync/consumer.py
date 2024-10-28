@@ -305,6 +305,7 @@ class SyncConsumer:
                 where=lambda item: self.get_decisions(item).local_decision.action_type == SyncActionType.CREATE_LOCAL
             )
             if download_items:
+                logger.info(f"Downloading {len(download_items)} files")
                 self.batch_download(download_items)
 
             item = self.queue.get(timeout=0.1)

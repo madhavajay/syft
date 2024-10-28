@@ -63,7 +63,7 @@ class SyncManager:
     def run_single_thread(self):
         # NOTE first implementation will be unthreaded and just loop through all datasites
         self.datasites = self.get_datasites()
-        logger.debug(f"Syncing {len(self.datasites)} datasites: {[datasite.email for datasite in self.datasites]}")
+        logger.debug(f"Syncing {len(self.datasites)} datasites...")
 
         for datasite in self.datasites:
             self.enqueue_datasite_changes(datasite)
