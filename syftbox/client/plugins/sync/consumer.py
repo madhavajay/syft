@@ -80,7 +80,7 @@ def create_local_batch(client: Client, remote_syncstates: list[FileMetadata]):
     paths = [str(remote_syncstate.data.path) for remote_syncstate in remote_syncstates]
     content_bytes = download_bulk(client.server_client, paths)
     zip_file = zipfile.ZipFile(BytesIO(content_bytes))
-    zip_file.extractall(client.sync_folder, pwd=client.sync_folder)
+    zip_file.extractall(client.sync_folder)
 
 
 def create_remote(client: Client, local_syncstate: FileMetadata):
