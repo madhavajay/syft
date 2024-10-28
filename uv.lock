@@ -1028,6 +1028,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pid"
+version = "3.0.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "psutil", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/46/45/9e551a0e30d68d18334bc6fd8971b3ab1485423877902eb4f26cc28d7bd5/pid-3.0.4.tar.gz", hash = "sha256:0e33670e83f6a33ebb0822e43a609c3247178d4a375ff50a4689e266d853eb66", size = 16228 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/30/7ebdc66dff1611756d4b38340effdb470aa2693c8789a8fef0bd8dd9332a/pid-3.0.4-py2.py3-none-any.whl", hash = "sha256:af2bf11c5d637bba8a80ce3368279c5eca28f08e201ac828538e1b9ad9e35ef9", size = 11975 },
+]
+
+[[package]]
 name = "platformdirs"
 version = "4.3.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1726,6 +1738,7 @@ dependencies = [
     { name = "markdown" },
     { name = "pandas" },
     { name = "pathspec" },
+    { name = "pid" },
     { name = "postmarker" },
     { name = "psutil" },
     { name = "py-fast-rsync" },
@@ -1765,6 +1778,7 @@ requires-dist = [
     { name = "markdown", specifier = ">=3.7" },
     { name = "pandas", specifier = ">=2.2.2" },
     { name = "pathspec", specifier = ">=0.12.1" },
+    { name = "pid", specifier = ">=3.0.4" },
     { name = "postmarker", specifier = ">=1.0" },
     { name = "psutil", specifier = ">=6.0.0" },
     { name = "py-fast-rsync" },
