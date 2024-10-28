@@ -32,9 +32,6 @@ def list_datasites(client: httpx.Client) -> list[str]:
     return data
 
 
-metadata_cache = {}
-
-
 def get_remote_state(client: httpx.Client, email: str, path: Path) -> list[FileMetadata]:
     response = client.post(
         "/sync/dir_state",
@@ -46,17 +43,10 @@ def get_remote_state(client: httpx.Client, email: str, path: Path) -> list[FileM
 
     response_data = handle_json_response("/dir_state", response)
     metadata_list = [FileMetadata(**item) for item in response_data]
-    global metadata_cache
-    for m in metadata_list:
-        metadata_cache[m.path] = m
     return metadata_list
 
 
 def get_metadata(client: httpx.Client, path: Path) -> FileMetadata:
-    global metadata_cache
-
-    if path in metadata_cache:
-        return metadata_cache[path]
     response = client.post(
         "/sync/get_metadata",
         json={
