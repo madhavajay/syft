@@ -1,18 +1,25 @@
-from pathlib import Path
-
-from typing_extensions import TypeAlias, Union
-
-PathLike: TypeAlias = Union[str, Path]
+from syftbox.lib.types import PathLike, to_path
 
 
 class SyftWorkspace:
     """
     A Syft workspace is a directory structure for everything stored by the client.
     Each workspace is expected to be unique for a client.
+
+    ```txt
+        root/
+        ├── apps/                       <-- installed apps
+        ├── plugins/                    <-- plugins data
+        └── datasites/                  <-- synced datasites
+            ├── user1@openmined.org/
+            │   └── apps_pipeline/
+            └── user2@openmined.org/
+                └── apps_pipeline/
+    ```
     """
 
     def __init__(self, root_dir: PathLike):
-        self.data_dir = Path(root_dir).expanduser().resolve()
+        self.data_dir = to_path(root_dir)
 
         # datasites dir
         self.datasites = self.data_dir / "datasites"
