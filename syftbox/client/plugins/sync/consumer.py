@@ -8,6 +8,7 @@ import py_fast_rsync
 from loguru import logger
 from pydantic import BaseModel, model_validator
 
+from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
 from syftbox.client.plugins.sync.endpoints import (
     SyftServerError,
     apply_diff,
@@ -154,6 +155,82 @@ class SyncDecision(BaseModel):
             remote_syncstate=remote_syncstate,
         )
 
+    def _is_invalid_remote_permission_change(self, local_abs_path: Path) -> bool:
+        # we want to make sure that
+        # 1) We never upload invalid syftperm files
+        # 2) We allow for modifications/deletions of syftperm files, even if the local version
+        # is corrupted
+
+        if self.side_to_update != SyncSide.REMOTE:
+            # Decision does not update remote, no need to check for invalid perm file
+            return False
+
+        remote_op = self.operation
+        is_invalid_permission_change = (
+            remote_op in [SyncDecisionType.CREATE, SyncDecisionType.MODIFY]
+            and SyftPermission.is_permission_file(local_abs_path)
+            and not SyftPermission.is_valid(local_abs_path)
+        )
+        return is_invalid_permission_change
+
+    def _is_valid_remote_decision(self, abs_path: Path) -> tuple[bool, str]:
+        if self.operation in [SyncDecisionType.NOOP, SyncDecisionType.DELETE]:
+            return True, ""
+
+        # Create/modify without file data
+        if self.local_syncstate is None:
+            return False, f"Attempted to sync file {abs_path} to remote, but local file data is missing."
+
+        # Create/modify invalid permission file
+        if self._is_invalid_remote_permission_change(abs_path):
+            return False, f"Found invalid permission {abs_path}, permission will not be synced to remote."
+
+        # Create/modify file over max size
+        max_size_bytes = MAX_FILE_SIZE_MB * 1024 * 1024
+        if self.local_syncstate.file_size > max_size_bytes:
+            return False, f"File {abs_path} is larger than {MAX_FILE_SIZE_MB}MB, it will not be synced to remote."
+
+        return True, ""
+
+    def _is_valid_local_decision(self, abs_path: Path) -> tuple[bool, str]:
+        if self.operation in [SyncDecisionType.NOOP, SyncDecisionType.DELETE]:
+            return True, ""
+
+        # Create/modify without file data
+        if self.remote_syncstate is None:
+            return False, f"Attempted to sync file {abs_path} to local, but remote file data is missing."
+
+        # Create/modify file over max size
+        max_size_bytes = MAX_FILE_SIZE_MB * 1024 * 1024
+        if self.remote_syncstate.file_size > max_size_bytes:
+            return False, f"File {abs_path} is larger than {MAX_FILE_SIZE_MB}MB, it will not be synced to local."
+
+        return True, ""
+
+    def is_valid(self, abs_path: Path, show_warnings: bool = False) -> bool:
+        """
+        Returns True if the sync decision is valid and should be executed.
+        If show_warnings is True, it will log warnings for invalid decisions.
+
+        Args:
+            abs_path (Path): Absolute path of the file to sync.
+            show_warnings (bool, optional): If True, a warning will be logged for invalid decisions. Defaults to False.
+
+        Returns:
+            bool: True if the decision should be executed.
+        """
+        if self.side_to_update == SyncSide.REMOTE:
+            is_valid, reason = self._is_valid_remote_decision(abs_path)
+        elif self.side_to_update == SyncSide.LOCAL:
+            is_valid, reason = self._is_valid_local_decision(abs_path)
+        else:
+            is_valid, reason = True, ""
+
+        if not is_valid and show_warnings:
+            logger.warning(reason)
+
+        return is_valid
+
 
 class SyncDecisionTuple(BaseModel):
     remote_decision: SyncDecision
@@ -266,8 +343,8 @@ class SyncConsumer:
             item = self.queue.get(timeout=0.1)
             try:
                 self.process_filechange(item)
-            except Exception:
-                logger.exception(f"Failed to sync file {item.data.path}")
+            except Exception as e:
+                logger.exception(f"Failed to sync file {item.data.path}. Reason: {e}")
 
     def get_decisions(self, item: SyncQueueItem) -> SyncDecisionTuple:
         path = item.data.path
@@ -286,32 +363,14 @@ class SyncConsumer:
 
         return SyncDecisionTuple.from_states(current_local_syncstate, previous_local_syncstate, current_server_state)
 
-    def invalid_remote_permission_change(self, decision: SyncDecision, local_abs_path: Path):
-        remote_op = decision.operation
-        invalid = (
-            remote_op in [SyncDecisionType.CREATE, SyncDecisionType.MODIFY]
-            and SyftPermission.is_permission_file(local_abs_path)
-            and not SyftPermission.is_valid(local_abs_path)
-        )
-        return invalid
-
-    def process_decision(self, item: SyncQueueItem, decision: SyncDecisionTuple):
+    def process_decision(self, item: SyncQueueItem, decision: SyncDecisionTuple) -> None:
         abs_path = item.data.local_abs_path
 
-        decision.local_decision.execute(self.client)
+        if decision.local_decision.is_valid(abs_path=abs_path, show_warnings=True):
+            decision.local_decision.execute(self.client)
 
-        # we want to make sure that
-        # 1) We never upload invalid syftperm files
-        # 2) We allow for modifications/deletions of syftperm files, even if the local version
-        # is corrupted
-
-        skip_remote = self.invalid_remote_permission_change(decision.remote_decision, abs_path)
-        if skip_remote:
-            logger.error(f"Trying to sync invalid permfile {item.data.path}")
-        else:
+        if decision.remote_decision.is_valid(abs_path=abs_path, show_warnings=True):
             decision.remote_decision.execute(self.client)
-
-        logger.debug(f"Saving state for {abs_path}, {decision.result_local_state}")
 
         self.previous_state.insert(path=item.data.path, state=decision.result_local_state)
 

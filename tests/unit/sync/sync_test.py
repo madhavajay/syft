@@ -1,10 +1,12 @@
 import json
+import os
 from pathlib import Path
 
 import faker
 from fastapi.testclient import TestClient
 
-from syftbox.client.plugins.sync.manager import SyncManager, SyncQueueItem
+from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
+from syftbox.client.plugins.sync.manager import DatasiteState, SyncManager, SyncQueueItem
 from syftbox.client.utils.dir_tree import DirTree, create_dir_tree
 from syftbox.lib import Client
 from syftbox.lib.lib import ClientConfig, SyftPermission
@@ -254,3 +256,76 @@ def test_delete_file(server_client: TestClient, datasite_1: Client, datasite_2: 
     remote_state_1 = sync_service_1.get_datasites()[0].get_remote_state()
     remote_paths = {metadata.path for metadata in remote_state_1}
     assert Path(datasite_1.email) / "folder1" / "file.txt" not in remote_paths
+
+
+def test_invalid_sync_to_remote(server_client: TestClient, datasite_1: Client):
+    sync_service_1 = SyncManager(datasite_1)
+    sync_service_1.run_single_thread()
+
+    # random bytes 1 byte too large
+    too_large_content = os.urandom((MAX_FILE_SIZE_MB * 1024 * 1024) + 1)
+    tree = {
+        "valid": {
+            "_.syftperm": SyftPermission.mine_with_public_write(datasite_1.email),
+            "file.txt": "valid content",
+        },
+        "invalid_on_modify": {
+            "_.syftperm": SyftPermission.mine_with_public_write(datasite_1.email),
+            "file.txt": "valid content",
+        },
+        "invalid_on_create": {
+            "_.syftperm": "invalid permission",
+            "file.txt": too_large_content,
+        },
+    }
+
+    create_dir_tree(Path(datasite_1.datasite_path), tree)
+    sync_service_1.enqueue_datasite_changes(datasite=DatasiteState(datasite_1, email=datasite_1.email))
+
+    queue = sync_service_1.queue
+    consumer = sync_service_1.consumer
+
+    items_to_sync = []
+    while not queue.empty():
+        items_to_sync.append(queue.get())
+    assert len(items_to_sync) == 6  # 3 files + 3 permissions
+
+    for item in items_to_sync:
+        decision_tuple = consumer.get_decisions(item)
+        abs_path = item.data.local_abs_path
+
+        should_be_valid = item.data.path.parent.name in ["valid", "invalid_on_modify"]
+        print(f"path: {abs_path}, should_be_valid: {should_be_valid}, parent: {item.data.path.parent}")
+
+        is_valid = decision_tuple.remote_decision.is_valid(abs_path=abs_path, show_warnings=True)
+        assert is_valid == should_be_valid, f"path: {abs_path}, is_valid: {is_valid}"
+
+    sync_service_1.run_single_thread()
+
+    # Modify invalid_on_modify to be invalid
+    file_path = datasite_1.datasite_path / "invalid_on_modify" / "file.txt"
+    file_path.write_bytes(too_large_content)
+    permission_path = datasite_1.datasite_path / "invalid_on_modify" / "_.syftperm"
+    permission_path.write_text("invalid permission")
+
+    sync_service_1.enqueue_datasite_changes(datasite=DatasiteState(datasite_1, email=datasite_1.email))
+    items_to_sync = []
+    while not queue.empty():
+        items_to_sync.append(queue.get())
+    assert len(items_to_sync) == 4  # 2 invalid files + 2 invalid permissions
+
+    for item in items_to_sync:
+        decision_tuple = consumer.get_decisions(item)
+        abs_path = item.data.local_abs_path
+
+        is_valid = decision_tuple.remote_decision.is_valid(abs_path=abs_path, show_warnings=True)
+
+        if SyftPermission.is_permission_file(abs_path):
+            print(decision_tuple.remote_decision)
+            print(decision_tuple.local_decision)
+            print(is_valid)
+            continue
+        else:
+            print(decision_tuple.remote_decision)
+
+        assert not is_valid, f"path: {abs_path}, is_valid: {is_valid}"
