@@ -1,6 +1,5 @@
 import json
 import os
-import secrets
 from pathlib import Path
 from typing import Optional
 
@@ -12,12 +11,13 @@ from syftbox.lib.types import PathLike, to_path
 __all__ = ["SyftClientConfig", "DEFAULT_SERVER_URL", "DEFAULT_DATA_DIR", "DEFAULT_CONFIG_PATH"]
 
 DEFAULT_SERVER_URL = "https://syftbox.openmined.org"
-DEFAULT_DATA_DIR = Path(Path.home(), "syftbox-data")
 DEFAULT_PORT = 38080
-LEGACY_CONIFG_PATH = Path(Path.home(), ".syftbox", "client_config.json")
-STATIC_CONFIG_PATH = Path(Path.home(), ".syftbox", "config.json")
+DEFAULT_DATA_DIR = Path(Path.home(), "syftbox-data")
+LEGACY_CONFIG_PATH = Path(Path.home(), ".syftbox", "client_config.json")
+CLIENT_CONFIG_PATH = Path(Path.home(), ".syftbox", "config.json")
 
-DEFAULT_CONFIG_PATH = os.getenv("SYFTBOX_CLIENT_CONFIG", STATIC_CONFIG_PATH)
+# env or default
+DEFAULT_CONFIG_PATH = os.getenv("SYFTBOX_CLIENT_CONFIG_PATH", CLIENT_CONFIG_PATH)
 
 
 class Config(BaseModel):
@@ -71,14 +71,23 @@ class SyftClientConfig(Config):
     path: Path = Field(exclude=True)
     """Path to the config file"""
 
-    def save(self):
-        self.path.write_text(self.as_json())
-
     def as_json(self, indent=4):
         return self.model_dump_json(indent=4, exclude_none=True, warnings="none")
 
+    def save(self):
+        self.path.write_text(self.as_json())
+
     @classmethod
-    def load(cls, path: PathLike) -> Self:
+    def load(cls, conf_path: Optional[PathLike] = None) -> Self:
+        """Load configuration from a path.
+
+        If conf_path is not provided, it will look for the config file in the following order:
+        - `SYFTBOX_CLIENT_CONFIG_PATH` environment variable
+        - `~/.syftbox/config.json`
+        """
+
+        # args or env or default
+        path = conf_path or DEFAULT_CONFIG_PATH
         path = to_path(path)
         data = json.loads(path.read_text())
         return cls(path=path, **data)
@@ -87,9 +96,16 @@ class SyftClientConfig(Config):
     def exists(cls, path: PathLike) -> bool:
         return to_path(path).exists()
 
+    @classmethod
+    def migrate(cls):
+        # move the legacy config to the new path
+        # call this before load()
+        if LEGACY_CONFIG_PATH.exists():
+            LEGACY_CONFIG_PATH.rename(CLIENT_CONFIG_PATH)
+
 
 if __name__ == "__main__":
+    SyftClientConfig.migrate()
     conf = SyftClientConfig.load()
-    conf.token = secrets.token_hex(32)
     print(conf)
     conf.save()
