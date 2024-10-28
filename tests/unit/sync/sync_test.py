@@ -319,13 +319,4 @@ def test_invalid_sync_to_remote(server_client: TestClient, datasite_1: Client):
         abs_path = item.data.local_abs_path
 
         is_valid = decision_tuple.remote_decision.is_valid(abs_path=abs_path, show_warnings=True)
-
-        if SyftPermission.is_permission_file(abs_path):
-            print(decision_tuple.remote_decision)
-            print(decision_tuple.local_decision)
-            print(is_valid)
-            continue
-        else:
-            print(decision_tuple.remote_decision)
-
         assert not is_valid, f"path: {abs_path}, is_valid: {is_valid}"

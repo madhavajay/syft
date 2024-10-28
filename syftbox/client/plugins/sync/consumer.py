@@ -84,15 +84,15 @@ class SyncDecision(BaseModel):
     side_to_update: SyncSide
     local_syncstate: Optional[FileMetadata]
     remote_syncstate: Optional[FileMetadata]
+    is_executed: bool = False
 
     def execute(self, client: Client):
-        if self.operation == SyncDecisionType.NOOP:
-            return
-
         to_local = self.side_to_update == SyncSide.LOCAL
         to_remote = self.side_to_update == SyncSide.REMOTE
 
-        if self.operation == SyncDecisionType.CREATE and to_remote:
+        if self.operation == SyncDecisionType.NOOP:
+            pass
+        elif self.operation == SyncDecisionType.CREATE and to_remote:
             create_remote(client, self.local_syncstate)
         elif self.operation == SyncDecisionType.CREATE and to_local:
             create_local(client, self.remote_syncstate)
@@ -104,6 +104,8 @@ class SyncDecision(BaseModel):
             update_remote(client, self.local_syncstate, self.remote_syncstate)
         elif self.operation == SyncDecisionType.MODIFY and to_local:
             update_local(client, self.local_syncstate, self.remote_syncstate)
+
+        self.is_executed = True
 
     @classmethod
     def noop(
@@ -237,11 +239,15 @@ class SyncDecisionTuple(BaseModel):
     local_decision: SyncDecision
 
     @property
-    def result_local_state(self):
+    def result_local_state(self) -> FileMetadata:
         if self.local_decision.operation == SyncDecisionType.NOOP:
             return self.local_decision.local_syncstate
         else:
             return self.local_decision.remote_syncstate
+
+    @property
+    def is_executed(self) -> bool:
+        return self.local_decision.is_executed and self.remote_decision.is_executed
 
     @classmethod
     def from_states(
@@ -372,7 +378,8 @@ class SyncConsumer:
         if decision.remote_decision.is_valid(abs_path=abs_path, show_warnings=True):
             decision.remote_decision.execute(self.client)
 
-        self.previous_state.insert(path=item.data.path, state=decision.result_local_state)
+        if decision.is_executed:
+            self.previous_state.insert(path=item.data.path, state=decision.result_local_state)
 
     def process_filechange(self, item: SyncQueueItem) -> None:
         decisions = self.get_decisions(item)
