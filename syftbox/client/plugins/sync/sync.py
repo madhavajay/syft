@@ -5,12 +5,12 @@ from pathlib import Path
 from typing import Optional
 
 from loguru import logger
+from pydantic import BaseModel
 
 from syftbox.client.plugins.sync.endpoints import get_remote_state
 from syftbox.lib import Client, DirState
 from syftbox.lib.ignore import filter_ignored_paths
 from syftbox.lib.lib import SyftPermission
-from syftbox.server.models import SyftBaseModel
 from syftbox.server.sync.hash import hash_dir
 from syftbox.server.sync.models import FileMetadata
 
@@ -20,7 +20,7 @@ class SyncSide(str, Enum):
     REMOTE = "remote"
 
 
-class FileChangeInfo(SyftBaseModel, frozen=True):
+class FileChangeInfo(BaseModel, frozen=True):
     local_sync_folder: Path
     path: Path
     side_last_modified: SyncSide
