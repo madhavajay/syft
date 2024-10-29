@@ -84,6 +84,20 @@ def get_all_metadata(conn: sqlite3.Connection, path_like: Optional[str] = None) 
     ]
 
 
+def get_metadata(conn: sqlite3.Connection, path: str) -> FileMetadata:
+    cursor = conn.execute("SELECT * FROM file_metadata WHERE path = ?", (path,))
+    row = cursor.fetchone()
+    if row is None:
+        raise ValueError(f"Failed to find metadata for {path}.")
+    return FileMetadata(
+        path=row[1],
+        hash=row[2],
+        signature=row[3],
+        file_size=row[4],
+        last_modified=row[5],
+    )
+
+
 def get_all_datasites(conn: sqlite3.Connection) -> list[str]:
     # INSTR(path, '/'): Finds the position of the first slash in the path.
     cursor = conn.execute(

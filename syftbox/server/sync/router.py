@@ -13,13 +13,13 @@ from loguru import logger
 from syftbox.lib.lib import PermissionTree, SyftPermission, filter_metadata
 from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.sync.db import (
-    delete_file_metadata,
     get_all_datasites,
     get_all_metadata,
     get_db,
     move_with_transaction,
     save_file_metadata,
 )
+from syftbox.server.sync.file_store import FileStore
 from syftbox.server.sync.hash import hash_file
 
 from .models import (
@@ -40,6 +40,13 @@ def get_db_connection(request: Request):
     conn.close()
 
 
+def get_file_store(request: Request):
+    store = FileStore(
+        server_settings=request.state.server_settings,
+    )
+    yield store
+
+
 def get_file_metadata(
     req: FileMetadataRequest,
     conn=Depends(get_db_connection),
@@ -55,26 +62,18 @@ router = APIRouter(prefix="/sync", tags=["sync"])
 @router.post("/get_diff", response_model=DiffResponse)
 def get_diff(
     req: DiffRequest,
-    conn: sqlite3.Connection = Depends(get_db_connection),
-    server_settings: ServerSettings = Depends(get_server_settings),
+    file_store: FileStore = Depends(get_file_store),
 ) -> DiffResponse:
-    metadata_list = get_all_metadata(conn, path_like=f"{req.path}")
-    if len(metadata_list) == 0:
-        raise HTTPException(status_code=404, detail="path not found")
-    elif len(metadata_list) > 1:
-        raise HTTPException(status_code=400, detail="too many files to get diff")
-
-    metadata = metadata_list[0]
-    abs_path = server_settings.snapshot_folder / metadata.path
-    with open(abs_path, "rb") as f:
-        data = f.read()
-
-    diff = py_fast_rsync.diff(req.signature_bytes, data)
+    try:
+        file = file_store.get(req.path)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="file not found")
+    diff = py_fast_rsync.diff(req.signature_bytes, file.data)
     diff_bytes = base64.b85encode(diff).decode("utf-8")
     return DiffResponse(
-        path=metadata.path.as_posix(),
+        path=file.metadata.path.as_posix(),
         diff=diff_bytes,
-        hash=metadata.hash,
+        hash=file.metadata.hash,
     )
 
 
@@ -155,24 +154,9 @@ def apply_diffs(
 @router.post("/delete", response_class=JSONResponse)
 def delete_file(
     req: FileRequest,
-    conn: sqlite3.Connection = Depends(get_db_connection),
-    server_settings: ServerSettings = Depends(get_server_settings),
+    file_store: FileStore = Depends(get_file_store),
 ) -> JSONResponse:
-    metadata_list = get_all_metadata(conn, path_like=f"{req.path}")
-    if len(metadata_list) == 0:
-        raise HTTPException(status_code=404, detail="path not found")
-    elif len(metadata_list) > 1:
-        raise HTTPException(status_code=400, detail="too many files to delete")
-
-    metadata = metadata_list[0]
-
-    try:
-        delete_file_metadata(conn, metadata.path.as_posix())
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    conn.commit()
-    abs_path = server_settings.snapshot_folder / metadata.path
-    Path(abs_path).unlink(missing_ok=True)
+    file_store.delete(req.path)
     return JSONResponse(content={"status": "success"})
 
 
@@ -212,22 +196,13 @@ def create_file(
 @router.post("/download", response_class=FileResponse)
 def download_file(
     req: FileRequest,
-    conn: sqlite3.Connection = Depends(get_db_connection),
-    server_settings: ServerSettings = Depends(get_server_settings),
+    file_store: FileStore = Depends(get_file_store),
 ) -> FileResponse:
-    metadata_list = get_all_metadata(conn, path_like=f"{req.path}")
-    if len(metadata_list) == 0:
-        raise HTTPException(status_code=404, detail="path not found")
-    elif len(metadata_list) > 1:
-        raise HTTPException(status_code=400, detail="too many files to download")
-
-    metadata = metadata_list[0]
-    abs_path = server_settings.snapshot_folder / metadata.path
-    if not Path(abs_path).exists():
-        # could be a stale db entry, remove from db
-        delete_file_metadata(conn, metadata.path.as_posix())
+    try:
+        abs_path = file_store.get(req.path).absolute_path
+        return FileResponse(abs_path)
+    except ValueError:
         raise HTTPException(status_code=404, detail="file not found")
-    return FileResponse(abs_path)
 
 
 @router.post("/datasites", response_model=list[str])

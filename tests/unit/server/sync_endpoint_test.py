@@ -167,7 +167,7 @@ def test_get_diff(client: TestClient):
     file_path = Path(TEST_DATASITE_NAME) / "nonexistent_file.txt"
     with pytest.raises(SyftServerError) as e:
         get_diff(client, file_path, sig)
-    assert "path not found" in str(e.value)
+    assert "file not found" in str(e.value)
 
 
 def test_delete_file(client: TestClient):
