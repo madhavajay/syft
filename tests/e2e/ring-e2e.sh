@@ -55,6 +55,46 @@ copy_secret() {
     cp $SCRIPT_DIR/ringdata/secret.$user.txt $_app/secret.txt
 }
 
+# Function to check if a directory exists
+check_directory() {
+    local dir_path="$1"
+    if [ -d "$dir_path" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Function to check if a file exists in a directory
+check_file() {
+    local dir_path="$1"
+    local filename="$2"
+    if [ -f "$dir_path/$filename" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+zip_folder() {
+    local folder_path="$1"     # The path to the folder you want to zip
+    local zip_name="$2"        # The desired name of the zip file
+    local timestamp=$(date +"%Y%m%d_%H%M%S")
+
+    echo "Zipping folder '$folder_path' as '$zip_name.zip'..."
+
+    # Check if the folder exists
+    if [ -d "$folder_path" ]; then
+        # Zip the folder
+        zip -r "${zip_name}_${timestamp}.zip" "$folder_path"
+        echo "Folder '$folder_path' has been zipped as '$zip_name.zip'."
+    else
+        echo "Error: Folder '$folder_path' does not exist."
+        exit 1
+    fi
+}
+
+
 ring_init() {
     init_user=$1
 
@@ -73,6 +113,42 @@ ring_init() {
     echo "$_pipeline is ready. Kick starting ring!"
     cp $SCRIPT_DIR/ringdata/init.json $_pipeline/data.json
 }
+
+post_ring_check() {
+    local end_user="$1"
+    local status=0
+
+    echo -e "Checking ring data for user: $end_user"
+
+    # Get pipeline path
+    _pipeline="$CLIENT_DIR/$end_user/$end_user@openmined.org/app_pipelines/ring/done"
+
+    echo -e "Checking ring results for user: $_pipeline"
+
+    # Check pipeline directory
+    if ! check_directory "$_pipeline"; then
+        echo -e "Error >> Ring app result is not ready: Done pipeline directory not found"
+        status=1
+    fi
+
+    # Check data file
+    local data_file="data.json"
+    if ! check_file "$_pipeline" "$data_file"; then
+        echo -e "Error >> Ring app result not found: $data_file not found in pipeline directory"
+        status=1
+    fi
+
+    # Zip the logs if the check fails
+    if [ $status -eq 1 ]; then
+        # If check returns 1 (failure), zip the logs
+        zip_folder "$E2E_DIR" "ring-e2e"
+        return 1
+    fi
+
+    echo -e "Success !! Ring app result is ready: Done pipeline directory and data file found."
+    return 0
+}
+
 
 do_e2e() {
     just reset
@@ -94,6 +170,10 @@ do_e2e() {
 
     # expect to finish within the timeframe
     sleep 120
+
+    # check ring results
+    post_ring_check user1
+
 }
 
 trap cleanup SIGINT EXIT TERM
