@@ -1,16 +1,15 @@
-import os
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 from loguru import logger
+from pydantic import BaseModel
 
 from syftbox.client.plugins.sync.endpoints import get_remote_state
-from syftbox.lib import Client, DirState
+from syftbox.lib import Client
 from syftbox.lib.ignore import filter_ignored_paths
 from syftbox.lib.lib import SyftPermission
-from syftbox.server.models import SyftBaseModel
 from syftbox.server.sync.hash import hash_dir
 from syftbox.server.sync.models import FileMetadata
 
@@ -20,7 +19,7 @@ class SyncSide(str, Enum):
     REMOTE = "remote"
 
 
-class FileChangeInfo(SyftBaseModel, frozen=True):
+class FileChangeInfo(BaseModel, frozen=True):
     local_sync_folder: Path
     path: Path
     side_last_modified: SyncSide
@@ -48,6 +47,9 @@ class DatasiteState:
         """
         self.client = client
         self.email = email
+
+    def __repr__(self) -> str:
+        return f"DatasiteState<{self.email}>"
 
     @property
     def path(self) -> Path:
@@ -95,8 +97,8 @@ class DatasiteState:
 
             try:
                 change_info = compare_fileinfo(self.client.sync_folder, afile, local_info, remote_info)
-            except Exception:
-                logger.exception(f"Failed to compare file {afile}")
+            except Exception as e:
+                logger.exception(f"Failed to compare file {afile}. Reason: {e}")
                 continue
 
             if change_info is not None:
@@ -173,45 +175,3 @@ def compare_fileinfo(
             date_last_modified=date_last_modified,
             file_size=file_size,
         )
-
-
-def get_ignore_rules(dir_state: DirState) -> list[str, str, str]:
-    """
-    TODO refactor, abs/relative paths are not handled correctly
-    returns a list of ignore rules (prefix, folder, ignore_file)
-    """
-    # get the ignore files
-    syft_ignore_files = []
-    folder_path = dir_state.sync_folder + "/" + dir_state.sub_path
-    for afile, file_info in dir_state.tree.items():
-        full_path = folder_path + "/" + afile
-        sub_folder = os.path.dirname(full_path)
-
-        if afile.endswith(".syftignore") and os.path.isfile(full_path):
-            ignore_list = []
-            with open(full_path) as f:
-                ignore_list = f.readlines()
-            for ignore_rule in ignore_list:
-                ignore_rule = ignore_rule.strip()
-                rule_prefix = sub_folder + "/" + ignore_rule
-                syft_ignore_files.append((rule_prefix, sub_folder, afile))
-
-    return syft_ignore_files
-
-
-def filter_ignored_changes(
-    all_changes: list[FileChangeInfo], ignore_rules: list[str, str, str]
-) -> list[FileChangeInfo]:
-    """
-    Filter out changes that are ignored by .syftignore files
-    """
-    filtered_changes = []
-    for change in all_changes:
-        keep = True
-        for rule_prefix, ignore_folder, ignore_file_path in ignore_rules:
-            if change.path.startswith(rule_prefix):
-                keep = False
-                break
-        if keep:
-            filtered_changes.append(change)
-    return filtered_changes

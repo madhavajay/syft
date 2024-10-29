@@ -1,5 +1,7 @@
 import base64
 import hashlib
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 import py_fast_rsync
@@ -11,6 +13,7 @@ from syftbox.client.plugins.sync.endpoints import (
     SyftNotFound,
     SyftServerError,
     apply_diff,
+    download_bulk,
     get_diff,
     get_metadata,
     get_remote_state,
@@ -244,3 +247,11 @@ def test_list_datasites(client: TestClient):
     response = client.post("/sync/datasites")
 
     response.raise_for_status()
+
+
+def test_download_snapshot(client: TestClient):
+    metadata = get_remote_state(client, TEST_DATASITE_NAME, Path(TEST_DATASITE_NAME))
+    paths = [m.path.as_posix() for m in metadata]
+    data = download_bulk(client, paths)
+    zip_file = zipfile.ZipFile(BytesIO(data))
+    assert len(zip_file.filelist) == 3

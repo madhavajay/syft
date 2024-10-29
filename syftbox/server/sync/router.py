@@ -1,11 +1,14 @@
 import base64
 import sqlite3
 import tempfile
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 import py_fast_rsync
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from loguru import logger
 
 from syftbox.lib.lib import PermissionTree, SyftPermission, filter_metadata
 from syftbox.server.settings import ServerSettings, get_server_settings
@@ -22,6 +25,7 @@ from syftbox.server.sync.hash import hash_file
 from .models import (
     ApplyDiffRequest,
     ApplyDiffResponse,
+    BatchFileRequest,
     DiffRequest,
     DiffResponse,
     FileMetadata,
@@ -220,6 +224,8 @@ def download_file(
     metadata = metadata_list[0]
     abs_path = server_settings.snapshot_folder / metadata.path
     if not Path(abs_path).exists():
+        # could be a stale db entry, remove from db
+        delete_file_metadata(conn, metadata.path.as_posix())
         raise HTTPException(status_code=404, detail="file not found")
     return FileResponse(abs_path)
 
@@ -227,3 +233,36 @@ def download_file(
 @router.post("/datasites", response_model=list[str])
 def get_datasites(conn: sqlite3.Connection = Depends(get_db_connection)) -> list[str]:
     return get_all_datasites(conn)
+
+
+def create_zip_from_files(file_metadatas: list[FileMetadata], server_settings: ServerSettings) -> BytesIO:
+    file_paths = [server_settings.snapshot_folder / file_metadata.path for file_metadata in file_metadatas]
+    memory_file = BytesIO()
+    with zipfile.ZipFile(memory_file, "w") as zf:
+        for file_path in file_paths:
+            with open(file_path, "rb") as file:
+                zf.writestr(file_path.relative_to(server_settings.snapshot_folder).as_posix(), file.read())
+    memory_file.seek(0)
+    return memory_file
+
+
+@router.post("/download_bulk")
+async def get_files(
+    req: BatchFileRequest,
+    conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
+) -> StreamingResponse:
+    all_metadata = []
+    for path in req.paths:
+        metadata_list = get_all_metadata(conn, path_like=f"{path}")
+        if len(metadata_list) != 1:
+            logger.warning(f"Expected 1 metadata, got {len(metadata_list)} for {path}")
+            continue
+        metadata = metadata_list[0]
+        abs_path = server_settings.snapshot_folder / metadata.path
+        if not Path(abs_path).exists() or not Path(abs_path).is_file():
+            logger.warning(f"File not found: {abs_path}")
+            continue
+        all_metadata.append(metadata)
+    zip_file = create_zip_from_files(all_metadata, server_settings)
+    return Response(content=zip_file.read(), media_type="application/zip")

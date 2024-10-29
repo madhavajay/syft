@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import shutil
@@ -13,7 +14,6 @@ from typing_extensions import Any, Optional, Union
 
 from syftbox.lib import (
     SyftPermission,
-    get_file_hash,
     perm_file_path,
 )
 
@@ -97,7 +97,7 @@ def load_config(path: str) -> Optional[SimpleNamespace]:
 
 def run_apps(client_config):
     # create the directory
-    apps_path = client_config.sync_folder + "/" + "apps"
+    apps_path = str(client_config.sync_folder / "apps")
     os.makedirs(apps_path, exist_ok=True)
 
     # Copy default apps if they don't exist
@@ -133,11 +133,16 @@ def run_apps(client_config):
                 RUNNING_APPS[app] = thread
 
 
+def get_file_hash(file_path, digest="md5") -> str:
+    with open(file_path, "rb") as f:
+        return hashlib.file_digest(f, digest)
+
+
 def output_published(app_output, published_output) -> bool:
     return (
         os.path.exists(app_output)
         and os.path.exists(published_output)
-        and get_file_hash(app_output) == get_file_hash(published_output)
+        and get_file_hash(app_output, "md5") == get_file_hash(published_output, "md5")
     )
 
 
@@ -166,6 +171,7 @@ def run_custom_app_config(client_config, app_config, path):
     while True:
         current_time = datetime.now()
         logger.info(f"👟 Running {app_name} at scheduled time {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Running command: {app_config.app.run.command}")
         try:
             result = subprocess.run(
                 app_config.app.run.command,
