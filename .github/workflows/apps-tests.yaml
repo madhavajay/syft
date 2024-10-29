@@ -46,18 +46,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # challenge here is actions/setup-python@v5 requires write access to /Users/runner/hostedtoolcache
-      # but current custom macos runner does not allow writing to that dir (even sudo won't work)
-      # so we need to use this weird way to install python on macos
-      - name: Set up Python ${{ matrix.python-version }} (uv managed)
-        if: startsWith(matrix.runner, 'syftbox-sh-mac')
-        run: |
-          uv python install ${{ matrix.python-version }}
-          uv venv --python ${{ matrix.python-version }} .venv${{ matrix.python-version }}
-          uv tool update-shell
-          source $HOME/.profile
-          source .venv${{ matrix.python-version }}/bin/activate
-
       - name: Cloning the app
         uses: actions/checkout@v4
         with:
