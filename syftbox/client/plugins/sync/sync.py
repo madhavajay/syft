@@ -49,6 +49,9 @@ class DatasiteState:
         self.client = client
         self.email = email
 
+    def __repr__(self) -> str:
+        return f"DatasiteState<{self.email}>"
+
     @property
     def path(self) -> Path:
         p = Path(self.client.sync_folder) / self.email
