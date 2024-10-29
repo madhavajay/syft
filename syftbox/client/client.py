@@ -249,6 +249,9 @@ def parse_args():
         default="https://syftbox.openmined.org",
         help="Server",
     )
+
+    parser.add_argument("--no_open_sync_folder", action="store_true", help="no open sync folder")
+
     subparsers = parser.add_subparsers(dest="command", help="Sub-command help")
     start_parser = subparsers.add_parser("report", help="Generate an error report")
     start_parser.add_argument(
@@ -488,7 +491,8 @@ def get_syftbox_src_path():
 def main() -> None:
     args = parse_args()
     client_config = load_or_create_config(args)
-    open_sync_folder(client_config.sync_folder)
+    if not args.no_open_sync_folder:
+        open_sync_folder(client_config.sync_folder)
     error_config = make_error_report(client_config)
 
     if args.command == "report":
