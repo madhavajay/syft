@@ -39,7 +39,7 @@ def test_second_invalid_git_path():
 
 def test_clone_valid_repository():
     path = "OpenMined/logged_in"
-    temp_path = clone_repository(path)
+    temp_path = clone_repository(path, "main")
     assert os.path.exists(temp_path)
     shutil.rmtree(temp_path)
 
@@ -47,16 +47,16 @@ def test_clone_valid_repository():
 def test_clone_repository_to_an_existent_path():
     # First call will make the repository path exist
     path = "OpenMined/logged_in"
-    temp_path = clone_repository(path)
+    temp_path = clone_repository(path, "main")
     assert os.path.exists(temp_path)
 
     # Second call must clone it again without any exception (replaces the old one).
-    temp_path = clone_repository(path)
+    temp_path = clone_repository(path, "main")
     shutil.rmtree(temp_path)
 
 
 def test_clone_invalid_repository():
     path = "InvalidUser/InvalidRepo"
     with pytest.raises(ValueError) as excpt:
-        _ = clone_repository(path)
+        _ = clone_repository(path, "main")
         assert excpt.value == "The provided repository path doesn't seems to be accessible. Please check it out."

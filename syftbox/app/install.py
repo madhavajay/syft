@@ -160,7 +160,7 @@ def is_repo_accessible(repo_url: str) -> bool:
         return False
 
 
-def clone_repository(sanitized_git_path: str) -> str:
+def clone_repository(sanitized_git_path: str, branch: str) -> str:
     """
     Clones a Git repository from GitHub to a temporary directory.
 
@@ -216,7 +216,15 @@ def clone_repository(sanitized_git_path: str) -> str:
 
     try:
         subprocess.run(
-            ["git", "clone", repo_url, temp_clone_path],
+            [
+                "git",
+                "clone",
+                "-b",
+                branch,
+                "--single-branch",
+                repo_url,
+                temp_clone_path,
+            ],
             check=True,
             text=True,
             capture_output=True,
@@ -705,6 +713,8 @@ def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
 
     parser.add_argument("repository", type=str, help="App repository")
 
+    parser.add_argument("--branch", type=str, default="main", help="repository branch")
+
     args = parser.parse_args()
     step = ""
     try:
@@ -725,7 +735,7 @@ def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
             # Handles: If /tmp/apps/<repository_name> already exists (replaces it)
             # Returns: Path where the repository folder was cloned temporarily.
             step = "Pulling App"
-            tmp_clone_path = clone_repository(sanitized_path)
+            tmp_clone_path = clone_repository(sanitized_path, args.branch)
 
             # NOTE:
             # Load config.json
