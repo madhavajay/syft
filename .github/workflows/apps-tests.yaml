@@ -9,11 +9,6 @@ on:
 
   workflow_call:
 
-  # TODO: to be removed after testing
-  pull_request:
-    branches:
-      - main
-
 jobs:
   apps-tests:
     strategy:
