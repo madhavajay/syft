@@ -73,7 +73,6 @@ class FileMetadata(BaseModel):
     signature: str
     file_size: int = 0  # limit file sizes?
     last_modified: datetime
-    is_executed: bool = False
 
     @property
     def signature_bytes(self) -> bytes:
