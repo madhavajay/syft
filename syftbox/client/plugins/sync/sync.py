@@ -97,8 +97,8 @@ class DatasiteState:
 
             try:
                 change_info = compare_fileinfo(self.client.sync_folder, afile, local_info, remote_info)
-            except Exception:
-                logger.exception(f"Failed to compare file {afile}")
+            except Exception as e:
+                logger.exception(f"Failed to compare file {afile}. Reason: {e}")
                 continue
 
             if change_info is not None:
