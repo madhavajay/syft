@@ -83,7 +83,7 @@ jobs:
     strategy:
       max-parallel: 99
       matrix:
-        runner: [syftbox-sh-linux-x64, syftbox-sh-mac-arm64]
+        runner: [syftbox-sh-linux-x64, sh-macos-arm64]
         python-version: ["3.12", "3.9"]
       fail-fast: false
 
