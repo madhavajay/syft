@@ -2,13 +2,30 @@ import base64
 import enum
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
+
+
+def should_be_relative(v):
+    if v.is_absolute():
+        raise ValueError("path must be relative")
+    return v
+
+
+def should_be_absolute(v):
+    if not v.is_absolute():
+        raise ValueError("path must be absolute")
+    return v
+
+
+RelativePath = Annotated[Path, AfterValidator(should_be_relative)]
+
+AbsolutePath = Annotated[Path, AfterValidator(should_be_absolute)]
 
 
 class DiffRequest(BaseModel):
-    path: Path
+    path: RelativePath
     signature: str
 
     @property
@@ -17,7 +34,7 @@ class DiffRequest(BaseModel):
 
 
 class DiffResponse(BaseModel):
-    path: Path
+    path: RelativePath
     diff: str
     hash: str
 
@@ -34,7 +51,7 @@ class SignatureError(str, enum.Enum):
 
 
 class SignatureResponse(BaseModel):
-    path: str
+    path: RelativePath
     signature: Optional[str] = None
     error: Optional[SignatureError] = None
 
@@ -44,15 +61,15 @@ class FileMetadataRequest(BaseModel):
 
 
 class FileRequest(BaseModel):
-    path: str = Field(description="Path to search for files, uses SQL LIKE syntax")
+    path: RelativePath = Field(description="Path to search for files, uses SQL LIKE syntax")
 
 
 class BatchFileRequest(BaseModel):
-    paths: list[str]
+    paths: list[RelativePath]
 
 
 class ApplyDiffRequest(BaseModel):
-    path: str
+    path: RelativePath
     diff: str
     expected_hash: str
 
@@ -62,7 +79,7 @@ class ApplyDiffRequest(BaseModel):
 
 
 class ApplyDiffResponse(BaseModel):
-    path: str
+    path: RelativePath
     current_hash: str
     previous_hash: str
 

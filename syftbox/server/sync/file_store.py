@@ -1,29 +1,11 @@
 from pathlib import Path
 
-from pydantic import BaseModel, RootModel, field_validator
+from pydantic import BaseModel
 
 from syftbox.server.settings import ServerSettings
 from syftbox.server.sync import db
 from syftbox.server.sync.db import get_db
-from syftbox.server.sync.models import FileMetadata
-
-
-class RelativePath(RootModel[Path]):
-    @field_validator("root", mode="after")
-    @classmethod
-    def should_be_relative(cls, v):
-        if v.is_absolute():
-            raise ValueError("path must be relative")
-        return v
-
-
-class AbsolutePath(RootModel[Path]):
-    @field_validator("root", mode="after")
-    @classmethod
-    def should_be_absolute(cls, v):
-        if not v.is_absolute():
-            raise ValueError("path must be absolute")
-        return v
+from syftbox.server.sync.models import AbsolutePath, FileMetadata, RelativePath
 
 
 class SyftFile(BaseModel):
@@ -46,7 +28,7 @@ class FileStore:
     def delete(self, path: RelativePath) -> None:
         conn = get_db(self.db_path)
         with conn:
-            db.delete_file_metadata(conn, path)
+            db.delete_file_metadata(conn, str(path))
             abs_path = self.server_settings.snapshot_folder / path
             abs_path.unlink(missing_ok=True)
 
