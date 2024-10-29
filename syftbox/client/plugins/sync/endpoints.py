@@ -42,7 +42,8 @@ def get_remote_state(client: httpx.Client, email: str, path: Path) -> list[FileM
     )
 
     response_data = handle_json_response("/dir_state", response)
-    return [FileMetadata(**item) for item in response_data]
+    metadata_list = [FileMetadata(**item) for item in response_data]
+    return metadata_list
 
 
 def get_metadata(client: httpx.Client, path: Path) -> FileMetadata:
@@ -115,4 +116,13 @@ def download(client: httpx.Client, path: Path) -> bytes:
     if response.status_code != 200:
         raise SyftNotFound(f"[/sync/download] not found on server: {path}, {response.text}")
 
+    return response.content
+
+
+def download_bulk(client: httpx.Client, paths: list[str]) -> bytes:
+    response = client.post(
+        "/sync/download_bulk",
+        json={"paths": paths},
+    )
+    response.raise_for_status()
     return response.content
