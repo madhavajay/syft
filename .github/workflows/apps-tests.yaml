@@ -12,15 +12,11 @@ jobs:
     strategy:
       max-parallel: 99
       matrix:
-        include:
-          - app: OpenMined/ring
-            branch: main
-          - app: OpenMined/tutorial-apps
-            branch: basic_aggregator
-          - app: OpenMined/tutorial-apps
-            branch: pretrained_model_aggregator
-          - app: OpenMined/tutorial-apps
-            branch: pretrained_model_local
+        apps:
+          - OpenMined/ring@main
+          - OpenMined/tutorial-apps@basic_aggregator
+          - OpenMined/tutorial-apps@pretrained_model_aggregator
+          - OpenMined/tutorial-apps@pretrained_model_local
         python-version: ["3.9"]
         runner: [syftbox-sh-linux-x64, sh-macos-arm64]
       fail-fast: true
@@ -30,9 +26,8 @@ jobs:
       - name: Cloning the app
         uses: actions/checkout@v4
         with:
-          repository: ${{ matrix.app }}
-          ref: ${{ matrix.branch }}
-          path: ${{ matrix.app }}_${{ matrix.branch }}
+          repository: ${{ matrix.apps.split('@')[0] }}
+          ref: ${{ matrix.apps.split('@')[1] }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -61,7 +56,7 @@ jobs:
         working-directory: ${{ matrix.app }}
         run: |
           CONFIG_PATH="$(pwd)/config.json"
-          SYNC_FOLDER="$(pwd)/syftbox-data/"
+          SYNC_FOLDER="$(pwd)/sync/"
           echo '{
               "config_path": "'"$CONFIG_PATH"'",
               "sync_folder": "'"$SYNC_FOLDER"'",
