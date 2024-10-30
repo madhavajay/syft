@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from syftbox.server.settings import ServerSettings
 from syftbox.server.sync import db
 from syftbox.server.sync.db import get_db
+from syftbox.server.sync.hash import hash_file
 from syftbox.server.sync.models import AbsolutePath, FileMetadata, RelativePath
 
 
@@ -22,19 +23,14 @@ class FileStore:
     def db_path(self) -> AbsolutePath:
         return self.server_settings.file_db_path
 
-    def copy(self, from_path: Path, to_path: Path) -> None:
-        pass
-
     def delete(self, path: RelativePath) -> None:
-        conn = get_db(self.db_path)
-        with conn:
+        with get_db(self.db_path) as conn:
             db.delete_file_metadata(conn, str(path))
             abs_path = self.server_settings.snapshot_folder / path
             abs_path.unlink(missing_ok=True)
 
     def get(self, path: RelativePath) -> SyftFile:
-        conn = get_db(self.db_path)
-        with conn:
+        with get_db(self.db_path) as conn:
             metadata = db.get_metadata(conn, path=str(path))
             abs_path = self.server_settings.snapshot_folder / metadata.path
             return SyftFile(metadata=metadata, data=self._read_bytes(abs_path), absolute_path=abs_path)
@@ -43,8 +39,24 @@ class FileStore:
         with open(path, "rb") as f:
             return f.read()
 
-    def put(self, path: Path, data: bytes) -> None:
-        pass
+    def put(self, path: Path, contents: bytes) -> None:
+        conn = get_db(self.db_path)
+        abs_path = self.server_settings.snapshot_folder / path
+        abs_path.parent.mkdir(exist_ok=True, parents=True)
 
-    def list(self, path: Path) -> list[Path]:
-        pass
+        with open(abs_path, "wb") as f:
+            # better to use async aiosqlite
+            f.write(contents)
+
+        cursor = conn.cursor()
+
+        metadata = hash_file(abs_path, root_dir=self.server_settings.snapshot_folder)
+        db.save_file_metadata(cursor, metadata)
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+    def list(self, path: RelativePath) -> list[FileMetadata]:
+        with get_db(self.db_path) as conn:
+            metadata = db.get_all_metadata(conn, path_like=f"{path.as_posix()}%")
+            return metadata
