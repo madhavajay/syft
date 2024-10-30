@@ -68,7 +68,7 @@ class SyncManager:
 
         datasite_states = self.get_datasite_states()
         logger.info(f"Syncing {len(datasite_states)} datasites")
-        logger.debug(f"Datasites: {datasite_states}")
+        logger.debug(f"Datasites: {', '.join([datasite.email for datasite in datasite_states])}")
 
         for datasite_state in datasite_states:
             self.enqueue_datasite_changes(datasite_state)
