@@ -154,6 +154,23 @@ install_syftbox() {
 }
 
 
+deactivate_env() {
+    if [ "$VIRTUAL_ENV" != "" ]; then
+        echo "${yellow}You are in a virtual environment: $(basename "$VIRTUAL_ENV")"${reset}
+        echo "${yellow}Please deactivate your virtual environment using" \
+             "${green}deactivate" \
+             "${yellow}and then install again.${reset}"
+        exit 1
+    fi
+    if [ "$CONDA_PREFIX" != "" ]; then
+        echo "${yellow}You are in a conda environment: $(basename "$CONDA_PREFIX")"${reset}
+        echo "${yellow}Please deactivate your conda environment using" \
+             "${green}conda deactivate" \
+             "${yellow}and then install again.${reset}"
+        exit 1
+    fi
+}
+
 check_python_version() {
     # Try python3, if it exists; otherwise, fall back to python
     py=$(get_python_command)
@@ -174,6 +191,8 @@ check_python_version() {
 
 
 pre_install() {
+    deactivate_env
+
     # check if python version is >= 3.10, if uv is not managing python
     if [ $MANAGED_PYTHON -eq 0 ]
     then check_python_version
