@@ -74,9 +74,16 @@ jobs:
           syftbox version
 
       - name: Run E2E Test for '${{ matrix.e2e-test }}'
+        env:
+          SYFTBOX_DISABLE_ICONS: "true"
         run: |
           just reset
           just test-e2e ${{ matrix.e2e-test }}
+
+      - name: Cleanup macOS Icon\r Files
+        if: ${{ always() && startsWith(matrix.runner, 'sh-macos') }}
+        run: |
+          find . -type f -name "Icon*" -exec rm -f {} \;
 
       - name: Upload e2e directory
         if: always()
