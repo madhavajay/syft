@@ -5,6 +5,10 @@ on:
 
   workflow_call:
 
+  pull_request:
+    branches:
+      - main
+
 concurrency:
   group: e2e-tests
   cancel-in-progress: true
