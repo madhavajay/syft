@@ -162,7 +162,7 @@ do_e2e() {
     need_cmd just
 
     info "Started E2E ring"
-    load_env $SCRIPT_DIR/env
+    load_env $SCRIPT_DIR/.env
 
     # prepare local data directories
     e2e_prepare_dirs

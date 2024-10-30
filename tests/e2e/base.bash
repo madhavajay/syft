@@ -129,7 +129,7 @@ wait_for_client() {
     wait_for_url "http://localhost:$port/datasites" $timeout
 }
 
-########## URL helpers ##########
+########## env helpers ##########
 
 load_env() {
     local env_file="$1"

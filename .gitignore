@@ -183,3 +183,5 @@ experimental/
 *.db
 notebooks/
 dev_space/
+
+!tests/**/.env
