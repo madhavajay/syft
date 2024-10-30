@@ -15,10 +15,10 @@ jobs:
       max-parallel: 99
       matrix:
         apps:
-          - OpenMined/ring@main
-          - OpenMined/tutorial-apps@basic_aggregator
-          - OpenMined/tutorial-apps@pretrained_model_aggregator
-          - OpenMined/tutorial-apps@pretrained_model_local
+          - ring
+          - tutorial-apps@basic_aggregator
+          - tutorial-apps@pretrained_model_aggregator
+          - tutorial-apps@pretrained_model_local
         python-version: ["3.9"]
         runner:
           - syftbox-sh-linux-x64
@@ -27,11 +27,19 @@ jobs:
 
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: Cloning the app
+      - name: Parse app repository info
+        id: apprepo
+        run: |
+          REPO=$(echo ${{ matrix.apps }} | cut -d'@' -f1)
+          REF=$(echo ${{ matrix.apps }} | cut -d'@' -f2 || echo "main")
+          echo "REPO=$REPO" >> $GITHUB_OUTPUT
+          echo "REF=$REF" >> $GITHUB_OUTPUT
+
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          repository: ${{ matrix.apps.split('@')[0] }}
-          ref: ${{ matrix.apps.split('@')[1] }}
+          repository: OpenMined/${{ steps.apprepo.outputs.REPO }}
+          ref: ${{ steps.apprepo.outputs.REF }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
