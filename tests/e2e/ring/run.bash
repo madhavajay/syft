@@ -11,9 +11,7 @@ LOGS_DIR=$RING_DIR/logs
 CLIENT_DIR=$RING_DIR/client
 SERVER_DIR=$RING_DIR/server
 CONFIG_DIR=$RING_DIR/config
-domain="openmined.org"
-
-export SYFTBOX_DISABLE_ICONS=1
+DOMAIN="openmined.org"
 
 ########## Client & Server ##########
 
@@ -28,7 +26,7 @@ bg_start_server() {
 bg_start_client() {
     local user=$1
     local port=$2
-    local email="$user@$domain"
+    local email="$user@$DOMAIN"
 
     info "Starting client email=$email port=$port"
 
@@ -68,7 +66,7 @@ path_ring_app() {
 path_ring_pipeline() {
     # get path to client's ring app pipeline
 
-    echo "$CLIENT_DIR/$1/$1@$domain/app_pipelines/ring"
+    echo "$CLIENT_DIR/$1/$1@$DOMAIN/app_pipelines/ring"
 }
 
 wait_for_ring_app() {
@@ -158,14 +156,13 @@ start_ring() {
 }
 
 do_e2e() {
-    # run e2e ring test
-
     need_cmd syftbox
     need_cmd curl
     need_cmd jq
     need_cmd just
 
     info "Started E2E ring"
+    load_env $SCRIPT_DIR/env
 
     # prepare local data directories
     e2e_prepare_dirs

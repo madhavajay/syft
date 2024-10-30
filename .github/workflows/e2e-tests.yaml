@@ -70,6 +70,7 @@ jobs:
           syftbox version
 
       - name: Run E2E Test for '${{ matrix.e2e-test }}'
+        # env for all e2e tests. use env file for test specific env vars
         env:
           SYFTBOX_DISABLE_ICONS: "true"
         run: |

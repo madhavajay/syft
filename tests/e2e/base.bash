@@ -14,6 +14,8 @@ boldcyan='\033[1;36m'
 
 pids=( )
 
+########## Logging ##########
+
 err() {
     echo -e "${red}ERROR: ${boldwhite}$1${reset}" >&2
     exit 1
@@ -66,7 +68,7 @@ run_bg() {
 }
 
 
-########## Helpers ##########
+########## Path helpers ##########
 
 wait_for_path() {
     local path="$1"
@@ -89,6 +91,8 @@ wait_for_path() {
     debug "Found: $path (after ${elapsed}s)"
     return 0
 }
+
+########## URL helpers ##########
 
 wait_for_url() {
     local url="$1"
@@ -123,4 +127,13 @@ wait_for_client() {
 
     debug "Waiting for client to be ready on port=$port"
     wait_for_url "http://localhost:$port/datasites" $timeout
+}
+
+########## URL helpers ##########
+
+load_env() {
+    local env_file="$1"
+    if [ -f "$env_file" ]; then
+        export $(grep -v '^#' "$env_file" | xargs)
+    fi
 }
