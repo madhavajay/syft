@@ -1,4 +1,4 @@
-name: Apps Tests
+name: Standalone Apps Tests
 
 on:
   workflow_dispatch:
@@ -20,10 +20,8 @@ jobs:
           - tutorial-apps@pretrained_model_aggregator
           - tutorial-apps@pretrained_model_local
         python-version: ["3.9"]
-        runner:
-          - syftbox-sh-linux-x64
-          - sh-macos-arm64
-      fail-fast: true
+        runner: [syftbox-sh-linux-x64, sh-macos-arm64]
+      fail-fast: false
 
     runs-on: ${{ matrix.runner }}
     steps:
