@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e-tests:
+  e2e-test:
     strategy:
       max-parallel: 99
       matrix:

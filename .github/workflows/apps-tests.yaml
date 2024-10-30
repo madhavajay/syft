@@ -10,12 +10,12 @@ on:
       - main
 
 jobs:
-  standalone-apps-tests:
+  apps-test:
     strategy:
       max-parallel: 99
       matrix:
         apps:
-          - ring
+          - ring@main
           - tutorial-apps@basic_aggregator
           - tutorial-apps@pretrained_model_aggregator
           - tutorial-apps@pretrained_model_local
@@ -31,7 +31,7 @@ jobs:
         id: apprepo
         run: |
           REPO=$(echo ${{ matrix.apps }} | cut -d'@' -f1)
-          REF=$(echo ${{ matrix.apps }} | cut -d'@' -f2 || echo "main")
+          REF=$(echo ${{ matrix.apps }} | cut -d'@' -f2)
           echo "REPO=$REPO" >> $GITHUB_OUTPUT
           echo "REF=$REF" >> $GITHUB_OUTPUT
 
