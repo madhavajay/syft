@@ -1,6 +1,8 @@
+import os
 import subprocess
 from pathlib import Path
 
+from loguru import logger
 from typing_extensions import Optional
 
 ASSETS_FOLDER = Path(__file__).parents[2] / "assets"
@@ -43,6 +45,14 @@ def find_icon_file(src_path: Path) -> Path:
 
 
 def copy_icon_file(icon_folder: str, dest_folder: str) -> None:
+    # a flag to disable icons
+    # GitHub CI needs to zip sync dir in tests and fails when it encounters Icon\r files
+    if str(os.getenv("SYFTBOX_DISABLE_ICONS")).lower() in ("true", "1"):
+        logger.info("Icons are disabled.")
+        return
+    else:
+        logger.info("Copying icons")
+
     dest_path = Path(dest_folder)
     icon_path = Path(icon_folder)
     src_icon_path = find_icon_file(icon_path)

@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 from croniter import croniter
@@ -16,6 +17,8 @@ from syftbox.lib import (
     SyftPermission,
     perm_file_path,
 )
+
+BOOTSTRAPPED = False
 
 
 def find_and_run_script(task_path, extra_args):
@@ -95,9 +98,9 @@ def load_config(path: str) -> Optional[SimpleNamespace]:
         return None
 
 
-def run_apps(client_config):
+def bootstrap(client_config):
     # create the directory
-    apps_path = str(client_config.sync_folder / "apps")
+    apps_path = str(Path(client_config.sync_folder) / "apps")
     os.makedirs(apps_path, exist_ok=True)
 
     # Copy default apps if they don't exist
@@ -115,6 +118,17 @@ def run_apps(client_config):
         except Exception as e:
             logger.error("Failed to create perm file")
             logger.exception(e)
+
+
+def run_apps(client_config):
+    # create the directory
+    apps_path = str(Path(client_config.sync_folder) / "apps")
+
+    global BOOTSTRAPPED
+    if not BOOTSTRAPPED:
+        logger.info("Bootstrapping apps")
+        bootstrap(client_config)
+        BOOTSTRAPPED = True
 
     apps = os.listdir(apps_path)
     for app in apps:
