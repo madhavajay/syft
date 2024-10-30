@@ -32,7 +32,7 @@ def list_datasites(client: httpx.Client) -> list[str]:
     return data
 
 
-def get_all_datasite_states(client: httpx.Client, email: str) -> dict[str, list[FileMetadata]]:
+def get_datasite_states(client: httpx.Client, email: str) -> dict[str, list[FileMetadata]]:
     response = client.post(
         "/sync/datasite_states",
         headers={"email": email},

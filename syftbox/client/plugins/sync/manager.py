@@ -4,7 +4,7 @@ from threading import Thread
 from loguru import logger
 
 from syftbox.client.plugins.sync.consumer import SyncConsumer
-from syftbox.client.plugins.sync.endpoints import get_all_datasite_states
+from syftbox.client.plugins.sync.endpoints import get_datasite_states
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import DatasiteState, FileChangeInfo
 from syftbox.lib import Client
@@ -33,7 +33,7 @@ class SyncManager:
 
     def get_datasite_states(self) -> list[DatasiteState]:
         try:
-            remote_datasite_states = get_all_datasite_states(self.client.server_client, email=self.client.email)
+            remote_datasite_states = get_datasite_states(self.client.server_client, email=self.client.email)
         except Exception as e:
             logger.error(f"Failed to retrieve datasites from server, only syncing own datasite. Reason: {e}")
             remote_datasite_states = {}
@@ -68,6 +68,7 @@ class SyncManager:
 
         datasite_states = self.get_datasite_states()
         logger.info(f"Syncing {len(datasite_states)} datasites")
+        logger.debug(f"Datasites: {datasite_states}")
 
         for datasite_state in datasite_states:
             self.enqueue_datasite_changes(datasite_state)

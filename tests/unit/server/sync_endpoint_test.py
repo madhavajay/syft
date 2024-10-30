@@ -14,7 +14,7 @@ from syftbox.client.plugins.sync.endpoints import (
     SyftServerError,
     apply_diff,
     download_bulk,
-    get_all_datasite_states,
+    get_datasite_states,
     get_diff,
     get_metadata,
     get_remote_state,
@@ -252,7 +252,7 @@ def test_list_datasites(client: TestClient):
 
 
 def test_get_all_datasite_states(client: TestClient):
-    response = get_all_datasite_states(client, email=TEST_DATASITE_NAME)
+    response = get_datasite_states(client, email=TEST_DATASITE_NAME)
     assert len(response) == 1
 
     metadatas = response[TEST_DATASITE_NAME]
