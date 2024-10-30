@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 from croniter import croniter
@@ -97,7 +98,10 @@ def load_config(path: str) -> Optional[SimpleNamespace]:
 
 def run_apps(client_config):
     # create the directory
-    apps_path = str(client_config.sync_folder / "apps")
+
+    # Note: an extra step of Path conversion is required since ClientConfig is a dataclass
+    # where type checking is not enforced, and the sync_folder becomes a string somewhere in the process
+    apps_path = str(Path(client_config.sync_folder) / "apps")
     os.makedirs(apps_path, exist_ok=True)
 
     # Copy default apps if they don't exist

@@ -647,7 +647,7 @@ def load_or_create_config(args) -> ClientConfig:
 
     if client_config.sync_folder is None:
         sync_folder = get_user_input(
-            "Where do you want to Sync SyftBox to?",
+            "Where do you want to Sync SyftBox to? Press Enter for default",
             DEFAULT_SYNC_FOLDER,
         )
         sync_folder = os.path.abspath(os.path.expanduser(sync_folder))
