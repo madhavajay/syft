@@ -391,7 +391,7 @@ def filter_metadata(
     metadata_list: list[FileMetadata],
     perm_tree: PermissionTree,
     snapshot_folder: Path,
-):
+) -> list[FileMetadata]:
     filtered_metadata = []
     for metadata in metadata_list:
         perm_file_at_path = perm_tree.permission_for_path((snapshot_folder / metadata.path).as_posix())

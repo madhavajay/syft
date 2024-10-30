@@ -14,10 +14,12 @@ from syftbox.client.plugins.sync.endpoints import (
     SyftServerError,
     apply_diff,
     download_bulk,
+    get_all_datasite_states,
     get_diff,
     get_metadata,
     get_remote_state,
 )
+from syftbox.lib.lib import FileMetadata
 from syftbox.server.sync.models import ApplyDiffResponse, DiffResponse
 from tests.unit.server.conftest import PERMFILE_FILE, TEST_DATASITE_NAME, TEST_FILE
 
@@ -247,6 +249,15 @@ def test_list_datasites(client: TestClient):
     response = client.post("/sync/datasites")
 
     response.raise_for_status()
+
+
+def test_get_all_datasite_states(client: TestClient):
+    response = get_all_datasite_states(client, email=TEST_DATASITE_NAME)
+    assert len(response) == 1
+
+    metadatas = response[TEST_DATASITE_NAME]
+    assert len(metadatas) == 3
+    assert all(isinstance(m, FileMetadata) for m in metadatas)
 
 
 def test_download_snapshot(client: TestClient):
