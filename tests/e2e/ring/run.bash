@@ -53,7 +53,7 @@ bg_start_syftbox() {
 }
 
 e2e_prepare_dirs() {
-    just reset
+    rm -rf $E2E_DIR
     mkdir -p $LOGS_DIR $CONFIG_DIR $CLIENT_DIR
 }
 
