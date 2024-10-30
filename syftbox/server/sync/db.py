@@ -91,7 +91,7 @@ def get_all_datasites(conn: sqlite3.Connection) -> list[str]:
         FROM file_metadata;
         """
     )
-    return [row[0] for row in cursor]
+    return [row[0] for row in cursor if row[0]]
 
 
 def move_with_transaction(

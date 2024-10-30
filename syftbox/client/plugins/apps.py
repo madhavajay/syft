@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import shutil
@@ -14,7 +15,6 @@ from typing_extensions import Any, Optional, Union
 
 from syftbox.lib import (
     SyftPermission,
-    get_file_hash,
     perm_file_path,
 )
 
@@ -134,11 +134,16 @@ def run_apps(client_config):
                 RUNNING_APPS[app] = thread
 
 
+def get_file_hash(file_path, digest="md5") -> str:
+    with open(file_path, "rb") as f:
+        return hashlib.file_digest(f, digest)
+
+
 def output_published(app_output, published_output) -> bool:
     return (
         os.path.exists(app_output)
         and os.path.exists(published_output)
-        and get_file_hash(app_output) == get_file_hash(published_output)
+        and get_file_hash(app_output, "md5") == get_file_hash(published_output, "md5")
     )
 
 
