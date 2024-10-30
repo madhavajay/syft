@@ -94,7 +94,6 @@ def get_datasite_states(
             continue
         datasite_states[datasite] = datasite_state
 
-    print(datasite_states)
     return datasite_states
 
 
