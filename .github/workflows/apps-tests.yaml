@@ -5,6 +5,7 @@ on:
 
   workflow_call:
 
+  # todo remove before merge
   pull_request:
     branches:
       - main
