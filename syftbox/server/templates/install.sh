@@ -155,19 +155,26 @@ install_syftbox() {
 
 
 deactivate_env() {
-    if [ "$VIRTUAL_ENV" != "" ]; then
-        echo "${yellow}You are in a virtual environment: $(basename "$VIRTUAL_ENV")"${reset}
-        echo "${yellow}Please deactivate your virtual environment using" \
-             "${green}deactivate" \
-             "${yellow}and then install again.${reset}"
-        exit 1
+    # tries to deactivate python venv
+    # - For conda, it's simple we `conda deactivate`
+    # - But for py venv, `deactivate` is not be available in the installer sh proc
+    #   so we surgically remove VIRTUAL_ENV VIRTUAL_ENV_PROMPT and drop references from PATH
+
+    if [ -n "$CONDA_DEFAULT_ENV" ]
+    then conda deactivate || true
+    elif [ -n "$VIRTUAL_ENV" ]
+    then
+        export PATH=${PATH#"$VIRTUAL_ENV/bin:"}
+        unset VIRTUAL_ENV
+        unset VIRTUAL_ENV_PROMPT
     fi
-    if [ "$CONDA_PREFIX" != "" ]; then
-        echo "${yellow}You are in a conda environment: $(basename "$CONDA_PREFIX")"${reset}
-        echo "${yellow}Please deactivate your conda environment using" \
-             "${green}conda deactivate" \
-             "${yellow}and then install again.${reset}"
-        exit 1
+
+    # people have weird python setups (skill issue) - double check if env/path is unset.
+    path_has_env=$(echo "$PATH" | grep "/envs/\|/venv/\|/.venv/\|/virtualenv/")
+    if [ -n "$VIRTUAL_ENV" ] || [ -n "$CONDA_DEFAULT_ENV" ]
+    then err "Unable to deactivate Python virtual environment. Please deactivate manually and run this script again."
+    elif [ -n "$path_has_env" ]
+    then err "Unable to deactivate Python virtual environment. There's a reference to a Python virtual environment in your PATH. Please remove it manually and run this script again."
     fi
 }
 
