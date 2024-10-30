@@ -38,6 +38,11 @@ jobs:
         with:
           just-version: "1.36.0"
 
+      - name: "Setup jq"
+        uses: dcarbone/install-jq-action@v2
+        with:
+          version: "1.7"
+
       - name: Set up Python ${{ matrix.python-version }}
         if: startsWith(matrix.runner, 'syftbox-sh-linux')
         uses: actions/setup-python@v5
@@ -59,11 +64,18 @@ jobs:
       - name: Install SyftBox
         run: |
           uv tool install --upgrade syftbox
+
+      - name: Pre-test checks
+        run: |
+          uv --version
+          jq --version
+          just --version
+          curl --version
           syftbox version
 
       - name: Run E2E Test for '${{ matrix.e2e-test }}'
         run: |
-          just e2e-test ${{ matrix.e2e-test }}
+          just test-e2e ${{ matrix.e2e-test }}
 
       - name: Upload e2e directory
         uses: actions/upload-artifact@v4
