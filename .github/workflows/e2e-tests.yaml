@@ -78,7 +78,7 @@ jobs:
           just test-e2e ${{ matrix.e2e-test }}
 
       - name: Upload e2e directory
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-${{ matrix.e2e-test }}-${{ runner.os }}-${{ matrix.python-version }}
