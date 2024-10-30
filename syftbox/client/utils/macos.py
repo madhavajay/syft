@@ -8,10 +8,6 @@ from typing_extensions import Optional
 ASSETS_FOLDER = Path(__file__).parents[2] / "assets"
 ICONS_PKG = ASSETS_FOLDER / "icon.zip"
 
-# a flag to disable icons
-# GitHub CI needs to zip sync dir in tests and fails when it encounters Icon\r files
-DISABLE_ICONS = str(os.getenv("SYFTBOX_DISABLE_ICONS")).lower() in ("true", "1")
-
 
 # Function to search for Icon\r file
 def search_icon_file(src_path: Path) -> Optional[Path]:
@@ -51,11 +47,11 @@ def find_icon_file(src_path: Path) -> Path:
 def copy_icon_file(icon_folder: str, dest_folder: str) -> None:
     # a flag to disable icons
     # GitHub CI needs to zip sync dir in tests and fails when it encounters Icon\r files
-    if DISABLE_ICONS:
+    if str(os.getenv("SYFTBOX_DISABLE_ICONS")).lower() in ("true", "1"):
         logger.info("Icons are disabled.")
         return
     else:
-        logger.info("Copying icons.")
+        logger.info("Copying icons")
 
     dest_path = Path(dest_folder)
     icon_path = Path(icon_folder)

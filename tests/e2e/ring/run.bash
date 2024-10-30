@@ -13,6 +13,8 @@ SERVER_DIR=$RING_DIR/server
 CONFIG_DIR=$RING_DIR/config
 domain="openmined.org"
 
+export SYFTBOX_DISABLE_ICONS=1
+
 ########## Client & Server ##########
 
 bg_start_server() {
@@ -30,14 +32,12 @@ bg_start_client() {
 
     info "Starting client email=$email port=$port"
 
-    export SYFTBOX_DISABLE_ICONS=1
     run_bg syftbox client \
         --config_path=$CONFIG_DIR/$user.json \
         --sync_folder=$CLIENT_DIR/$user \
         --email=$email \
         --port=$port \
         --server=http://localhost:5001 &> $LOGS_DIR/client.$1.log
-    unset SYFTBOX_DISABLE_ICONS
 }
 
 bg_start_syftbox() {
