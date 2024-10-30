@@ -2,39 +2,42 @@ name: Apps Tests
 
 on:
   workflow_dispatch:
-
   workflow_call:
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  apps-tests:
+  standalone-apps-tests:
     strategy:
       max-parallel: 99
       matrix:
+        include:
+          - app: OpenMined/ring
+            branch: main
+          - app: OpenMined/tutorial-apps
+            branch: basic_aggregator
+          - app: OpenMined/tutorial-apps
+            branch: pretrained_model_aggregator
+          - app: OpenMined/tutorial-apps
+            branch: pretrained_model_local
+        python-version: ["3.9"]
         runner: [syftbox-sh-linux-x64, sh-macos-arm64]
-        python-version: ["3.12", "3.9"]
-        app: ["ring"]
       fail-fast: true
 
     runs-on: ${{ matrix.runner }}
     steps:
+      - name: Cloning the app
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.app }}
+          ref: ${{ matrix.branch }}
+          path: ${{ matrix.app }}_${{ matrix.branch }}
+
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
           version: "0.4.25"
-
-      - name: Get uv cache dir
-        id: pip-cache
-        shell: bash
-        run: |
-          echo "dir=$(uv cache dir)" >> $GITHUB_OUTPUT
-
-      - name: Load github cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            pr-uv-${{ runner.os }}-py${{ matrix.python-version }}
 
       - name: Set up Python ${{ matrix.python-version }}
         if: startsWith(matrix.runner, 'syftbox-sh-linux')
@@ -53,12 +56,6 @@ jobs:
           uv tool update-shell
           source $HOME/.profile
           source .venv${{ matrix.python-version }}/bin/activate
-
-      - name: Cloning the app
-        uses: actions/checkout@v4
-        with:
-          repository: OpenMined/${{ matrix.app }}
-          path: ${{ matrix.app }}
 
       - name: Provisioning dummy config
         working-directory: ${{ matrix.app }}
