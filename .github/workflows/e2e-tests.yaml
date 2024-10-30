@@ -5,10 +5,6 @@ on:
 
   workflow_call:
 
-  pull_request:
-    branches:
-      - main
-
 concurrency:
   group: e2e-tests
   cancel-in-progress: true
@@ -19,9 +15,9 @@ jobs:
       max-parallel: 99
       matrix:
         # os: [ubuntu-latest, macos-latest]
-        runner: [syftbox-sh-linux-x64, sh-macos-arm64]
-        python-version: ["3.9", "3.12"]
         e2e-test: ["ring"]
+        python-version: ["3.9", "3.12"]
+        runner: [syftbox-sh-linux-x64, sh-macos-arm64]
       fail-fast: false
 
     runs-on: ${{ matrix.runner }}
@@ -81,12 +77,12 @@ jobs:
           just test-e2e ${{ matrix.e2e-test }}
 
       - name: Cleanup macOS Icon\r Files
-        if: ${{ always() && startsWith(matrix.runner, 'sh-macos') }}
+        if: ${{ failure() && startsWith(matrix.runner, 'sh-macos') }}
         run: |
           find . -type f -name "Icon*" -exec rm -f {} \;
 
-      - name: Upload e2e directory
-        if: always()
+      - name: Upload logs & client/server state
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-${{ matrix.e2e-test }}-${{ runner.os }}-${{ matrix.python-version }}
