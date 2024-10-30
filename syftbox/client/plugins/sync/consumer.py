@@ -25,7 +25,7 @@ from syftbox.client.plugins.sync.endpoints import (
 )
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import SyncSide
-from syftbox.lib.lib import Client, PermissionTree, SyftPermission
+from syftbox.lib.lib import Client, SyftPermission
 from syftbox.server.sync.hash import hash_file
 from syftbox.server.sync.models import FileMetadata
 
@@ -35,21 +35,6 @@ class SyncDecisionType(Enum):
     CREATE = 1
     MODIFY = 2
     DELETE = 3
-
-
-def get_datasite_path_for_file(client: Client, file_path: Path) -> Path:
-    # TODO move to Workspace once its merged
-    if not file_path.is_absolute():
-        abs_path = client.sync_folder / file_path
-    else:
-        abs_path = file_path
-
-    if not abs_path.is_relative_to(client.sync_folder):
-        raise ValueError(f"Path {abs_path} is not within sync folder {client.sync_folder}")
-
-    datasite_name = abs_path.relative_to(client.sync_folder).parts[0]
-    datasite_abs_path = client.sync_folder / datasite_name
-    return datasite_abs_path
 
 
 def update_local(client: Client, local_syncstate: FileMetadata, remote_syncstate: FileMetadata):
@@ -422,23 +407,6 @@ class SyncConsumer:
                 path=item.data.path,
                 state=self.get_decisions(item).result_local_state,
             )
-
-    def has_write_permission(self, item: SyncQueueItem) -> bool:
-        """
-        Checks the local permission tree to see if this client has write permission for the file.
-        """
-        path = item.data.path
-        datasite_path = get_datasite_path_for_file(self.client, path)
-
-        if SyftPermission.is_permission_file(datasite_path):
-            datasite_owner = datasite_path.parts[-1]
-            return datasite_owner == self.client.email
-
-        permission_tree = PermissionTree.from_path(str(datasite_path))
-        abs_path = self.client.sync_folder / path
-        permission = permission_tree.permission_for_path(str(abs_path))
-
-        return permission.is_admin(self.client.email) or permission.has_write_permission(self.client.email)
 
     def get_decisions(self, item: SyncQueueItem) -> SyncDecisionTuple:
         path = item.data.path
