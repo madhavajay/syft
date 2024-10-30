@@ -98,7 +98,7 @@ def load_config(path: str) -> Optional[SimpleNamespace]:
 
 def run_apps(client_config):
     # create the directory
-    apps_path = Path(client_config.sync_folder) / "apps"
+    apps_path = str(Path(client_config.sync_folder) / "apps")
     os.makedirs(apps_path, exist_ok=True)
 
     # Copy default apps if they don't exist
@@ -119,9 +119,9 @@ def run_apps(client_config):
 
     apps = os.listdir(apps_path)
     for app in apps:
-        app_path = os.path.abspath(str(apps_path / "app"))
+        app_path = os.path.abspath(apps_path + "/" + app)
         if os.path.isdir(app_path):
-            app_config = load_config(str(app_path / "config.json"))
+            app_config = load_config(app_path + "/" + "config.json")
             if app_config is None:
                 run_app(client_config, app_path)
             elif RUNNING_APPS.get(app, None) is None:
