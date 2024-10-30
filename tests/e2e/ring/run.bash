@@ -73,7 +73,7 @@ wait_for_ring_app() {
     # wait for ring app to be be installed
 
     for user in $@
-    do wait_for_path "$(path_ring_app $user)/run.sh" 20
+    do wait_for_path "$(path_ring_app $user)/run.sh" 30
     done
 }
 

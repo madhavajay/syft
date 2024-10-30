@@ -82,4 +82,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-${{ matrix.e2e-test }}-${{ runner.os }}-${{ matrix.python-version }}
-          path: ./e2e
+          path: .e2e/${{ matrix.e2e-test }}

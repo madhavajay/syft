@@ -3,13 +3,14 @@
 PWD=$(pwd)
 E2E_DIR=$PWD/.e2e
 
+reset='\033[0m'
 boldwhite='\033[1;37m'
 red='\033[1;31m'
-yellow='\033[0;33m'
-cyan='\033[1;36m'
 green='\033[1;32m'
-gray='\033[0;30m'
-reset='\033[0m'
+yellow='\033[0;33m'
+blue='\033[0;34m'
+magenta='\033[0;35m'
+boldcyan='\033[1;36m'
 
 pids=( )
 
@@ -19,7 +20,7 @@ err() {
 }
 
 info() {
-    echo -e "${cyan}$1${reset}"
+    echo -e "${boldcyan}$1${reset}"
 }
 
 warn() {
@@ -27,7 +28,7 @@ warn() {
 }
 
 debug() {
-    echo -e "${gray}$1${reset}"
+    echo -e "${blue}$1${reset}"
 }
 
 success() {
@@ -76,8 +77,7 @@ wait_for_path() {
     debug "Waiting for: $path timeout=${timeout}s"
 
     while [ ! -e "$path" ]; do
-        current_time=$(date +%s)
-        elapsed=$((current_time - start_time))
+        elapsed=$(($(date +%s) - start_time))
 
         if [ $elapsed -ge $timeout ]; then
             err "Timeout after ${timeout}s waiting for: $path"
@@ -93,15 +93,20 @@ wait_for_path() {
 wait_for_url() {
     local url="$1"
     local timeout=${2:-30}
+    local interval=${3:-1}  # Default 1s polling interval
     local start_time=$(date +%s)
 
-    while ! curl -s -f "$url" > /dev/null; do
-        if [ $(($(date +%s) - start_time)) -ge "$timeout" ]; then
-            echo "Timeout waiting for $url"
-            return 1
-        fi
-        sleep 1
-    done
+    curl -sf \
+        --retry 100 --retry-all-errors \
+        --retry-delay 1 --retry-max-time $timeout \
+        $url > /dev/null
+
+    if [ $? -ne 0 ]; then
+        err "Failed to get response from $url"
+    fi
+
+    elapsed=$(($(date +%s) - start_time))
+    debug "Got response from $url (after ${elapsed}s)"
 }
 
 wait_for_server() {
