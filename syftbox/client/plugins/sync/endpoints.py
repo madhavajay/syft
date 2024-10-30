@@ -43,10 +43,16 @@ def get_remote_state(client: httpx.Client, email: str, path: Path) -> list[FileM
 
     response_data = handle_json_response("/dir_state", response)
     metadata_list = [FileMetadata(**item) for item in response_data]
+    for item in metadata_list:
+        if not hasattr(client, "metadata_cache"):
+            client.metadata_cache = {}
+        client.metadata_cache[item.path] = item
     return metadata_list
 
 
 def get_metadata(client: httpx.Client, path: Path) -> FileMetadata:
+    if hasattr(client, "metadata_cache") and path in client.metadata_cache:
+        return client.metadata_cache[path]
     response = client.post(
         "/sync/get_metadata",
         json={

@@ -18,6 +18,8 @@ from syftbox.lib import (
     perm_file_path,
 )
 
+BOOTSTRAPPED = False
+
 
 def find_and_run_script(task_path, extra_args):
     script_path = os.path.join(task_path, "run.sh")
@@ -96,11 +98,8 @@ def load_config(path: str) -> Optional[SimpleNamespace]:
         return None
 
 
-def run_apps(client_config):
+def bootstrap(client_config):
     # create the directory
-
-    # Note: an extra step of Path conversion is required since ClientConfig is a dataclass
-    # where type checking is not enforced, and the sync_folder becomes a string somewhere in the process
     apps_path = str(Path(client_config.sync_folder) / "apps")
     os.makedirs(apps_path, exist_ok=True)
 
@@ -119,6 +118,17 @@ def run_apps(client_config):
         except Exception as e:
             logger.error("Failed to create perm file")
             logger.exception(e)
+
+
+def run_apps(client_config):
+    # create the directory
+    apps_path = str(Path(client_config.sync_folder) / "apps")
+
+    global BOOTSTRAPPED
+    if not BOOTSTRAPPED:
+        logger.info("Bootstrapping apps")
+        bootstrap(client_config)
+        BOOTSTRAPPED = True
 
     apps = os.listdir(apps_path)
     for app in apps:
