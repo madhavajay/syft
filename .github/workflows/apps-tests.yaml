@@ -2,7 +2,9 @@ name: Apps Tests
 
 on:
   workflow_dispatch:
+
   workflow_call:
+
   pull_request:
     branches:
       - main
@@ -18,7 +20,9 @@ jobs:
           - OpenMined/tutorial-apps@pretrained_model_aggregator
           - OpenMined/tutorial-apps@pretrained_model_local
         python-version: ["3.9"]
-        runner: [syftbox-sh-linux-x64, sh-macos-arm64]
+        runner:
+          - syftbox-sh-linux-x64
+          - sh-macos-arm64
       fail-fast: true
 
     runs-on: ${{ matrix.runner }}
@@ -53,7 +57,6 @@ jobs:
           source .venv${{ matrix.python-version }}/bin/activate
 
       - name: Provisioning dummy config
-        working-directory: ${{ matrix.app }}
         run: |
           CONFIG_PATH="$(pwd)/config.json"
           SYNC_FOLDER="$(pwd)/sync/"
@@ -75,7 +78,6 @@ jobs:
           cat $CONFIG_PATH
 
       - name: Run the test
-        working-directory: ${{ matrix.app }}
         run: |
           chmod +x ./run.sh
           export SYFTBOX_CLIENT_CONFIG_PATH="$(pwd)/config.json"
