@@ -1,4 +1,4 @@
-name: Standalone Apps Tests
+name: Test - Apps Standalone
 
 on:
   workflow_dispatch:
