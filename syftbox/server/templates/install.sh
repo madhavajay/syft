@@ -162,7 +162,9 @@ deactivate_env() {
 
     if [ -n "$CONDA_DEFAULT_ENV" ]
     then conda deactivate || true
-    elif [ -n "$VIRTUAL_ENV" ]
+    fi
+
+    if [ -n "$VIRTUAL_ENV" ]
     then
         export PATH=${PATH#"$VIRTUAL_ENV/bin:"}
         unset VIRTUAL_ENV
@@ -170,11 +172,8 @@ deactivate_env() {
     fi
 
     # people have weird python setups (skill issue) - double check if env/path is unset.
-    path_has_env=$(echo "$PATH" | grep "/envs/\|/venv/\|/.venv/\|/virtualenv/")
-    if [ -n "$VIRTUAL_ENV" ] || [ -n "$CONDA_DEFAULT_ENV" ]
-    then err "Unable to deactivate Python virtual environment. Please deactivate manually and run this script again."
-    elif [ -n "$path_has_env" ]
-    then err "Unable to deactivate Python virtual environment. There's a reference to a Python virtual environment in your PATH. Please remove it manually and run this script again."
+    if $(get_python_command) -c "import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)" 2>/dev/null
+    then err "Unable to deactivate Python virtual environment. Please deactivate manually, and verify your PATH does not have references to any other environment."
     fi
 }
 
@@ -196,14 +195,52 @@ check_python_version() {
     fi
 }
 
+show_debug_and_exit() {
+    need_python
+    py=$(get_python_command)
+    echo
+    warn "SYFTBOX INSTALLER DEBUG REPORT"
+    echo
+    info System
+    echo "SHELL           : $SHELL"
+    echo "LANG            : $LANG"
+    echo "LD_LIBRARY_PATH : $LD_LIBRARY_PATH"
+    echo "PATH            : $PATH"
+    echo "PWD             : $(pwd)"
+    echo
+    info "Python"
+    echo "Alias           : $py"
+    echo "Version         : $($py -V)"
+    echo "which           : $(which $py)"
+    echo "python/[ip env vars"
+    env | grep -E "(PYTHON|PIP)" || echo "-"
+    echo
+    info "Python Virtual Environment"
+    env | grep -E "(VIRTUAL_ENV|VENV)" || echo "-"
+    echo
+    info "Conda Environment"
+    env | grep CONDA || echo "-"
+    echo
+    info "Python Runtime"
+    $py -c '
+import sys; \
+print("sys.version      :", sys.version); \
+print("sys.executable   :", sys.executable); \
+print("sys.prefix       :", sys.prefix); \
+print("sys.base_prefix  :", sys.base_prefix); \
+print("sys.path"); \
+[print("-", p) for p in sys.path];'
+    exit 0
+}
 
 pre_install() {
-    deactivate_env
 
     # check if python version is >= 3.10, if uv is not managing python
     if [ $MANAGED_PYTHON -eq 0 ]
     then check_python_version
     fi
+
+    deactivate_env
 
     # if you see this message, you're good to go
     echo "
@@ -271,6 +308,9 @@ do_install() {
                 ;;
             --managed-python|managed-python)
                 MANAGED_PYTHON=1
+                ;;
+            --debug|debug)
+                show_debug_and_exit
                 ;;
             *)
                 ;;
