@@ -2,10 +2,6 @@ name: Apps Tests
 
 on:
   workflow_dispatch:
-    inputs:
-      none:
-        description: "Run Apps Manually"
-        required: false
 
   workflow_call:
 
