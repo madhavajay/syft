@@ -1,10 +1,12 @@
 import time
 from threading import Thread
+from typing import Optional
 
 from loguru import logger
 
 from syftbox.client.plugins.sync.consumer import SyncConsumer
 from syftbox.client.plugins.sync.endpoints import get_datasite_states
+from syftbox.client.plugins.sync.exceptions import FatalSyncError
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import DatasiteState, FileChangeInfo
 from syftbox.lib import Client
@@ -15,15 +17,32 @@ class SyncManager:
         self.client = client
         self.queue = SyncQueue()
         self.consumer = SyncConsumer(client=self.client, queue=self.queue)
+        self.sync_interval = 1  # seconds
+        self.thread: Optional[Thread] = None
+        self.is_stop_requested = False
+
+    def is_alive(self) -> bool:
+        return self.thread is not None and self.thread.is_alive()
+
+    def stop(self, blocking: bool = False):
+        self.is_stop_requested = True
+        if blocking:
+            self.thread.join()
 
     def start(self):
         def _start(manager: SyncManager):
-            while True:
-                manager.run_single_thread()
-                time.sleep(1)
+            while not manager.is_stop_requested:
+                try:
+                    manager.run_single_thread()
+                    time.sleep(manager.sync_interval)
+                except FatalSyncError as e:
+                    logger.error(f"Syncing encountered a fatal error: {e}")
+                    break
 
-        t = Thread(target=_start, args=[self])
+        self.is_stop_requested = False
+        t = Thread(target=_start, args=(self,), daemon=True)
         t.start()
+        self.thread = t
 
     def setup(self):
         self.change_log_folder.mkdir(exist_ok=True)
@@ -73,4 +92,5 @@ class SyncManager:
         for datasite_state in datasite_states:
             self.enqueue_datasite_changes(datasite_state)
 
+        # TODO stop consumer if self.is_stop_requested
         self.consumer.consume_all()

@@ -23,6 +23,7 @@ from syftbox.client.plugins.sync.endpoints import (
     get_diff,
     get_metadata,
 )
+from syftbox.client.plugins.sync.exceptions import FatalSyncError, SyncEnvironmentError
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import SyncSide
 from syftbox.lib.lib import Client, SyftPermission
@@ -351,7 +352,10 @@ class LocalState(BaseModel):
 
     @model_validator(mode="after")
     def init_dir(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with threading.Lock():
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            if not self.path.exists():
+                self.save()
         return self
 
     def insert(self, path: Path, state: FileMetadata):
@@ -381,11 +385,21 @@ class SyncConsumer:
         self.client = client
         self.queue = queue
         self.previous_state = LocalState(path=Path(client.sync_folder) / ".syft" / "local_syncstate.json")
-        self.previous_state.load()
+        try:
+            self.previous_state.load()
+        except Exception as e:
+            raise SyncEnvironmentError(f"Failed to load previous sync state: {e}")
+
+    def validate_sync_environment(self):
+        if not Path(self.client.sync_folder).is_dir():
+            raise SyncEnvironmentError("Your sync folder has been deleted by a different process.")
+        if not self.previous_state.path.is_file():
+            raise SyncEnvironmentError("Your previous sync state has been deleted by a different process.")
 
     def consume_all(self):
         batched_items: Dict[SyncActionType, list[SyncQueueItem]] = defaultdict(list)
         while not self.queue.empty():
+            self.validate_sync_environment()
             item = self.queue.get(timeout=0.1)
             if self.get_decisions(item).local_decision.action_type == SyncActionType.CREATE_LOCAL:
                 batched_items[SyncActionType.CREATE_LOCAL].append(item)
@@ -393,6 +407,9 @@ class SyncConsumer:
 
             try:
                 self.process_filechange(item)
+            except FatalSyncError as e:
+                # Fatal error, syncing should be interrupted
+                raise e
             except Exception as e:
                 logger.exception(f"Failed to sync file {item.data.path}. Reason: {e}")
 
@@ -428,6 +445,8 @@ class SyncConsumer:
     def process_decision(self, item: SyncQueueItem, decision: SyncDecisionTuple) -> None:
         abs_path = item.data.local_abs_path
 
+        # Ensure no changes are made if the sync environment is corrupted
+        self.validate_sync_environment()
         if decision.local_decision.is_valid(abs_path=abs_path, show_warnings=True):
             decision.local_decision.execute(self.client)
 

@@ -82,6 +82,10 @@ class FileMetadata(BaseModel):
     def hash_bytes(self) -> bytes:
         return base64.b85decode(self.hash)
 
+    @property
+    def datasite_name(self) -> str:
+        return self.path.parts[0]
+
     def __eq__(self, value: Any):
         if not isinstance(value, FileMetadata):
             return False
