@@ -426,6 +426,7 @@ class SyncConsumer:
             self.batch_download(download_items)
 
     def batch_download(self, download_items: list[SyncQueueItem]):
+        self.validate_sync_environment()
         create_local_batch(self.client, download_items)
         for item in download_items:
             self.previous_state.insert(
