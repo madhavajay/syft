@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import time
 from pathlib import Path
 
 import faker
@@ -357,6 +359,36 @@ def test_invalid_sync_to_remote(server_client: TestClient, datasite_1: Client):
 
         is_valid = decision_tuple.remote_decision.is_valid(abs_path=abs_path, show_warnings=True)
         assert not is_valid, f"path: {abs_path}, is_valid: {is_valid}"
+
+
+def test_sync_invalid_local_environment(datasite_1: Client):
+    sync_service = SyncManager(datasite_1)
+    sync_service.sync_interval = 0.1
+    sync_folder = Path(datasite_1.sync_folder)
+
+    # Create a file in datasite_1
+    tree = {
+        "folder1": {
+            "_.syftperm": SyftPermission.mine_with_public_read(datasite_1.email),
+            "file.txt": fake.text(max_nb_chars=1000),
+        },
+    }
+    create_dir_tree(Path(datasite_1.datasite_path), tree)
+
+    # Start syncing in separate thread
+    sync_service.start()
+    time.sleep(sync_service.sync_interval * 2)
+    assert sync_service.is_alive()
+    # Deleting the previous state file stops the sync
+    shutil.rmtree(sync_folder.as_posix())
+    time.sleep(sync_service.sync_interval * 2)
+
+    assert not sync_service.is_alive()
+
+    # Restarting is not possible
+    sync_service.start()
+    time.sleep(sync_service.sync_interval * 2)
+    assert not sync_service.is_alive()
 
 
 @pytest.mark.skip("This is for manual testing")
