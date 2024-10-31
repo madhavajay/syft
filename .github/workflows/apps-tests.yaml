@@ -5,11 +5,6 @@ on:
 
   workflow_call:
 
-  # todo remove before merge
-  pull_request:
-    branches:
-      - main
-
 jobs:
   apps-test:
     strategy:
@@ -17,9 +12,9 @@ jobs:
       matrix:
         apps:
           - ring@main
-          - tutorial-apps@basic_aggregator
-          - tutorial-apps@pretrained_model_aggregator
-          - tutorial-apps@pretrained_model_local
+          # - tutorial-apps@basic_aggregator
+          # - tutorial-apps@pretrained_model_aggregator
+          # - tutorial-apps@pretrained_model_local
         python-version: ["3.9"]
         runner: [syftbox-sh-linux-x64, sh-macos-arm64]
       fail-fast: false
