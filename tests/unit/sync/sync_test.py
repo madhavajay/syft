@@ -3,7 +3,9 @@ import os
 from pathlib import Path
 
 import faker
+import pytest
 from fastapi.testclient import TestClient
+from loguru import logger
 
 from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
 from syftbox.client.plugins.sync.manager import DatasiteState, SyncManager, SyncQueueItem
@@ -11,6 +13,7 @@ from syftbox.client.utils.dir_tree import DirTree, create_dir_tree
 from syftbox.lib import Client
 from syftbox.lib.lib import ClientConfig, SyftPermission
 from syftbox.server.settings import ServerSettings
+from tests.unit.sync.conftest import setup_datasite
 
 fake = faker.Faker()
 
@@ -61,13 +64,13 @@ def test_get_datasites(datasite_1: Client, datasite_2: Client):
     sync_service.run_single_thread()
     sync_service2.run_single_thread()
 
-    datasites = sync_service.get_datasites()
+    datasites = sync_service.get_datasite_states()
     assert {datasites[0].email, datasites[1].email} == emails
 
 
 def test_enqueue_changes(datasite_1: Client):
     sync_service = SyncManager(datasite_1)
-    datasites = sync_service.get_datasites()
+    datasites = sync_service.get_datasite_states()
 
     out_of_sync_permissions, out_of_sync_files = datasites[0].get_out_of_sync_files()
     num_files_after_setup = len(out_of_sync_files) + len(out_of_sync_permissions)
@@ -121,7 +124,7 @@ def test_create_file(server_client: TestClient, datasite_1: Client, datasite_2: 
     sync_service.run_single_thread()
 
     # check if no changes are left
-    for datasite in sync_service.get_datasites():
+    for datasite in sync_service.get_datasite_states():
         out_of_sync_permissions, out_of_sync_files = datasite.get_out_of_sync_files()
         assert not out_of_sync_files
         assert not out_of_sync_permissions
@@ -134,13 +137,13 @@ def test_create_file(server_client: TestClient, datasite_1: Client, datasite_2: 
     # check if file exists on datasite_2
     sync_client_2 = SyncManager(datasite_2)
     sync_client_2.run_single_thread()
-    datasite_states = sync_client_2.get_datasites()
+    datasite_states = sync_client_2.get_datasite_states()
     ds1_state = datasite_states[0]
     assert ds1_state.email == datasite_1.email
 
     print(ds1_state.get_out_of_sync_files())
 
-    print(f"datasites {[d.email for d in sync_client_2.get_datasites()]}")
+    print(f"datasites {[d.email for d in sync_client_2.get_datasite_states()]}")
     sync_client_2.run_single_thread()
 
     assert_files_on_datasite(datasite_2, [Path(datasite_1.email) / "folder1" / "file.txt"])
@@ -287,7 +290,7 @@ def test_delete_file(server_client: TestClient, datasite_1: Client, datasite_2: 
     assert (datasite_2.datasite_path / datasite_1.email / "folder1" / "file.txt").exists() is False
 
     # Check if the metadata is gone
-    remote_state_1 = sync_service_1.get_datasites()[0].get_remote_state()
+    remote_state_1 = sync_service_1.get_datasite_states()[0].get_remote_state()
     remote_paths = {metadata.path for metadata in remote_state_1}
     assert Path(datasite_1.email) / "folder1" / "file.txt" not in remote_paths
 
@@ -354,3 +357,38 @@ def test_invalid_sync_to_remote(server_client: TestClient, datasite_1: Client):
 
         is_valid = decision_tuple.remote_decision.is_valid(abs_path=abs_path, show_warnings=True)
         assert not is_valid, f"path: {abs_path}, is_valid: {is_valid}"
+
+
+@pytest.mark.skip("This is for manual testing")
+def test_n_datasites(tmp_path: Path, server_client: TestClient, datasite_1: Client):
+    n = 10
+    files_per_datasite = 32
+
+    logger.debug(f"Creating {n} datasites")
+
+    emails = [f"datasite_{i}@openmined.org" for i in range(n)]
+    other_datasites: list[Client] = [setup_datasite(tmp_path, server_client, email) for email in emails]
+
+    other_datasite_trees = [
+        {
+            "folder": {
+                "_.syftperm": SyftPermission.mine_with_public_read(email),
+            }
+        }
+        for email in emails
+    ]
+
+    for tree in other_datasite_trees:
+        tree["folder"].update({f"file_{i}.txt": fake.text(max_nb_chars=10_000) for i in range(files_per_datasite - 1)})
+
+    for datasite, tree in zip(other_datasites, other_datasite_trees):
+        create_dir_tree(Path(datasite.datasite_path), tree)
+
+    logger.debug("Syncing datasites")
+    for datasite in other_datasites:
+        sync_service = SyncManager(datasite)
+        sync_service.run_single_thread()
+
+    logger.debug("syncing main datasite")
+    sync_service_1 = SyncManager(datasite_1)
+    sync_service_1.run_single_thread()

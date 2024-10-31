@@ -78,6 +78,25 @@ def get_diff(
     )
 
 
+@router.post("/datasite_states", response_model=dict[str, list[FileMetadata]])
+def get_datasite_states(
+    conn: sqlite3.Connection = Depends(get_db_connection),
+    server_settings: ServerSettings = Depends(get_server_settings),
+    email: str = Header(),
+) -> dict[str, list[FileMetadata]]:
+    all_datasites = get_all_datasites(conn)
+    datasite_states: dict[str, list[FileMetadata]] = {}
+    for datasite in all_datasites:
+        try:
+            datasite_state = dir_state(Path(datasite), conn, server_settings, email)
+        except Exception as e:
+            logger.error(f"Failed to get dir state for {datasite}: {e}")
+            continue
+        datasite_states[datasite] = datasite_state
+
+    return datasite_states
+
+
 @router.post("/dir_state", response_model=list[FileMetadata])
 def dir_state(
     dir: Path,
@@ -94,7 +113,7 @@ def dir_state(
     try:
         perm_tree = PermissionTree.from_path(full_path, raise_on_corrupted_files=True)
     except Exception as e:
-        print(f"Failed to parse permission tree: {dir}")
+        logger.exception(f"Failed to parse permission tree: {dir}")
         raise e
 
     # filter the read state for this user by the perm tree
