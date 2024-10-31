@@ -359,6 +359,14 @@ class LocalState(BaseModel):
         return self
 
     def insert(self, path: Path, state: FileMetadata):
+        if not self.path.is_file():
+            # If the LocalState file does not exist, the sync environment is corrupted and syncing should be aborted
+
+            # NOTE: this can occur when the user deletes the sync folder, but a different plugin re-creates it.
+            # If the sync folder exists but the LocalState file does not, it means the sync folder was deleted
+            # during syncing and might cause unexpected behavior like deleting files on the remote
+            raise SyncEnvironmentError("Your previous sync state has been deleted by a different process.")
+
         if state is None:
             self.states.pop(path, None)
         else:
