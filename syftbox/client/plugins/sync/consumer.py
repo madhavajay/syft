@@ -2,11 +2,10 @@ import enum
 import hashlib
 import threading
 import zipfile
-from collections import defaultdict
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 import py_fast_rsync
 from loguru import logger
@@ -25,7 +24,7 @@ from syftbox.client.plugins.sync.endpoints import (
 )
 from syftbox.client.plugins.sync.exceptions import FatalSyncError, SyncEnvironmentError
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
-from syftbox.client.plugins.sync.sync import SyncSide
+from syftbox.client.plugins.sync.sync import DatasiteState, SyncSide
 from syftbox.lib.lib import Client, SyftPermission
 from syftbox.server.sync.hash import hash_file
 from syftbox.server.sync.models import FileMetadata
@@ -79,8 +78,8 @@ def create_local(client: Client, remote_syncstate: FileMetadata):
     abs_path.write_bytes(content_bytes)
 
 
-def create_local_batch(client: Client, remote_syncstates: list[FileMetadata]):
-    paths = [str(remote_syncstate.data.path) for remote_syncstate in remote_syncstates]
+def create_local_batch(client: Client, remote_syncstates: list[Path]):
+    paths = [str(path) for path in remote_syncstates]
     content_bytes = download_bulk(client.server_client, paths)
     zip_file = zipfile.ZipFile(BytesIO(content_bytes))
     zip_file.extractall(client.sync_folder)
@@ -405,14 +404,9 @@ class SyncConsumer:
             raise SyncEnvironmentError("Your previous sync state has been deleted by a different process.")
 
     def consume_all(self):
-        batched_items: Dict[SyncActionType, list[SyncQueueItem]] = defaultdict(list)
         while not self.queue.empty():
             self.validate_sync_environment()
             item = self.queue.get(timeout=0.1)
-            if self.get_decisions(item).local_decision.action_type == SyncActionType.CREATE_LOCAL:
-                batched_items[SyncActionType.CREATE_LOCAL].append(item)
-                continue
-
             try:
                 self.process_filechange(item)
             except FatalSyncError as e:
@@ -421,17 +415,18 @@ class SyncConsumer:
             except Exception as e:
                 logger.exception(f"Failed to sync file {item.data.path}. Reason: {e}")
 
-        download_items = batched_items[SyncActionType.CREATE_LOCAL]
-        if download_items:
-            self.batch_download(download_items)
-
-    def batch_download(self, download_items: list[SyncQueueItem]):
-        self.validate_sync_environment()
-        create_local_batch(self.client, download_items)
-        for item in download_items:
+    def download_all_missing(self, datasite_states: list[DatasiteState]):
+        missing_files = []
+        for datasite_state in datasite_states:
+            for file in datasite_state.remote_state:
+                path = file.path
+                if not self.previous_state.states.get(path):
+                    missing_files.append(path)
+        create_local_batch(self.client, missing_files)
+        for path in missing_files:
             self.previous_state.insert(
-                path=item.data.path,
-                state=self.get_decisions(item).result_local_state,
+                path=path,
+                state=self.get_current_local_syncstate(path),
             )
 
     def get_decisions(self, item: SyncQueueItem) -> SyncDecisionTuple:
