@@ -1,26 +1,33 @@
-from locust import HttpUser, task
+from locust import FastHttpUser, between, task
+from loguru import logger
 
 from syftbox.client.plugins.sync import endpoints
 
 
-class SyftBoxUser(HttpUser):
+class SyftBoxUser(FastHttpUser):
+    network_timeout = 5.0
+    connection_timeout = 5.0
+    wait_time = between(0.5, 1.5)
+
     def on_start(self):
         self.datasites = []
         self.email = "aziz@openmined.org"
         self.remote_state: dict[str, list[endpoints.FileMetadata]] = {}
 
     @task
-    def get_datasites(self):
-        self.datasites = endpoints.list_datasites(self.client)
-
-    @task
     def sync_datasites(self):
-        for datasite in self.datasites:
-            metadata_list = endpoints.get_remote_state(client=self.client, email=self.email, path=datasite)
-            self.remote_state[datasite] = metadata_list
+        remote_datasite_states = endpoints.get_datasite_states(
+            self.client,
+            email=self.email,
+        )
+        # logger.info(f"Syncing {len(remote_datasite_states)} datasites")
+        all_files = []
+        for email, remote_state in remote_datasite_states.items():
+            all_files.extend(remote_state)
 
-    @task
-    def get_metadata(self):
-        for datasite, metadata_list in self.remote_state.items():
-            for metadata in metadata_list:
-                endpoints.get_metadata(client=self.client, path=metadata.path)
+        all_paths = [str(f.path) for f in all_files][:10]
+        logger.info(f"Downloading {len(all_paths)} files")
+        endpoints.download_bulk(
+            self.client,
+            all_paths,
+        )
