@@ -186,10 +186,10 @@ check_python_version() {
         return 1
     fi
 
-    # Check if the python version is >= 3.10
+    # Check if the python version is >= 3.9
     py_valid_ver=$($py -c "import sys; print((sys.version_info[:2] >= ($REQ_PYTHON_MAJOR, $REQ_PYTHON_MINOR)))")
 
-    # Check if Python version not is greater than or equal to 3.10
+    # Check if Python version not is greater than or equal to 3.9
     if [ "$py_valid_ver" = "False" ]; then
         err "SyftBox requires Python $REQ_PYTHON_MAJOR.$REQ_PYTHON_MINOR or higher, found $($py -V). Please upgrade your Python installation and retry."
     fi
@@ -235,7 +235,7 @@ print("sys.path"); \
 
 pre_install() {
 
-    # check if python version is >= 3.10, if uv is not managing python
+    # check if python version is >= 3.9, if uv is not managing python
     if [ $MANAGED_PYTHON -eq 0 ]
     then check_python_version
     fi
