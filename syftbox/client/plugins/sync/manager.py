@@ -4,7 +4,7 @@ from threading import Thread
 from loguru import logger
 
 from syftbox.client.plugins.sync.consumer import SyncConsumer
-from syftbox.client.plugins.sync.endpoints import list_datasites
+from syftbox.client.plugins.sync.endpoints import get_datasite_states
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import DatasiteState, FileChangeInfo
 from syftbox.lib import Client
@@ -31,19 +31,22 @@ class SyncManager:
     def enqueue(self, change: FileChangeInfo) -> None:
         self.queue.put(SyncQueueItem(priority=change.get_priority(), data=change))
 
-    def get_datasites(self) -> list[DatasiteState]:
+    def get_datasite_states(self) -> list[DatasiteState]:
         try:
-            datasite_names = list_datasites(self.client.server_client)
+            remote_datasite_states = get_datasite_states(self.client.server_client, email=self.client.email)
         except Exception as e:
             logger.error(f"Failed to retrieve datasites from server, only syncing own datasite. Reason: {e}")
-            datasite_names = []
+            remote_datasite_states = {}
 
         # Ensure we are always syncing own datasite
-        if self.client.email not in datasite_names:
-            datasite_names.append(self.client.email)
+        if self.client.email not in remote_datasite_states:
+            remote_datasite_states[self.client.email] = []
 
-        datasites = [DatasiteState(client=self.client, email=email) for email in datasite_names]
-        return datasites
+        datasite_states = [
+            DatasiteState(self.client, email, remote_state=remote_state)
+            for email, remote_state in remote_datasite_states.items()
+        ]
+        return datasite_states
 
     def enqueue_datasite_changes(self, datasite: DatasiteState):
         try:
@@ -62,10 +65,12 @@ class SyncManager:
 
     def run_single_thread(self):
         # NOTE first implementation will be unthreaded and just loop through all datasites
-        self.datasites = self.get_datasites()
-        logger.debug(f"Syncing {len(self.datasites)} datasites...")
 
-        for datasite in self.datasites:
-            self.enqueue_datasite_changes(datasite)
+        datasite_states = self.get_datasite_states()
+        logger.info(f"Syncing {len(datasite_states)} datasites")
+        logger.debug(f"Datasites: {', '.join([datasite.email for datasite in datasite_states])}")
+
+        for datasite_state in datasite_states:
+            self.enqueue_datasite_changes(datasite_state)
 
         self.consumer.consume_all()

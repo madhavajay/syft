@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import shutil
@@ -5,6 +6,7 @@ import subprocess
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 from croniter import croniter
@@ -13,9 +15,10 @@ from typing_extensions import Any, Optional, Union
 
 from syftbox.lib import (
     SyftPermission,
-    get_file_hash,
     perm_file_path,
 )
+
+BOOTSTRAPPED = False
 
 
 def find_and_run_script(task_path, extra_args):
@@ -95,9 +98,9 @@ def load_config(path: str) -> Optional[SimpleNamespace]:
         return None
 
 
-def run_apps(client_config):
+def bootstrap(client_config):
     # create the directory
-    apps_path = client_config.sync_folder + "/" + "apps"
+    apps_path = str(Path(client_config.sync_folder) / "apps")
     os.makedirs(apps_path, exist_ok=True)
 
     # Copy default apps if they don't exist
@@ -116,6 +119,17 @@ def run_apps(client_config):
             logger.error("Failed to create perm file")
             logger.exception(e)
 
+
+def run_apps(client_config):
+    # create the directory
+    apps_path = str(Path(client_config.sync_folder) / "apps")
+
+    global BOOTSTRAPPED
+    if not BOOTSTRAPPED:
+        logger.info("Bootstrapping apps")
+        bootstrap(client_config)
+        BOOTSTRAPPED = True
+
     apps = os.listdir(apps_path)
     for app in apps:
         app_path = os.path.abspath(apps_path + "/" + app)
@@ -133,11 +147,16 @@ def run_apps(client_config):
                 RUNNING_APPS[app] = thread
 
 
+def get_file_hash(file_path, digest="md5") -> str:
+    with open(file_path, "rb") as f:
+        return hashlib.file_digest(f, digest)
+
+
 def output_published(app_output, published_output) -> bool:
     return (
         os.path.exists(app_output)
         and os.path.exists(published_output)
-        and get_file_hash(app_output) == get_file_hash(published_output)
+        and get_file_hash(app_output, "md5") == get_file_hash(published_output, "md5")
     )
 
 
@@ -166,6 +185,7 @@ def run_custom_app_config(client_config, app_config, path):
     while True:
         current_time = datetime.now()
         logger.info(f"👟 Running {app_name} at scheduled time {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Running command: {app_config.app.run.command}")
         try:
             result = subprocess.run(
                 app_config.app.run.command,

@@ -71,7 +71,7 @@ class FileMetadata(BaseModel):
     path: Path
     hash: str
     signature: str
-    file_size: int = 0  # limit file sizes?
+    file_size: int = 0
     last_modified: datetime
 
     @property

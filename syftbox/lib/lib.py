@@ -9,7 +9,6 @@ import re
 import threading
 import zlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 
@@ -19,13 +18,6 @@ from loguru import logger
 from typing_extensions import Any, Optional, Self, Union
 
 from syftbox.client.utils import macos
-from syftbox.server.models import (
-    DirState,
-    FileInfo,
-    get_file_hash,
-    get_file_last_modified,
-    get_file_size,
-)
 from syftbox.server.sync.models import FileMetadata
 
 from .exceptions import ClientConfigException
@@ -140,8 +132,14 @@ class SyftPermission(Jsonable):
         except Exception:
             return False
 
+    def is_admin(self, email: str) -> bool:
+        return email in self.admin
+
     def has_read_permission(self, email: str) -> bool:
         return email in self.read or USER_GROUP_GLOBAL in self.read
+
+    def has_write_permission(self, email: str) -> bool:
+        return email in self.write or USER_GROUP_GLOBAL in self.write
 
     def __eq__(self, other):
         if not isinstance(other, SyftPermission):
@@ -269,36 +267,6 @@ def ignore_dirs(directory: str, root: str, ignore_folders=None) -> bool:
     return False
 
 
-def hash_dir(
-    sync_folder: str,
-    sub_path: str,
-    ignore_folders: Optional[list] = None,
-) -> DirState:
-    state_dict = {}
-    full_path = os.path.join(sync_folder, sub_path)
-    for root, dirs, files in os.walk(full_path):
-        if not ignore_dirs(full_path, root, ignore_folders):
-            for file in files:
-                if not ignore_file(full_path, root, file):
-                    path = os.path.join(root, file)
-                    rel_path = os.path.relpath(path, full_path)
-                    file_info = FileInfo(
-                        file_hash=get_file_hash(path),
-                        last_modified=get_file_last_modified(path),
-                        num_bytes=get_file_size(path),
-                    )
-                    state_dict[rel_path] = file_info
-
-    utc_unix_timestamp = datetime.now(timezone.utc).timestamp()
-    dir_state = DirState(
-        tree=state_dict,
-        timestamp=utc_unix_timestamp,
-        sync_folder=sync_folder,
-        sub_path=sub_path,
-    )
-    return dir_state
-
-
 def ignore_file(directory: str, root: str, filename: str) -> bool:
     if directory == root:
         if filename.startswith(ICON_FILE):
@@ -406,8 +374,6 @@ class PermissionTree(Jsonable):
             current_perm_level += "/" + part
             next_perm_file = perm_file_path(current_perm_level)
             if next_perm_file in self.tree:
-                # we could do some overlay with defaults but
-                # for now lets just use a fully defined overwriting perm file
                 next_perm = self.tree[next_perm_file]
                 current_perm = next_perm
 
@@ -420,27 +386,12 @@ class PermissionTree(Jsonable):
         return f"PermissionTree: {self.parent_path}\n" + build_tree_string(self.tree)
 
 
-def filter_read_state(user_email: str, dir_state: DirState, perm_tree: PermissionTree):
-    filtered_tree = {}
-    root_dir = dir_state.sync_folder + "/" + dir_state.sub_path
-    for file_path, file_info in dir_state.tree.items():
-        full_path = root_dir + "/" + file_path
-        perm_file_at_path = perm_tree.permission_for_path(full_path)
-        if (
-            user_email in perm_file_at_path.read
-            or "GLOBAL" in perm_file_at_path.read
-            or user_email in perm_file_at_path.admin
-        ):
-            filtered_tree[file_path] = file_info
-    return filtered_tree
-
-
 def filter_metadata(
     user_email: str,
     metadata_list: list[FileMetadata],
     perm_tree: PermissionTree,
     snapshot_folder: Path,
-):
+) -> list[FileMetadata]:
     filtered_metadata = []
     for metadata in metadata_list:
         perm_file_at_path = perm_tree.permission_for_path((snapshot_folder / metadata.path).as_posix())
