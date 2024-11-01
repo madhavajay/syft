@@ -115,7 +115,7 @@ def dir_state(
     try:
         perm_tree = PermissionTree.from_path(full_path, raise_on_corrupted_files=True)
     except Exception as e:
-        print(f"Failed to parse permission tree: {dir}")
+        logger.warning(f"Failed to parse permission tree: {dir}")
         raise e
 
     # filter the read state for this user by the perm tree
