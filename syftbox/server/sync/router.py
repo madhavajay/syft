@@ -17,6 +17,7 @@ from syftbox.server.sync.db import (
     get_all_datasites,
     get_all_metadata,
     get_db,
+    get_one_metadata,
     move_with_transaction,
     save_file_metadata,
 )
@@ -46,7 +47,10 @@ def get_file_metadata(
 ) -> list[FileMetadata]:
     # TODO check permissions
 
-    return get_all_metadata(conn, path_like=req.path_like)
+    try:
+        return get_one_metadata(conn, path=req.path_like)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -58,13 +62,11 @@ def get_diff(
     conn: sqlite3.Connection = Depends(get_db_connection),
     server_settings: ServerSettings = Depends(get_server_settings),
 ) -> DiffResponse:
-    metadata_list = get_all_metadata(conn, path_like=f"{req.path}")
-    if len(metadata_list) == 0:
-        raise HTTPException(status_code=404, detail="path not found")
-    elif len(metadata_list) > 1:
-        raise HTTPException(status_code=400, detail="too many files to get diff")
+    try:
+        metadata = get_one_metadata(conn, path=f"{req.path}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    metadata = metadata_list[0]
     abs_path = server_settings.snapshot_folder / metadata.path
     with open(abs_path, "rb") as f:
         data = f.read()
@@ -107,13 +109,13 @@ def dir_state(
     if dir.is_absolute():
         raise HTTPException(status_code=400, detail="dir must be relative")
 
-    metadata = get_all_metadata(conn, path_like=f"{dir.as_posix()}%")
+    metadata = get_all_metadata(conn, path_like=f"{dir.as_posix()}")
     full_path = server_settings.snapshot_folder / dir
     # get the top level perm file
     try:
         perm_tree = PermissionTree.from_path(full_path, raise_on_corrupted_files=True)
     except Exception as e:
-        logger.exception(f"Failed to parse permission tree: {dir}")
+        print(f"Failed to parse permission tree: {dir}")
         raise e
 
     # filter the read state for this user by the perm tree
@@ -121,10 +123,10 @@ def dir_state(
     return filtered_metadata
 
 
-@router.post("/get_metadata", response_model=list[FileMetadata])
+@router.post("/get_metadata", response_model=FileMetadata)
 def get_metadata(
-    metadata: list[FileMetadata] = Depends(get_file_metadata),
-) -> list[FileMetadata]:
+    metadata: FileMetadata = Depends(get_file_metadata),
+) -> FileMetadata:
     return metadata
 
 
@@ -134,14 +136,10 @@ def apply_diffs(
     conn: sqlite3.Connection = Depends(get_db_connection),
     server_settings: ServerSettings = Depends(get_server_settings),
 ) -> ApplyDiffResponse:
-    metadata_list = get_all_metadata(conn, path_like=f"{req.path}")
-
-    if len(metadata_list) == 0:
-        raise HTTPException(status_code=404, detail="path not found")
-    elif len(metadata_list) > 1:
-        raise HTTPException(status_code=400, detail="found too many files to apply diff")
-
-    metadata = metadata_list[0]
+    try:
+        metadata = get_one_metadata(conn, path=f"{req.path}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     abs_path = server_settings.snapshot_folder / metadata.path
     with open(abs_path, "rb") as f:
@@ -177,13 +175,10 @@ def delete_file(
     conn: sqlite3.Connection = Depends(get_db_connection),
     server_settings: ServerSettings = Depends(get_server_settings),
 ) -> JSONResponse:
-    metadata_list = get_all_metadata(conn, path_like=f"{req.path}")
-    if len(metadata_list) == 0:
-        raise HTTPException(status_code=404, detail="path not found")
-    elif len(metadata_list) > 1:
-        raise HTTPException(status_code=400, detail="too many files to delete")
-
-    metadata = metadata_list[0]
+    try:
+        metadata = get_one_metadata(conn, path=f"{req.path}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     try:
         delete_file_metadata(conn, metadata.path.as_posix())
@@ -201,7 +196,9 @@ def create_file(
     conn: sqlite3.Connection = Depends(get_db_connection),
     server_settings: ServerSettings = Depends(get_server_settings),
 ) -> JSONResponse:
-    #
+    if "%" in file.filename:
+        raise HTTPException(status_code=400, detail="filename cannot contain '%'")
+
     relative_path = Path(file.filename)
     abs_path = server_settings.snapshot_folder / relative_path
 
@@ -217,9 +214,14 @@ def create_file(
         f.write(contents)
 
     cursor = conn.cursor()
-    metadata = get_all_metadata(cursor, path_like=f"{file.filename}")
-    if len(metadata) > 0:
+    try:
+        get_one_metadata(cursor, path=f"{file.filename}")
         raise HTTPException(status_code=400, detail="file already exists")
+    except ValueError:
+        # this is ok, there should be no metadata in db
+        pass
+
+    # create a new metadata for db entry
     metadata = hash_file(abs_path, root_dir=server_settings.snapshot_folder)
     save_file_metadata(cursor, metadata)
     conn.commit()
@@ -234,13 +236,11 @@ def download_file(
     conn: sqlite3.Connection = Depends(get_db_connection),
     server_settings: ServerSettings = Depends(get_server_settings),
 ) -> FileResponse:
-    metadata_list = get_all_metadata(conn, path_like=f"{req.path}")
-    if len(metadata_list) == 0:
-        raise HTTPException(status_code=404, detail="path not found")
-    elif len(metadata_list) > 1:
-        raise HTTPException(status_code=400, detail="too many files to download")
+    try:
+        metadata = get_one_metadata(conn, path=f"{req.path}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    metadata = metadata_list[0]
     abs_path = server_settings.snapshot_folder / metadata.path
     if not Path(abs_path).exists():
         # could be a stale db entry, remove from db
@@ -273,11 +273,12 @@ async def get_files(
 ) -> StreamingResponse:
     all_metadata = []
     for path in req.paths:
-        metadata_list = get_all_metadata(conn, path_like=f"{path}")
-        if len(metadata_list) != 1:
-            logger.warning(f"Expected 1 metadata, got {len(metadata_list)} for {path}")
+        try:
+            metadata = get_one_metadata(conn, path=path)
+        except ValueError as e:
+            logger.warning(str(e))
             continue
-        metadata = metadata_list[0]
+
         abs_path = server_settings.snapshot_folder / metadata.path
         if not Path(abs_path).exists() or not Path(abs_path).is_file():
             logger.warning(f"File not found: {abs_path}")
