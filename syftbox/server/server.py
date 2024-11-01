@@ -356,6 +356,13 @@ def parse_args() -> argparse.Namespace:
         help="Path to SSL certificate file for HTTPS",
     )
 
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of worker processes to spawn",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -368,6 +375,7 @@ def main() -> None:
         "port": args.port,
         "log_level": "debug" if args.debug else "info",
         "reload": args.debug,
+        "workers": args.workers,
     }
 
     uvicorn_config["ssl_keyfile"] = args.ssl_keyfile if args.ssl_keyfile else None
