@@ -73,9 +73,7 @@ def get_metadata(client: httpx.Client, path: Path) -> FileMetadata:
 
     response_data = handle_json_response("/sync/get_metadata", response)
 
-    if len(response_data) == 0:
-        raise SyftNotFound(f"[/sync/get_metadata] not found on server: {path}")
-    return FileMetadata(**response_data[0])
+    return FileMetadata(**response_data)
 
 
 def get_diff(client: httpx.Client, path: Path, signature: bytes) -> DiffResponse:
