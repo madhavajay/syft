@@ -20,6 +20,7 @@ class SyncManager:
         self.sync_interval = 1  # seconds
         self.thread: Optional[Thread] = None
         self.is_stop_requested = False
+        self.sync_run_once = False
 
     def is_alive(self) -> bool:
         return self.thread is not None and self.thread.is_alive()
@@ -89,8 +90,16 @@ class SyncManager:
         logger.info(f"Syncing {len(datasite_states)} datasites")
         logger.debug(f"Datasites: {', '.join([datasite.email for datasite in datasite_states])}")
 
+        if not self.sync_run_once:
+            # Download all missing files at the start
+            self.consumer.download_all_missing(
+                datasite_states=datasite_states,
+            )
+
         for datasite_state in datasite_states:
             self.enqueue_datasite_changes(datasite_state)
 
         # TODO stop consumer if self.is_stop_requested
         self.consumer.consume_all()
+
+        self.sync_run_once = True
