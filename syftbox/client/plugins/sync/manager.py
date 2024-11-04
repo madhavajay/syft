@@ -43,6 +43,7 @@ class SyncManager:
         self.is_stop_requested = False
         t = Thread(target=_start, args=(self,), daemon=True)
         t.start()
+        logger.info(f"Sync started, syncing every {self.sync_interval} seconds")
         self.thread = t
 
     def setup(self):
@@ -87,8 +88,7 @@ class SyncManager:
         # NOTE first implementation will be unthreaded and just loop through all datasites
 
         datasite_states = self.get_datasite_states()
-        logger.info(f"Syncing {len(datasite_states)} datasites")
-        logger.debug(f"Datasites: {', '.join([datasite.email for datasite in datasite_states])}")
+        logger.debug(f"Syncing {len(datasite_states)} datasites")
 
         if not self.sync_run_once:
             # Download all missing files at the start
