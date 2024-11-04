@@ -83,7 +83,7 @@ class Jsonable:
         return self.to_dict()[key]
 
     @classmethod
-    def load(cls, file_or_bytes: str | Path | bytes) -> Self:
+    def load(cls, file_or_bytes: Union[str, Path, bytes]) -> Self:
         try:
             if isinstance(file_or_bytes, (str, Path)):
                 with open(file_or_bytes) as f:
@@ -125,7 +125,7 @@ class SyftPermission(Jsonable):
         return path.name == "_.syftperm"
 
     @classmethod
-    def is_valid(cls, path_or_bytes: str | Path | bytes):
+    def is_valid(cls, path_or_bytes: Union[str, Path, bytes]):
         try:
             SyftPermission.load(path_or_bytes)
             return True

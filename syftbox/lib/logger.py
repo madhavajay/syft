@@ -1,13 +1,14 @@
 import sys
 from pathlib import Path
 from shutil import make_archive
+from typing import Union
 
 from loguru import logger
 
 from syftbox.lib.lib import DEFAULT_LOGS_PATH
 
 
-def setup_logger(level: str | int = "DEBUG", log_file: Path | str = DEFAULT_LOGS_PATH):
+def setup_logger(level: Union[str, int] = "DEBUG", log_file: Union[Path, str] = DEFAULT_LOGS_PATH):
     # TODO set configurable log path per client (once new folder structure is merged)
     logger.remove()
     logger.add(level=level, sink=sys.stderr, diagnose=False, backtrace=False)
