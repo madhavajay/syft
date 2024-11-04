@@ -26,6 +26,7 @@ current_dir = Path(__file__).parent
 ASSETS_FOLDER = current_dir.parent / "assets"
 DEFAULT_PORT = 8082
 ICON_FOLDER = ASSETS_FOLDER / "icon"
+DEFAULT_SERVER_URL = "https://syftbox.openmined.org"
 DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
 DEFAULT_CONFIG_FOLDER = os.path.expanduser("~/.syftbox")
 DEFAULT_CONFIG_PATH = os.path.join(DEFAULT_CONFIG_FOLDER, "client_config.json")
