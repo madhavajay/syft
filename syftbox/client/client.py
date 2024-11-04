@@ -38,7 +38,7 @@ from syftbox.lib import (
     SharedState,
     load_or_create_config,
 )
-from syftbox.lib.logger import zip_logs
+from syftbox.lib.logger import setup_logger, zip_logs
 
 
 class CustomFastAPI(FastAPI):
@@ -490,6 +490,8 @@ def get_syftbox_src_path():
 
 def main() -> None:
     args = parse_args()
+    log_level = "DEBUG" if args.debug else "INFO"
+    setup_logger(log_level)
     client_config = load_or_create_config(args)
     if not args.no_open_sync_folder:
         open_sync_folder(client_config.sync_folder)
