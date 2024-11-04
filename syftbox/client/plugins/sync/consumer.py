@@ -127,6 +127,15 @@ class SyncDecision(BaseModel):
         self.is_executed = True
 
     @property
+    def path(self) -> Path:
+        if self.local_syncstate:
+            return self.local_syncstate.path
+        elif self.remote_syncstate:
+            return self.remote_syncstate.path
+
+        raise ValueError("No path found in SyncDecision")
+
+    @property
     def action_type(self):
         if self.operation == SyncDecisionType.NOOP:
             return SyncActionType.NOOP
@@ -303,8 +312,9 @@ class SyncDecisionTuple(BaseModel):
         in_sync = current_remote_syncstate == current_local_syncstate
         conflict = local_modified and remote_modified and not in_sync
 
+        path = current_local_syncstate.path if current_local_syncstate else current_remote_syncstate.path
         logger.debug(
-            f"local_modified: {local_modified}, remote_modified: {remote_modified}, in_sync: {in_sync}, conflict: {conflict}"
+            f"{path} local_modified: {local_modified}, remote_modified: {remote_modified}, in_sync: {in_sync}, conflict: {conflict}"
         )
 
         if in_sync:
@@ -343,6 +353,24 @@ class SyncDecisionTuple(BaseModel):
                     ),
                     remote_decision=noop(),
                 )
+
+    def is_noop(self) -> bool:
+        return (
+            self.local_decision.operation == SyncDecisionType.NOOP
+            and self.remote_decision.operation == SyncDecisionType.NOOP
+        )
+
+    @property
+    def info_message(self) -> Optional[str]:
+        messages = []
+        if self.local_decision.operation != SyncDecisionType.NOOP:
+            messages.append(f"Syncing {self.local_decision.path} with decision: {self.local_decision.action_type.name}")
+        if self.remote_decision.operation != SyncDecisionType.NOOP:
+            messages.append(
+                f"Syncing {self.remote_decision.path} with decision: {self.remote_decision.action_type.name}"
+            )
+
+        return ". ".join(messages) if messages else "Syncing {self.local_decision.path} with decision: NOOP"
 
 
 class LocalState(BaseModel):
@@ -436,14 +464,6 @@ class SyncConsumer:
         # TODO, rename to remote
         current_server_state = self.get_current_server_state(path)
 
-        # local_hash = current_local_syncstate.hash if current_local_syncstate else None
-        # server_hash = current_server_state.hash if current_server_state else None
-        # previous_local_hash = previous_local_syncstate.hash if previous_local_syncstate else None
-
-        # logger.debug(
-        #     f"Processing {path} with local hash {local_hash}, server hash {server_hash}, previous local hash {previous_local_hash}"
-        # )
-
         return SyncDecisionTuple.from_states(current_local_syncstate, previous_local_syncstate, current_server_state)
 
     def process_decision(self, item: SyncQueueItem, decision: SyncDecisionTuple) -> None:
@@ -462,9 +482,8 @@ class SyncConsumer:
 
     def process_filechange(self, item: SyncQueueItem) -> None:
         decisions = self.get_decisions(item)
-        logger.debug(
-            f"Processing {item.data.path} with decisions {decisions.local_decision.operation}, {decisions.remote_decision.operation}"
-        )
+        if not decisions.is_noop():
+            logger.info(decisions.info_message)
         self.process_decision(item, decisions)
 
     def get_current_local_syncstate(self, path: Path) -> Optional[FileMetadata]:
