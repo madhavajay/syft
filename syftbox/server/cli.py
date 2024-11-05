@@ -1,9 +1,10 @@
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 import uvicorn
 from typer import Option, Typer
 
+from syftbox.client.cli import VERBOSE_OPTS
 from syftbox.server.server import app as fastapi_app
 
 app = Typer(name="SyftBox Server", pretty_exceptions_enable=False)
@@ -11,34 +12,33 @@ app = Typer(name="SyftBox Server", pretty_exceptions_enable=False)
 
 # Define options separately to keep the function signature clean
 # fmt: off
-is_file = dict(exists=True, file_okay=True, readable=True)
 SERVER_PANEL = "Server Options"
 SSL_PANEL = "SSL Options"
 
 PORT_OPTS = Option(
-    5001, "-p", "--port",
+    "-p", "--port",
     rich_help_panel=SERVER_PANEL,
     help="Local port for the SyftBox client",
 )
 WORKERS_OPTS = Option(
-    1, "-w", "--workers",
+    "-w", "--workers",
     rich_help_panel=SERVER_PANEL,
-    help="Number of worker processes. Not valid with --debug/--reload",
+    help="Number of worker processes",
 )
 RELOAD_OPTS = Option(
-    False, "--reload", "--debug",
+    "--reload", "--debug",
     rich_help_panel=SERVER_PANEL,
     help="Enable debug mode",
 )
 SSL_KEY_OPTS = Option(
-    None, "--key", "--ssl-keyfile",
-    **is_file,
+    "--key", "--ssl-keyfile",
+    exists=True, file_okay=True, readable=True,
     rich_help_panel=SSL_PANEL,
     help="Path to SSL key file",
 )
 SSL_CERT_OPTS = Option(
-    None, "--cert", "--ssl-certfile",
-    **is_file,
+    "--cert", "--ssl-certfile",
+    exists=True, file_okay=True, readable=True,
     rich_help_panel=SSL_PANEL,
     help="Path to SSL certificate file",
 )
@@ -47,26 +47,23 @@ SSL_CERT_OPTS = Option(
 
 @app.callback(invoke_without_command=True)
 def server(
-    port: int = PORT_OPTS,
-    workers: int = WORKERS_OPTS,
-    reload: bool = RELOAD_OPTS,
-    ssl_key: Optional[Path] = SSL_KEY_OPTS,
-    ssl_cert: Optional[Path] = SSL_CERT_OPTS,
+    port: Annotated[int, PORT_OPTS] = 5001,
+    workers: Annotated[int, WORKERS_OPTS] = 1,
+    verbose: Annotated[bool, VERBOSE_OPTS] = False,
+    ssl_key: Annotated[Optional[Path], SSL_KEY_OPTS] = None,
+    ssl_cert: Annotated[Optional[Path], SSL_CERT_OPTS] = None,
 ):
     """Start the SyftBox server"""
 
-    config = {
-        "app": "syftbox.server.server:app" if (reload or workers > 1) else fastapi_app,
-        "host": "0.0.0.0",
-        "port": port,
-        "log_level": "debug" if reload else "info",
-        "workers": workers,
-        "reload": reload,
-        "ssl_keyfile": ssl_key if ssl_key else None,
-        "ssl_certfile": ssl_cert if ssl_cert else None,
-    }
-
-    uvicorn.run(**config)
+    uvicorn.run(
+        app=fastapi_app,
+        host="0.0.0.0",
+        port=port,
+        log_level="debug" if verbose else "info",
+        workers=workers,
+        ssl_keyfile=ssl_key,
+        ssl_certfile=ssl_cert,
+    )
 
 
 def main():

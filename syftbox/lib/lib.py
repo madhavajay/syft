@@ -4,7 +4,6 @@ import base64
 import hashlib
 import json
 import os
-import platform
 import re
 import shutil
 import tempfile
@@ -19,7 +18,6 @@ import requests
 from loguru import logger
 from typing_extensions import Any, Optional, Self, Tuple, Union
 
-from syftbox.client.utils import macos
 from syftbox.server.sync.models import FileMetadata
 
 from .exceptions import ClientConfigException
@@ -29,10 +27,10 @@ ASSETS_FOLDER = current_dir.parent / "assets"
 DEFAULT_PORT = 8082
 ICON_FOLDER = ASSETS_FOLDER / "icon"
 DEFAULT_SERVER_URL = "https://syftbox.openmined.org"
-DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
-DEFAULT_CONFIG_FOLDER = os.path.expanduser("~/.syftbox")
-DEFAULT_CONFIG_PATH = os.path.join(DEFAULT_CONFIG_FOLDER, "client_config.json")
-DEFAULT_LOGS_PATH = os.path.join(DEFAULT_CONFIG_FOLDER, "logs", "syftbox.log")
+DEFAULT_SYNC_FOLDER = Path("~/SyftBox").expanduser().resolve()
+DEFAULT_CONFIG_FOLDER = Path("~/.syftbox").expanduser().resolve()
+DEFAULT_CONFIG_PATH = Path(DEFAULT_CONFIG_FOLDER, "client_config.json")
+DEFAULT_LOGS_PATH = Path(DEFAULT_CONFIG_FOLDER, "logs", "syftbox.log")
 
 USER_GROUP_GLOBAL = "GLOBAL"
 
@@ -528,11 +526,11 @@ def str_to_bool(bool_str: Optional[str]) -> bool:
 @dataclass
 class Client(Jsonable):
     config_path: Path
-    sync_folder: Optional[Path] = None
-    port: Optional[int] = None
-    email: Optional[str] = None
-    token: Optional[int] = None
+    sync_folder: Path
+    email: str
+    port: int = DEFAULT_PORT
     server_url: str = "http://localhost:5001"
+    token: Optional[int] = None
     email_token: Optional[str] = None
     autorun_plugins: Optional[list[str]] = field(default_factory=lambda: ["init", "create_datasite", "sync", "apps"])
     _server_client: Optional[httpx.Client] = None
@@ -597,7 +595,7 @@ class Client(Jsonable):
         return Path(full_path)
 
     @classmethod
-    def load(cls, filepath: Optional[int] = None) -> Self:
+    def load(cls, filepath: Optional[Path] = None) -> Self:
         try:
             if filepath is None:
                 config_path = os.getenv("SYFTBOX_CLIENT_CONFIG_PATH", DEFAULT_CONFIG_PATH)
@@ -613,76 +611,6 @@ class Client(Jsonable):
 
 
 ClientConfig = Client
-
-
-def get_user_input(prompt, default: Optional[str] = None):
-    if default:
-        prompt = f"{prompt} (default: {default}): "
-    user_input = input(prompt).strip()
-    return user_input if user_input else default
-
-
-def load_or_create_config(args) -> ClientConfig:
-    syft_config_dir = os.path.abspath(os.path.expanduser("~/.syftbox"))
-    os.makedirs(syft_config_dir, exist_ok=True)
-
-    client_config = None
-    try:
-        client_config = ClientConfig.load(args.config_path)
-    except Exception:
-        pass
-
-    if client_config is None and args.config_path:
-        config_path = os.path.abspath(os.path.expanduser(args.config_path))
-        client_config = ClientConfig(config_path=config_path)
-
-    if client_config is None:
-        # config_path = get_user_input("Path to config file?", DEFAULT_CONFIG_PATH)
-        config_path = os.path.abspath(os.path.expanduser(config_path))
-        client_config = ClientConfig(config_path=config_path)
-
-    if args.sync_folder:
-        sync_folder = os.path.abspath(os.path.expanduser(args.sync_folder))
-        client_config.sync_folder = sync_folder
-
-    # Keep asking for sync folder until a valid one is provided
-    while client_config.sync_folder is None:
-        sync_folder = prompt_sync_dir()
-        client_config.sync_folder = sync_folder
-
-    if args.server:
-        client_config.server_url = args.server
-
-    if not os.path.exists(client_config.sync_folder):
-        os.makedirs(client_config.sync_folder, exist_ok=True)
-
-    if platform.system() == "Darwin":
-        macos.copy_icon_file(ICON_FOLDER, client_config.sync_folder)
-
-    if args.email:
-        client_config.email = args.email
-
-    if client_config.email is None:
-        email = prompt_email()
-        client_config.email = email
-
-    if args.port:
-        client_config.port = args.port
-
-    if client_config.port is None:
-        port = int(get_user_input("Enter the port to use", DEFAULT_PORT))
-        client_config.port = port
-
-    email_token = os.environ.get("EMAIL_TOKEN", None)
-    if email_token:
-        client_config.email_token = email_token
-
-    # Migrate Old Server URL to HTTPS
-    if client_config.server_url == "http://20.168.10.234:8080":
-        client_config.server_url = "https://syftbox.openmined.org"
-
-    client_config.save(args.config_path)
-    return client_config
 
 
 def is_valid_dir(path: Union[str, Path], check_empty=True, check_writable=True) -> Tuple[bool, str]:
@@ -728,25 +656,3 @@ def is_valid_email(email: str) -> bool:
     if re.match(email_regex, email):
         return True
     return False
-
-
-def prompt_sync_dir(default_dir: Path = DEFAULT_SYNC_FOLDER) -> Path:
-    while True:
-        sync_folder = get_user_input(
-            "Where do you want to Sync SyftBox to? Press Enter for default",
-            default_dir,
-        )
-        valid, reason = is_valid_dir(sync_folder)
-        if not valid:
-            print(f"Invalid directory: '{sync_folder}'. {reason}")
-            continue
-        return Path(sync_folder).expanduser().resolve()
-
-
-def prompt_email() -> str:
-    while True:
-        email = get_user_input("Enter your email address: ")
-        if not is_valid_email(email):
-            print(f"Invalid email: '{email}'")
-            continue
-        return email

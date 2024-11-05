@@ -1,22 +1,20 @@
 from pathlib import Path
 
-import uvicorn
 from rich import print as rprint
 from typer import Option, Typer
 from typing_extensions import Annotated
 
-from syftbox.client.client import DEFAULT_SYNC_FOLDER, open_sync_folder
-from syftbox.client.client import app as fastapi_app
+from syftbox.client.client import run_client
+from syftbox.client.config import setup_config_interactive
 from syftbox.client.utils.net import get_free_port, is_port_in_use
-from syftbox.lib.lib import DEFAULT_CONFIG_PATH, DEFAULT_SERVER_URL, prompt_email, prompt_sync_dir
-from syftbox.lib.logger import setup_logger
+from syftbox.lib.lib import DEFAULT_CONFIG_PATH, DEFAULT_SERVER_URL, DEFAULT_SYNC_FOLDER
 
 app = Typer(name="SyftBox Client", pretty_exceptions_enable=False)
 
 # Define options separately to keep the function signature clean
 # fmt: off
 
-# ----- client commands opts -----
+# client commands opts
 CLIENT_PANEL = "Client Options"
 LOCAL_SERVER_PANEL = "Local Server Options"
 
@@ -24,10 +22,9 @@ EMAIL_OPTS = Option(
     "-e", "--email",
     rich_help_panel=CLIENT_PANEL,
     help="Email for the SyftBox datasite",
-    callback=prompt_email,
 )
 SERVER_OPTS = Option(
-    DEFAULT_SERVER_URL, "-s", "--server",
+    "-s", "--server",
     rich_help_panel=CLIENT_PANEL,
     help="SyftBox cache server URL",
 )
@@ -35,30 +32,33 @@ DATA_DIR_OPTS = Option(
     "-d", "--data-dir", "--sync_folder",
     rich_help_panel=CLIENT_PANEL,
     help="Directory where SyftBox stores data",
-    callback=prompt_sync_dir,
 )
 CONFIG_OPTS = Option(
-    DEFAULT_CONFIG_PATH, "-c", "--config", "--config_path",
+    "-c", "--config", "--config_path",
     rich_help_panel=CLIENT_PANEL,
     help="Path to SyftBox configuration file",
 )
-OPEN_DIR_OPTS = Option(
-    "--open-dir/--no-open-dir",
+OPEN_OPTS = Option(
+    is_flag=True,
     rich_help_panel=CLIENT_PANEL,
-    help="Will open SyftBox sync/data dir folder in file explorer",
+    help="Open SyftBox sync/data dir folder on client start",
 )
 PORT_OPTS = Option(
-    8080, "-p", "--port",
+    "-p", "--port",
     rich_help_panel=LOCAL_SERVER_PANEL,
     help="Local port for the SyftBox client",
 )
 RELOAD_OPTS = Option(
-    False, "--reload", "--debug",
     rich_help_panel=LOCAL_SERVER_PANEL,
-    help="Enable debug mode",
+    help="Run server in hot reload. Should not see this in production",
+)
+VERBOSE_OPTS = Option(
+    "-v", "--verbose",
+    is_flag=True,
+    help="Enable verbose mode",
 )
 
-# ----- report command opts -----
+# report command opts
 REPORT_PATH_OPTS = Option(
     Path(".").resolve(), "-o", "-p", "--path", "--output-dir",
     help="Directory to save the log file",
@@ -71,41 +71,21 @@ REPORT_PATH_OPTS = Option(
 def client(
     data_dir: Annotated[Path, DATA_DIR_OPTS] = DEFAULT_SYNC_FOLDER,
     email: Annotated[str, EMAIL_OPTS] = None,
-    server: str = SERVER_OPTS,
-    conf_path: Path = CONFIG_OPTS,
-    port: int = PORT_OPTS,
-    open_dir: Annotated[bool, OPEN_DIR_OPTS] = True,
-    reload: bool = RELOAD_OPTS,
+    server: Annotated[str, SERVER_OPTS] = DEFAULT_SERVER_URL,
+    config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
+    port: Annotated[int, PORT_OPTS] = 8080,
+    open_dir: Annotated[bool, OPEN_OPTS] = True,
+    verbose: Annotated[bool, VERBOSE_OPTS] = False,
 ):
     """Run the SyftBox client"""
-
-    log_level = "DEBUG" if reload else "INFO"
-    setup_logger(log_level)
-
-    # todo: untangle client config, client and fastapi server
-    # prompt & validate if no config
-    # generate config
-    # open_sync_folder
-    if open_dir:
-        open_sync_folder(data_dir)
-
-    # todo set config for fastapi app like this?
-    # fastapi_app.config = dict(key="value")
 
     if is_port_in_use(port):
         new_port = get_free_port()
         rprint(f"[yellow]Port {port} is already in use! Switching to port {new_port}[/yellow]")
         port = new_port
 
-    # run uvicorn
-    uvicorn.run(
-        # --reload/--workers requires a string path to the app
-        app="syftbox.client.client:app" if reload else fastapi_app,
-        host="0.0.0.0",
-        port=port,
-        log_level=log_level.lower(),
-        reload=reload,
-    )
+    client_config = setup_config_interactive(config_path, email, data_dir, server, port)
+    run_client(client_config=client_config, open_dir=open_dir, verbose=verbose)
 
 
 @app.command()
