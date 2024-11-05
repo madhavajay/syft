@@ -67,8 +67,12 @@ def get_all_metadata(conn: sqlite3.Connection, path_like: Optional[str] = None) 
     params = ()
 
     if path_like:
-        query += " WHERE path LIKE ?"
-        params = (path_like,)
+        if "%" in path_like:
+            raise ValueError("we don't support % in paths")
+        path_like = path_like + "%"
+        escaped_path = path_like.replace("_", "\\_")
+        query += " WHERE path LIKE ? ESCAPE '\\' "
+        params = (escaped_path,)
 
     cursor = conn.execute(query, params)
     # would be nice to paginate
@@ -84,6 +88,21 @@ def get_all_metadata(conn: sqlite3.Connection, path_like: Optional[str] = None) 
     ]
 
 
+def get_one_metadata(conn: sqlite3.Connection, path: str) -> FileMetadata:
+    cursor = conn.execute("SELECT * FROM file_metadata WHERE path = ?", (path,))
+    rows = cursor.fetchall()
+    if len(rows) == 0 or len(rows) > 1:
+        raise ValueError(f"Expected 1 metadata entry for {path}, got {len(rows)}")
+    row = rows[0]
+    return FileMetadata(
+        path=row[1],
+        hash=row[2],
+        signature=row[3],
+        file_size=row[4],
+        last_modified=row[5],
+    )
+
+
 def get_all_datasites(conn: sqlite3.Connection) -> list[str]:
     # INSTR(path, '/'): Finds the position of the first slash in the path.
     cursor = conn.execute(
@@ -91,7 +110,7 @@ def get_all_datasites(conn: sqlite3.Connection) -> list[str]:
         FROM file_metadata;
         """
     )
-    return [row[0] for row in cursor]
+    return [row[0] for row in cursor if row[0]]
 
 
 def move_with_transaction(

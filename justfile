@@ -52,7 +52,7 @@ run-client name port="auto" server="http://localhost:5001":
 
     # if port is auto, then generate a random port between 8000-8090, else use the provided port
     PORT="{{ port }}"
-    if [[ "$PORT" == "auto" ]]; then PORT=$(shuf -n 1 -i 8000-8090); fi
+    if [[ "$PORT" == "auto" ]]; then PORT="0"; fi
 
     # Working directory for client is .clients/<email>
     CONFIG_DIR=.clients/$EMAIL/config
@@ -65,22 +65,13 @@ run-client name port="auto" server="http://localhost:5001":
     echo -e "Config Dir : $CONFIG_DIR"
     echo -e "Sync Dir   : $SYNC_DIR"
 
-    uv run syftbox/client/client.py --config_path=$CONFIG_DIR/config.json --sync_folder=$SYNC_DIR --email=$EMAIL --port=$PORT --server={{ server }}
+    uv run syftbox/client/cli.py --config=$CONFIG_DIR/config.json --data-dir=$SYNC_DIR --email=$EMAIL --port=$PORT --server={{ server }}
 
 # ---------------------------------------------------------------------------------------------------------------------
 
 [group('client')]
 run-live-client server="https://syftbox.openmined.org/":
-    #!/bin/bash
-    set -eou pipefail
-
-    # Working directory for client is .clients/<email>
-    CONFIG_DIR=~/.syftbox
-    mkdir -p $CONFIG_DIR
-
-    echo -e "Config Dir : $CONFIG_DIR"
-
-    uv run syftbox/client/client.py --config_path=$CONFIG_DIR/client_config.json --server={{ server }}
+    uv run syftbox client --server={{ server }}
 
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -149,6 +140,13 @@ bump-version level="patch":
 
 # ---------------------------------------------------------------------------------------------------------------------
 
+[group('test')]
+test-e2e test_name:
+    chmod +x ./tests/e2e/{{ test_name }}/run.bash
+    bash ./tests/e2e/{{ test_name }}/run.bash
+
+# ---------------------------------------------------------------------------------------------------------------------
+
 # Build & Deploy syftbox to a remote server using SSH
 [group('deploy')]
 upload-dev keyfile remote="user@0.0.0.0": build
@@ -206,8 +204,7 @@ ssh keyfile remote="user@0.0.0.0":
 # remove all local files & directories
 [group('utils')]
 reset:
-    # 'users' is the old directory
-    rm -rf ./users ./.clients ./data ./dist *.whl
+    rm -rf ./.clients ./data ./dist ./.e2e
 
 [group('utils')]
 run-jupyter jupyter_args="":
