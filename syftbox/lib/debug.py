@@ -2,6 +2,7 @@ import os
 import platform
 import shutil
 import sys
+from dataclasses import asdict
 
 import psutil
 
@@ -15,8 +16,9 @@ def debug_report() -> str:
     apps = []
     try:
         client_config = ClientConfig.load(config_path)
-        apps = list_app(client_config, silent=True)
-        client_config = client_config.to_dict()
+        apps = list_app(client_config)["apps"]
+        client_config = asdict(client_config)
+        del client_config["_server_client"]
     except Exception:
         pass
 
@@ -40,9 +42,9 @@ def debug_report() -> str:
         },
         "syftbox": {
             "command": syftbox_path or "syftbox executable not found in PATH",
-            "apps": apps,
-            "client_config_path": config_path,
+            "client_config_path": str(config_path),
             "client_config": client_config,
+            "apps": apps,
         },
         "syftbox_env": {key: value for key, value in os.environ.items() if key.startswith("SYFT")},
     }
@@ -51,4 +53,4 @@ def debug_report() -> str:
 def debug_report_yaml() -> str:
     import yaml
 
-    return yaml.dump(debug_report(), default_flow_style=False)
+    return yaml.dump(debug_report(), default_flow_style=False, sort_keys=False)
