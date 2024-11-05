@@ -1,20 +1,11 @@
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
-from syftbox.client.config import get_user_input, prompt_email, prompt_sync_dir
+from syftbox.client.config import prompt_email, prompt_sync_dir
 from syftbox.lib.lib import DEFAULT_SYNC_FOLDER, is_valid_dir, is_valid_email
-
-
-def test_get_user_input():
-    with patch("builtins.input", return_value="test"):
-        assert get_user_input("prompt") == "test"
-
-    with patch("builtins.input", return_value=""):
-        assert get_user_input("prompt", default="default") == "default"
 
 
 @pytest.mark.parametrize(
@@ -83,19 +74,19 @@ def test_email_validation(email, expected):
     ],
 )
 def test_prompt_sync_dir(user_input, expected, monkeypatch):
-    monkeypatch.setattr("builtins.input", lambda x: user_input)
+    monkeypatch.setattr("builtins.input", lambda *a, **k: user_input)
     monkeypatch.setattr("syftbox.client.config.is_valid_dir", lambda x: (True, ""))
 
-    result = prompt_sync_dir()
-    assert result.absolute() == expected.absolute()
+    dir = prompt_sync_dir()
+    assert dir.absolute() == expected.absolute()
 
 
 @pytest.mark.timeout(1)
 def test_prompt_email(monkeypatch):
     valid_email = "test@example.com"
 
-    monkeypatch.setattr("builtins.input", lambda x: valid_email)
+    monkeypatch.setattr("builtins.input", lambda *a, **k: valid_email)
     monkeypatch.setattr("syftbox.client.config.is_valid_dir", lambda x: (True, ""))
 
-    with patch("builtins.input", return_value=valid_email):
-        assert prompt_email() == valid_email
+    email = prompt_email()
+    assert email == valid_email

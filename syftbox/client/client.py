@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from syftbox import __version__
 from syftbox.client.plugins.sync.manager import SyncManager
+from syftbox.client.utils import macos
 from syftbox.client.utils.error_reporting import make_error_report
 from syftbox.lib import ClientConfig, SharedState
 from syftbox.lib.logger import setup_logger
@@ -397,6 +398,18 @@ def open_sync_folder(folder_path):
         logger.error(f"Failed to open folder {folder_path}: {e}")
 
 
+def copy_folder_icon(sync_folder: Path):
+    # a flag to disable icons
+    # GitHub CI needs to zip sync dir in tests and fails when it encounters Icon\r files
+    disable_icons = str(os.getenv("SYFTBOX_DISABLE_ICONS")).lower() in ("true", "1")
+    if disable_icons:
+        logger.info("Directory icons are disabled")
+        return
+
+    if platform.system():
+        macos.copy_icon_file(ICON_FOLDER, sync_folder)
+
+
 def run_client(
     client_config: ClientConfig,
     open_dir: bool,
@@ -410,6 +423,9 @@ def run_client(
 
     error_config = make_error_report(client_config)
     logger.info(f"Client metadata: {error_config.model_dump_json(indent=2)}")
+
+    # copy folder icon
+    copy_folder_icon(client_config.sync_folder)
 
     # open_sync_folder
     open_dir and open_sync_folder(client_config.sync_folder)

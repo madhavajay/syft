@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Optional
 
-from syftbox.lib.lib import DEFAULT_SYNC_FOLDER, ClientConfig, is_valid_dir, is_valid_email
+from rich import print as rprint
+from rich.prompt import Confirm, Prompt
+
+from syftbox.lib.lib import DEFAULT_SYNC_FOLDER, DIR_NOT_EMPTY, ClientConfig, is_valid_dir, is_valid_email
 
 
 def load_config(config_path: Path) -> Optional[ClientConfig]:
@@ -21,11 +24,11 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
 
     if not conf:
         # first time setup
-        if not email:
-            email = prompt_email()
-
         if data_dir.expanduser().resolve() == DEFAULT_SYNC_FOLDER:
             data_dir = prompt_sync_dir()
+
+        if not email:
+            email = prompt_email()
 
         # create a new config with the input params
         conf = ClientConfig(
@@ -48,38 +51,39 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
         if port and port != conf.port:
             conf.port = port
 
+    conf.sync_folder.mkdir(parents=True, exist_ok=True)
     conf.save()
     return conf
 
 
-def get_user_input(prompt, default: Optional[str] = None):
-    """Get user input from the command line"""
-
-    if default:
-        prompt = f"{prompt} (default: {default}): "
-
-    user_input = input(prompt).strip()
-
-    return user_input or default
-
-
 def prompt_sync_dir(default_dir: Path = DEFAULT_SYNC_FOLDER) -> Path:
     while True:
-        sync_folder = get_user_input(
-            "Where do you want to Sync SyftBox to? Press Enter for default",
-            default_dir,
+        sync_folder = Prompt.ask(
+            "[bold]Where do you want SyftBox to store data?[/bold] [grey70]Press Enter for default[/grey70]",
+            default=str(default_dir),
         )
         valid, reason = is_valid_dir(sync_folder)
+        if reason == DIR_NOT_EMPTY:
+            overwrite = Confirm.ask(
+                f"[bold yellow]Directory '{sync_folder}' is not empty![/bold yellow] Do you want to overwrite it?",
+            )
+            if not overwrite:
+                continue
+            valid = True
+
         if not valid:
-            print(f"Invalid directory: '{sync_folder}'. {reason}")
+            rprint(f"[bold red]{reason}[/bold red] '{sync_folder}'")
             continue
-        return Path(sync_folder).expanduser().resolve()
+
+        path = Path(sync_folder).expanduser().resolve()
+        rprint(f"Selected directory [bold]'{path}'[/bold]")
+        return path
 
 
 def prompt_email() -> str:
     while True:
-        email = get_user_input("Enter your email address: ")
+        email = Prompt.ask("[bold]Enter your email address[/bold]")
         if not is_valid_email(email):
-            print(f"Invalid email: '{email}'")
+            rprint(f"[bold red]Invalid email[/bold red]: '{email}'")
             continue
         return email

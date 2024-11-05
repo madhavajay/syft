@@ -33,6 +33,7 @@ DEFAULT_CONFIG_PATH = Path(DEFAULT_CONFIG_FOLDER, "client_config.json")
 DEFAULT_LOGS_PATH = Path(DEFAULT_CONFIG_FOLDER, "logs", "syftbox.log")
 
 USER_GROUP_GLOBAL = "GLOBAL"
+DIR_NOT_EMPTY = "Directory is not empty"
 
 ICON_FILE = "Icon"  # special
 IGNORE_FILES = []
@@ -630,7 +631,7 @@ def is_valid_dir(path: Union[str, Path], check_empty=True, check_writable=True) 
                 return False, "Path is not a directory"
 
             if check_empty and any(dir_path.iterdir()):
-                return False, "Directory is not empty"
+                return False, DIR_NOT_EMPTY
         elif check_writable:
             # Try to create a temporary file to test write permissions on parent
             try:
