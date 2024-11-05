@@ -32,6 +32,17 @@ def list_datasites(client: httpx.Client) -> list[str]:
     return data
 
 
+def get_datasite_states(client: httpx.Client, email: str) -> dict[str, list[FileMetadata]]:
+    response = client.post(
+        "/sync/datasite_states",
+        headers={"email": email},
+    )
+
+    data = handle_json_response("/sync/datasite_states", response)
+
+    return {email: [FileMetadata(**item) for item in metadata_list] for email, metadata_list in data.items()}
+
+
 def get_remote_state(client: httpx.Client, email: str, path: Path) -> list[FileMetadata]:
     response = client.post(
         "/sync/dir_state",
@@ -62,9 +73,7 @@ def get_metadata(client: httpx.Client, path: Path) -> FileMetadata:
 
     response_data = handle_json_response("/sync/get_metadata", response)
 
-    if len(response_data) == 0:
-        raise SyftNotFound(f"[/sync/get_metadata] not found on server: {path}")
-    return FileMetadata(**response_data[0])
+    return FileMetadata(**response_data)
 
 
 def get_diff(client: httpx.Client, path: Path, signature: bytes) -> DiffResponse:

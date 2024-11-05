@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from syftbox.client.plugins.create_datasite import run as run_create_datasite_plugin
 from syftbox.client.plugins.init import run as run_init_plugin
-from syftbox.lib.lib import ClientConfig, SharedState, perm_file_path
+from syftbox.lib.lib import Client, ClientConfig, SharedState, perm_file_path
 from syftbox.server.server import app as server_app
 from syftbox.server.server import lifespan as server_lifespan
 from syftbox.server.settings import ServerSettings
@@ -31,7 +31,7 @@ def wait_for_datasite_setup(client_config: ClientConfig, timeout=5):
     raise TimeoutError("Datasite setup took too long")
 
 
-def setup_datasite(tmp_path: Path, server_client: TestClient, email: str) -> ClientConfig:
+def setup_datasite(tmp_path: Path, server_client: TestClient, email: str) -> Client:
     client_path = tmp_path / email
     client_path.unlink(missing_ok=True)
     client_path.mkdir(parents=True)

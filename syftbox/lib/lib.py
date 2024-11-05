@@ -83,7 +83,7 @@ class Jsonable:
         return self.to_dict()[key]
 
     @classmethod
-    def load(cls, file_or_bytes: str | Path | bytes) -> Self:
+    def load(cls, file_or_bytes: Union[str, Path, bytes]) -> Self:
         try:
             if isinstance(file_or_bytes, (str, Path)):
                 with open(file_or_bytes) as f:
@@ -125,15 +125,21 @@ class SyftPermission(Jsonable):
         return path.name == "_.syftperm"
 
     @classmethod
-    def is_valid(cls, path_or_bytes: str | Path | bytes):
+    def is_valid(cls, path_or_bytes: Union[str, Path, bytes]):
         try:
             SyftPermission.load(path_or_bytes)
             return True
         except Exception:
             return False
 
+    def is_admin(self, email: str) -> bool:
+        return email in self.admin
+
     def has_read_permission(self, email: str) -> bool:
         return email in self.read or USER_GROUP_GLOBAL in self.read
+
+    def has_write_permission(self, email: str) -> bool:
+        return email in self.write or USER_GROUP_GLOBAL in self.write
 
     def __eq__(self, other):
         if not isinstance(other, SyftPermission):
@@ -368,8 +374,6 @@ class PermissionTree(Jsonable):
             current_perm_level += "/" + part
             next_perm_file = perm_file_path(current_perm_level)
             if next_perm_file in self.tree:
-                # we could do some overlay with defaults but
-                # for now lets just use a fully defined overwriting perm file
                 next_perm = self.tree[next_perm_file]
                 current_perm = next_perm
 
@@ -387,7 +391,7 @@ def filter_metadata(
     metadata_list: list[FileMetadata],
     perm_tree: PermissionTree,
     snapshot_folder: Path,
-):
+) -> list[FileMetadata]:
     filtered_metadata = []
     for metadata in metadata_list:
         perm_file_at_path = perm_tree.permission_for_path((snapshot_folder / metadata.path).as_posix())

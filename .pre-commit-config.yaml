@@ -25,13 +25,7 @@ repos:
         always_run: true
       - id: name-tests-test
         always_run: true
-        exclude: |
-          (?x)(
-              ^tests/.*/fixtures/.*|    # Exclude all fixture directories under tests
-              ^tests/fixtures/.*|       # Exclude root level fixtures
-              ^.*[/\\]fixture[/\\].*|   # Exclude any directory named 'fixture'
-              ^.*[/\\]fixtures[/\\].*   # Exclude any directory named 'fixtures'
-          )
+        exclude: "tests/.*(e2e|stress|fixtures)"
       - id: requirements-txt-fixer
         always_run: true
       - id: mixed-line-ending

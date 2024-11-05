@@ -1,4 +1,4 @@
-name: Apps Tests
+name: Test - Apps Standalone
 
 on:
   workflow_dispatch:
@@ -6,35 +6,39 @@ on:
   workflow_call:
 
 jobs:
-  apps-tests:
+  apps-test:
     strategy:
       max-parallel: 99
       matrix:
+        apps:
+          - ring@main
+          # - tutorial-apps@basic_aggregator
+          # - tutorial-apps@pretrained_model_aggregator
+          # - tutorial-apps@pretrained_model_local
+        python-version: ["3.9"]
         runner: [syftbox-sh-linux-x64, sh-macos-arm64]
-        python-version: ["3.12", "3.9"]
-        app: ["ring"]
-      fail-fast: true
+      fail-fast: false
 
     runs-on: ${{ matrix.runner }}
     steps:
+      - name: Parse app repository info
+        id: apprepo
+        run: |
+          REPO=$(echo ${{ matrix.apps }} | cut -d'@' -f1)
+          REF=$(echo ${{ matrix.apps }} | cut -d'@' -f2)
+          echo "REPO=$REPO" >> $GITHUB_OUTPUT
+          echo "REF=$REF" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: OpenMined/${{ steps.apprepo.outputs.REPO }}
+          ref: ${{ steps.apprepo.outputs.REF }}
+
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
           version: "0.4.25"
-
-      - name: Get uv cache dir
-        id: pip-cache
-        shell: bash
-        run: |
-          echo "dir=$(uv cache dir)" >> $GITHUB_OUTPUT
-
-      - name: Load github cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: pr-uv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            pr-uv-${{ runner.os }}-py${{ matrix.python-version }}
 
       - name: Set up Python ${{ matrix.python-version }}
         if: startsWith(matrix.runner, 'syftbox-sh-linux')
@@ -54,17 +58,10 @@ jobs:
           source $HOME/.profile
           source .venv${{ matrix.python-version }}/bin/activate
 
-      - name: Cloning the app
-        uses: actions/checkout@v4
-        with:
-          repository: OpenMined/${{ matrix.app }}
-          path: ${{ matrix.app }}
-
       - name: Provisioning dummy config
-        working-directory: ${{ matrix.app }}
         run: |
           CONFIG_PATH="$(pwd)/config.json"
-          SYNC_FOLDER="$(pwd)/syftbox-data/"
+          SYNC_FOLDER="$(pwd)/sync/"
           echo '{
               "config_path": "'"$CONFIG_PATH"'",
               "sync_folder": "'"$SYNC_FOLDER"'",
@@ -83,7 +80,6 @@ jobs:
           cat $CONFIG_PATH
 
       - name: Run the test
-        working-directory: ${{ matrix.app }}
         run: |
           chmod +x ./run.sh
           export SYFTBOX_CLIENT_CONFIG_PATH="$(pwd)/config.json"
