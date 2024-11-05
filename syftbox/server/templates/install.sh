@@ -153,30 +153,6 @@ install_syftbox() {
     fi
 }
 
-
-deactivate_env() {
-    # tries to deactivate python venv
-    # - For conda, it's simple we `conda deactivate`
-    # - But for py venv, `deactivate` is not be available in the installer sh proc
-    #   so we surgically remove VIRTUAL_ENV VIRTUAL_ENV_PROMPT and drop references from PATH
-
-    if [ -n "$CONDA_DEFAULT_ENV" ]
-    then conda deactivate || true
-    fi
-
-    if [ -n "$VIRTUAL_ENV" ]
-    then
-        export PATH=${PATH#"$VIRTUAL_ENV/bin:"}
-        unset VIRTUAL_ENV
-        unset VIRTUAL_ENV_PROMPT
-    fi
-
-    # people have weird python setups (skill issue) - double check if env/path is unset.
-    if $(get_python_command) -c "import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)" 2>/dev/null
-    then err "Unable to deactivate Python virtual environment. Please deactivate manually, and verify your PATH does not have references to any other environment."
-    fi
-}
-
 check_python_version() {
     # Try python3, if it exists; otherwise, fall back to python
     py=$(get_python_command)
@@ -239,8 +215,6 @@ pre_install() {
     if [ $MANAGED_PYTHON -eq 0 ]
     then check_python_version
     fi
-
-    deactivate_env
 
     # if you see this message, you're good to go
     echo "
