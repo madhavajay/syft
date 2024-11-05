@@ -602,13 +602,13 @@ class Client(Jsonable):
                 config_path = os.getenv("SYFTBOX_CLIENT_CONFIG_PATH", DEFAULT_CONFIG_PATH)
                 filepath = config_path
             return super().load(filepath)
-        except Exception:
+        except Exception as e:
             raise ClientConfigException(
                 f"Unable to load Client config from {filepath}."
                 "If you are running this outside of syftbox app runner you must supply "
                 "the Client config path like so: \n"
                 "SYFTBOX_CLIENT_CONFIG_PATH=~/.syftbox/client_config.json"
-            )
+            ) from e
 
 
 ClientConfig = Client

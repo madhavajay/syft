@@ -20,11 +20,14 @@ def load_config(config_path: Path) -> Optional[ClientConfig]:
 def setup_config_interactive(config_path: Path, email: str, data_dir: Path, server: str, port: int) -> ClientConfig:
     """Setup the client configuration interactively. Called from CLI"""
 
+    config_path = config_path.expanduser().resolve()
+    data_dir = data_dir.expanduser().resolve()
+
     conf = load_config(config_path)
 
     if not conf:
         # first time setup
-        if data_dir.expanduser().resolve() == DEFAULT_SYNC_FOLDER:
+        if data_dir == DEFAULT_SYNC_FOLDER:
             data_dir = prompt_sync_dir()
 
         if not email:

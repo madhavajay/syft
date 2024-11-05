@@ -78,8 +78,10 @@ def client(
     verbose: Annotated[bool, VERBOSE_OPTS] = False,
 ):
     """Run the SyftBox client"""
-
-    if is_port_in_use(port):
+    if port == 0:
+        port = get_free_port()
+        rprint(f"[yellow]Allocated port {port}[yellow]")
+    elif is_port_in_use(port):
         new_port = get_free_port()
         rprint(f"[yellow]Port {port} is already in use! Switching to port {new_port}[/yellow]")
         port = new_port
