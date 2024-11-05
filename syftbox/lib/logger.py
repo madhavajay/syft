@@ -23,7 +23,6 @@ def setup_logger(level: Union[str, int] = "DEBUG", log_file: Union[Path, str] = 
 
 
 def zip_logs(output_path):
-    logger.info("Compressing logs folder")
     logs_folder = Path(DEFAULT_LOGS_PATH).parent
     return make_archive(output_path, "zip", logs_folder)
 

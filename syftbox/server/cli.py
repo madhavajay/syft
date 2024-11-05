@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import uvicorn
-from typer import Option, Typer
+from typer import Context, Option, Typer
 
 from syftbox.client.cli import VERBOSE_OPTS
 from syftbox.server.server import app as fastapi_app
@@ -47,6 +47,7 @@ SSL_CERT_OPTS = Option(
 
 @app.callback(invoke_without_command=True)
 def server(
+    ctx: Context,
     port: Annotated[int, PORT_OPTS] = 5001,
     workers: Annotated[int, WORKERS_OPTS] = 1,
     verbose: Annotated[bool, VERBOSE_OPTS] = False,
@@ -54,6 +55,10 @@ def server(
     ssl_cert: Annotated[Optional[Path], SSL_CERT_OPTS] = None,
 ):
     """Run the SyftBox server"""
+
+    if ctx.invoked_subcommand is not None:
+        # If a subcommand is being invoked, just return
+        return
 
     uvicorn.run(
         app=fastapi_app,
