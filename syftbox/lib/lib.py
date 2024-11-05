@@ -720,7 +720,8 @@ def is_valid_dir(path: Union[str, Path], check_empty=True, check_writable=True) 
 
 def is_valid_email(email: str) -> bool:
     # Define a regex pattern for a valid email
-    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+    # from: https://stackoverflow.com/a/21608610
+    email_regex = r"\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*"
 
     # Use the match method to check if the email fits the pattern
     if re.match(email_regex, email):
