@@ -6,6 +6,8 @@ import json
 import os
 import platform
 import re
+import shutil
+import tempfile
 import threading
 import zlib
 from dataclasses import dataclass, field
@@ -15,7 +17,7 @@ from threading import Lock
 import httpx
 import requests
 from loguru import logger
-from typing_extensions import Any, Optional, Self, Union
+from typing_extensions import Any, Optional, Self, Tuple, Union
 
 from syftbox.client.utils import macos
 from syftbox.server.sync.models import FileMetadata
@@ -59,6 +61,9 @@ def pack(obj) -> Any:
 
     if isinstance(obj, dict):
         return {k: pack(v) for k, v in obj.items()}
+
+    if isinstance(obj, Path):
+        return str(obj)
 
     raise Exception(f"Unable to pack type: {type(obj)} value: {obj}")
 
@@ -519,16 +524,6 @@ def str_to_bool(bool_str: Optional[str]) -> bool:
     return result
 
 
-def validate_email(email: str) -> bool:
-    # Define a regex pattern for a valid email
-    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
-
-    # Use the match method to check if the email fits the pattern
-    if re.match(email_regex, email):
-        return True
-    return False
-
-
 @dataclass
 class Client(Jsonable):
     config_path: Path
@@ -649,12 +644,9 @@ def load_or_create_config(args) -> ClientConfig:
         sync_folder = os.path.abspath(os.path.expanduser(args.sync_folder))
         client_config.sync_folder = sync_folder
 
-    if client_config.sync_folder is None:
-        sync_folder = get_user_input(
-            "Where do you want to Sync SyftBox to?",
-            DEFAULT_SYNC_FOLDER,
-        )
-        sync_folder = os.path.abspath(os.path.expanduser(sync_folder))
+    # Keep asking for sync folder until a valid one is provided
+    while client_config.sync_folder is None:
+        sync_folder = prompt_sync_dir()
         client_config.sync_folder = sync_folder
 
     if args.server:
@@ -670,9 +662,7 @@ def load_or_create_config(args) -> ClientConfig:
         client_config.email = args.email
 
     if client_config.email is None:
-        email = get_user_input("What is your email address? ")
-        if not validate_email(email):
-            raise Exception(f"Invalid email: {email}")
+        email = prompt_email()
         client_config.email = email
 
     if args.port:
@@ -692,3 +682,70 @@ def load_or_create_config(args) -> ClientConfig:
 
     client_config.save(args.config_path)
     return client_config
+
+
+def is_valid_dir(path: Union[str, Path], check_empty=True, check_writable=True) -> Tuple[bool, str]:
+    try:
+        if not path:
+            return False, "Empty path"
+
+        # Convert to Path object if string
+        dir_path = Path(path).expanduser().resolve()
+
+        # Must not be a reserved path
+        if dir_path.is_reserved():
+            return False, "Reserved path"
+
+        if dir_path.exists():
+            if not dir_path.is_dir():
+                return False, "Path is not a directory"
+
+            if check_empty and any(dir_path.iterdir()):
+                return False, "Directory is not empty"
+        elif check_writable:
+            # Try to create a temporary file to test write permissions on parent
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+                testfile = tempfile.TemporaryFile(dir=dir_path)
+                testfile.close()
+                shutil.rmtree(dir_path)
+            except Exception as e:
+                return False, str(e)
+
+        # all checks passed
+        return True, ""
+    except Exception as e:
+        return False, str(e)
+
+
+def is_valid_email(email: str) -> bool:
+    # Define a regex pattern for a valid email
+    # from: https://stackoverflow.com/a/21608610
+    email_regex = r"\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*"
+
+    # Use the match method to check if the email fits the pattern
+    if re.match(email_regex, email):
+        return True
+    return False
+
+
+def prompt_sync_dir(default_dir: Path = DEFAULT_SYNC_FOLDER) -> Path:
+    while True:
+        sync_folder = get_user_input(
+            "Where do you want to Sync SyftBox to? Press Enter for default",
+            default_dir,
+        )
+        valid, reason = is_valid_dir(sync_folder)
+        if not valid:
+            print(f"Invalid directory: '{sync_folder}'. {reason}")
+            continue
+        return Path(sync_folder).expanduser().resolve()
+
+
+def prompt_email() -> str:
+    while True:
+        email = get_user_input("Enter your email address: ")
+        if not is_valid_email(email):
+            print(f"Invalid email: '{email}'")
+            continue
+        return email
