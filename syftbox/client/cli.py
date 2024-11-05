@@ -1,46 +1,113 @@
 from pathlib import Path
 from typing import Optional
 
+import uvicorn
 from rich import print as rprint
 from typer import Option, Typer
 
-from syftbox.client.client import DEFAULT_SYNC_FOLDER
+from syftbox.client.client import DEFAULT_SYNC_FOLDER, open_sync_folder
+from syftbox.client.client import app as fastapi_app
+from syftbox.client.utils.net import get_free_port, is_port_in_use
 from syftbox.lib.lib import DEFAULT_CONFIG_PATH, DEFAULT_SERVER_URL
+from syftbox.lib.logger import setup_logger
 
 app = Typer(name="SyftBox Client", pretty_exceptions_enable=False)
 
 # Define options separately to keep the function signature clean
 # fmt: off
-EMAIL    = Option(None,                "-e", "--email",                     help="Email for the SyftBox datasite")
-SERVER   = Option(DEFAULT_SERVER_URL,  "-s", "--server",                    help="SyftBox cache server URL")
-DATA_DIR = Option(DEFAULT_SYNC_FOLDER, "-d", "--data-dir", "--sync_folder", help="Directory where SyftBox stores data")
-CONFIG   = Option(DEFAULT_CONFIG_PATH, "-c", "--config",   "--config_path", help="Path to SyftBox configuration file")
-PORT     = Option(8080,                "-p", "--port",                      help="Local port for the SyftBox client")
-DEBUG    = Option(False,               "--debug",                           help="Enable debug mode")
-NO_OPEN  = Option(False,               "--no-open-dir",                     help="Do not open the SyftBox sync folder")
+
+# ----- client commands opts -----
+CLIENT_PANEL = "Client Options"
+LOCAL_SERVER_PANEL = "Local Server Options"
+
+EMAIL_OPTS = Option(
+    None, "-e", "--email",
+    rich_help_panel=CLIENT_PANEL,
+    help="Email for the SyftBox datasite",
+)
+SERVER_OPTS = Option(
+    DEFAULT_SERVER_URL, "-s", "--server",
+    rich_help_panel=CLIENT_PANEL,
+    help="SyftBox cache server URL",
+)
+DATA_DIR_OPTS = Option(
+    DEFAULT_SYNC_FOLDER, "-d", "--data-dir", "--sync_folder",
+    rich_help_panel=CLIENT_PANEL,
+    help="Directory where SyftBox stores data",
+)
+CONFIG_OPTS = Option(
+    DEFAULT_CONFIG_PATH, "-c", "--config", "--config_path",
+    rich_help_panel=CLIENT_PANEL,
+    help="Path to SyftBox configuration file",
+)
+NO_OPEN_OPTS = Option(
+    False, "--no-open",
+    rich_help_panel=CLIENT_PANEL,
+    help="Will not open SyftBox sync/data dir folder",
+)
+PORT_OPTS = Option(
+    8080, "-p", "--port",
+    rich_help_panel=LOCAL_SERVER_PANEL,
+    help="Local port for the SyftBox client",
+)
+RELOAD_OPTS = Option(
+    False, "--reload", "--debug",
+    rich_help_panel=LOCAL_SERVER_PANEL,
+    help="Enable debug mode",
+)
+
+# ----- report command opts -----
+REPORT_PATH_OPTS = Option(
+    Path(".").resolve(), "-o", "-p", "--path", "--output-dir",
+    help="Directory to save the log file",
+)
+
 # fmt: on
 
 
 @app.callback(invoke_without_command=True)
 def client(
-    email: Optional[str] = EMAIL,
-    server: str = SERVER,
-    data_dir: Path = DATA_DIR,
-    conf_path: Path = CONFIG,
-    port: int = PORT,
-    debug: bool = DEBUG,
-    no_open_dir: bool = NO_OPEN,
+    email: Optional[str] = EMAIL_OPTS,
+    server: str = SERVER_OPTS,
+    data_dir: Path = DATA_DIR_OPTS,
+    conf_path: Path = CONFIG_OPTS,
+    port: int = PORT_OPTS,
+    no_open_dir: bool = NO_OPEN_OPTS,
+    reload: bool = RELOAD_OPTS,
 ):
     """Run the SyftBox client"""
 
+    log_level = "DEBUG" if reload else "INFO"
+    setup_logger(log_level)
+
     # todo: untangle client config, client and fastapi server
-    raise NotImplementedError()
+    # prompt & validate if no config
+    # generate config
+    # open_sync_folder
+    if not no_open_dir:
+        open_sync_folder(data_dir)
+
+    # todo set config for fastapi app like this?
+    # fastapi_app.config = dict(key="value")
+
+    if is_port_in_use(port):
+        new_port = get_free_port()
+        rprint(f"[yellow]Port {port} is already in use! Switching to port {new_port}[/yellow]")
+        port = new_port
+
+    # run uvicorn
+    uvicorn.run(
+        # --reload/--workers requires a string path to the app
+        app="syftbox.client.client:app" if reload else fastapi_app,
+        host="0.0.0.0",
+        port=port,
+        log_level=log_level.lower(),
+        reload=reload,
+    )
 
 
 @app.command()
-def report(
-    path: Path = Option(".", "-o", "-p", "--path", "--output-dir", help="Directory to save the log file"),
-):
+def report(path: Path = REPORT_PATH_OPTS):
     """Generate a report of the SyftBox client"""
     from datetime import datetime
 
