@@ -53,7 +53,7 @@ def server(
     ssl_key: Annotated[Optional[Path], SSL_KEY_OPTS] = None,
     ssl_cert: Annotated[Optional[Path], SSL_CERT_OPTS] = None,
 ):
-    """Start the SyftBox server"""
+    """Run the SyftBox server"""
 
     uvicorn.run(
         app=fastapi_app,

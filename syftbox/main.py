@@ -2,8 +2,9 @@ from rich import print as rprint
 from typer import Typer
 
 from syftbox import __version__
-from syftbox.client.cli import app as client_app
-from syftbox.server.cli import app as server_app
+from syftbox.app.cli import app as app_cli
+from syftbox.client.cli import app as client_cli
+from syftbox.server.cli import app as server_cli
 
 app = Typer(
     name="SyftBox",
@@ -13,14 +14,14 @@ app = Typer(
 )
 
 
-@app.command()
+@app.command(rich_help_panel="General Options")
 def version():
     """Print SyftBox version"""
 
     print(__version__)
 
 
-@app.command()
+@app.command(rich_help_panel="General Options")
 def debug():
     """Print SyftBox debug data"""
     from syftbox.lib.debug import debug_report_yaml
@@ -31,8 +32,9 @@ def debug():
         rprint(f"[red]Error[/red]: {e}")
 
 
-app.add_typer(client_app, name="client")
-app.add_typer(server_app, name="server")
+app.add_typer(client_cli, name="client")
+app.add_typer(server_cli, name="server")
+app.add_typer(app_cli, name="app")
 
 
 def main():
