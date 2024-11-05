@@ -1,5 +1,5 @@
-import os
-import shutil
+from pathlib import Path
+from subprocess import CalledProcessError
 
 import pytest
 
@@ -37,26 +37,60 @@ def test_second_invalid_git_path():
         assert excpt.value == "Invalid Git repository path format."
 
 
-def test_clone_valid_repository():
+def test_clone_valid_repository(monkeypatch):
+    count = 0
+
+    def mock_subproc_run(*args, **kwargs):
+        nonlocal count
+        count += 1
+        return 0
+
+    monkeypatch.setattr("subprocess.run", mock_subproc_run)
+
     path = "OpenMined/logged_in"
     temp_path = clone_repository(path, "main")
-    assert os.path.exists(temp_path)
-    shutil.rmtree(temp_path)
+    assert count == 3
+    assert isinstance(temp_path, Path)
 
 
-def test_clone_repository_to_an_existent_path():
+def test_clone_repository_to_an_existent_path(monkeypatch):
+    count = 0
+
+    def mock_subproc_run(*args, **kwargs):
+        nonlocal count
+        count += 1
+        return 0
+
+    monkeypatch.setattr("subprocess.run", mock_subproc_run)
+
     # First call will make the repository path exist
     path = "OpenMined/logged_in"
     temp_path = clone_repository(path, "main")
-    assert os.path.exists(temp_path)
+    assert isinstance(temp_path, Path)
+    assert count == 3
 
     # Second call must clone it again without any exception (replaces the old one).
     temp_path = clone_repository(path, "main")
-    shutil.rmtree(temp_path)
+    assert isinstance(temp_path, Path)
+    assert count == 6
 
 
-def test_clone_invalid_repository():
+def test_clone_invalid_repository(monkeypatch):
+    count = 0
+
+    def mock_subproc_run(*args, **kwargs):
+        nonlocal count
+        count += 1
+        cmd = args[0]
+
+        if cmd[0] == "git" and cmd[1] == "ls-remote" and "Invalid" in cmd[2]:
+            raise CalledProcessError(1, cmd)
+
+        return 0
+
+    monkeypatch.setattr("subprocess.run", mock_subproc_run)
+
     path = "InvalidUser/InvalidRepo"
     with pytest.raises(ValueError) as excpt:
         _ = clone_repository(path, "main")
-        assert excpt.value == "The provided repository path doesn't seems to be accessible. Please check it out."
+        assert "Cannot access repository" in excpt.value
