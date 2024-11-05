@@ -1,3 +1,4 @@
+import inspect
 import os
 import tempfile
 from pathlib import Path
@@ -90,12 +91,16 @@ def test_email_validation(email, expected):
         # sanity check in test_is_valid_dir
     ],
 )
+@pytest.mark.timeout(1)
 def test_prompt_sync_dir(user_input, expected):
     with patch("builtins.input", return_value=user_input):
-        result = prompt_sync_dir()
-        assert result.absolute() == expected.absolute()
+        is_valid_dir_path = f"{inspect.getmodule(is_valid_dir).__name__}.{is_valid_dir.__name__}"
+        with patch(is_valid_dir_path, return_value=(True, "")):
+            result = prompt_sync_dir()
+            assert result.absolute() == expected.absolute()
 
 
+@pytest.mark.timeout(1)
 def test_prompt_email():
     valid_email = "test@example.com"
     with patch("builtins.input", return_value=valid_email):
