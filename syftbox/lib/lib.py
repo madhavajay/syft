@@ -580,6 +580,68 @@ class Client(Jsonable):
         os.environ["SYFTBOX_SYNC_DIR"] = self.sync_folder
         logger.info(f"> Setting Sync Dir to: {self.sync_folder}")
 
+    def validate_sync_folder(self) -> bool:
+        """
+        Validates if the sync folder is valid and writable.
+
+        Returns:
+            bool: True if the sync folder is valid and writable, False otherwise.
+
+        Checks:
+            1. Path exists and is valid
+            2. Not a reserved Windows path
+            3. Is a directory (or can be created)
+            4. Is empty if exists
+            5. Has proper write permissions
+        """
+        if not self.sync_folder:
+            logger.error("Sync folder path not provided")
+            return False
+
+        try:
+            # Convert to Path object and resolve any relative paths
+            path = Path(self.sync_folder).expanduser().resolve()
+
+            # Must not be a reserved Windows path
+            if path.is_reserved():
+                logger.error(f"Invalid path: {path} is a reserved Windows path")
+                return False
+
+            # Check if path exists
+            if path.exists():
+                # Path must be a directory
+                if not path.is_dir():
+                    logger.error(f"Path exists but is not a directory: {path}")
+                    return False
+
+                # Path must be empty
+                if any(path.iterdir()):
+                    logger.error(f"Directory is not empty: {path}")
+                    return False
+
+                # Path must be writable
+                if not os.access(path, os.W_OK):
+                    logger.error(f"No write permission for sync folder: {path}")
+                    return False
+            else:
+                # Path doesn't exist yet. We'll later create the directory using `os.makedirs`. So
+                # recursively check the first parent directory that exists and ensure that it is writable
+                parent = path.parent
+                while not parent.exists():
+                    parent = parent.parent
+
+                if not os.access(parent, os.W_OK):
+                    logger.error(f"No write permission for parent directory: {parent}")
+                    return False
+
+            # Update the path with validated version
+            self.sync_folder = str(path)
+            return True
+
+        except (ValueError, OSError) as e:
+            logger.error(f"Invalid path: {self.sync_folder}. Error: {str(e)}")
+            return False
+
     def create_folder(self, path: str, permission: SyftPermission):
         os.makedirs(path, exist_ok=True)
         permission.save(path)
@@ -645,13 +707,15 @@ def load_or_create_config(args) -> ClientConfig:
         sync_folder = os.path.abspath(os.path.expanduser(args.sync_folder))
         client_config.sync_folder = sync_folder
 
-    if client_config.sync_folder is None:
+    # Keep asking for sync folder until a valid one is provided
+    while client_config.sync_folder is None:
         sync_folder = get_user_input(
             "Where do you want to Sync SyftBox to? Press Enter for default",
             DEFAULT_SYNC_FOLDER,
         )
-        sync_folder = os.path.abspath(os.path.expanduser(sync_folder))
         client_config.sync_folder = sync_folder
+        if not client_config.validate_sync_folder():
+            client_config.sync_folder = None
 
     if args.server:
         client_config.server_url = args.server
