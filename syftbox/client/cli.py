@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from rich import print as rprint
-from typer import Option, Typer
+from typer import Context, Option, Typer
 from typing_extensions import Annotated
 
 from syftbox.client.client import run_client
@@ -69,6 +69,7 @@ REPORT_PATH_OPTS = Option(
 
 @app.callback(invoke_without_command=True)
 def client(
+    ctx: Context,
     data_dir: Annotated[Path, DATA_DIR_OPTS] = DEFAULT_SYNC_FOLDER,
     email: Annotated[str, EMAIL_OPTS] = None,
     server: Annotated[str, SERVER_OPTS] = DEFAULT_SERVER_URL,
@@ -78,6 +79,11 @@ def client(
     verbose: Annotated[bool, VERBOSE_OPTS] = False,
 ):
     """Run the SyftBox client"""
+
+    if ctx.invoked_subcommand is not None:
+        # If a subcommand is being invoked, just return
+        return
+
     if port == 0:
         port = get_free_port()
         rprint(f"[yellow]Allocated port {port}[yellow]")
