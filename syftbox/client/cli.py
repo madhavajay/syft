@@ -1,14 +1,14 @@
 from pathlib import Path
-from typing import Optional
 
 import uvicorn
 from rich import print as rprint
 from typer import Option, Typer
+from typing_extensions import Annotated
 
 from syftbox.client.client import DEFAULT_SYNC_FOLDER, open_sync_folder
 from syftbox.client.client import app as fastapi_app
 from syftbox.client.utils.net import get_free_port, is_port_in_use
-from syftbox.lib.lib import DEFAULT_CONFIG_PATH, DEFAULT_SERVER_URL
+from syftbox.lib.lib import DEFAULT_CONFIG_PATH, DEFAULT_SERVER_URL, prompt_email, prompt_sync_dir
 from syftbox.lib.logger import setup_logger
 
 app = Typer(name="SyftBox Client", pretty_exceptions_enable=False)
@@ -21,9 +21,10 @@ CLIENT_PANEL = "Client Options"
 LOCAL_SERVER_PANEL = "Local Server Options"
 
 EMAIL_OPTS = Option(
-    None, "-e", "--email",
+    "-e", "--email",
     rich_help_panel=CLIENT_PANEL,
     help="Email for the SyftBox datasite",
+    callback=prompt_email,
 )
 SERVER_OPTS = Option(
     DEFAULT_SERVER_URL, "-s", "--server",
@@ -31,19 +32,20 @@ SERVER_OPTS = Option(
     help="SyftBox cache server URL",
 )
 DATA_DIR_OPTS = Option(
-    DEFAULT_SYNC_FOLDER, "-d", "--data-dir", "--sync_folder",
+    "-d", "--data-dir", "--sync_folder",
     rich_help_panel=CLIENT_PANEL,
     help="Directory where SyftBox stores data",
+    callback=prompt_sync_dir,
 )
 CONFIG_OPTS = Option(
     DEFAULT_CONFIG_PATH, "-c", "--config", "--config_path",
     rich_help_panel=CLIENT_PANEL,
     help="Path to SyftBox configuration file",
 )
-NO_OPEN_OPTS = Option(
-    False, "--no-open",
+OPEN_DIR_OPTS = Option(
+    "--open-dir/--no-open-dir",
     rich_help_panel=CLIENT_PANEL,
-    help="Will not open SyftBox sync/data dir folder",
+    help="Will open SyftBox sync/data dir folder in file explorer",
 )
 PORT_OPTS = Option(
     8080, "-p", "--port",
@@ -67,12 +69,12 @@ REPORT_PATH_OPTS = Option(
 
 @app.callback(invoke_without_command=True)
 def client(
-    email: Optional[str] = EMAIL_OPTS,
+    data_dir: Annotated[Path, DATA_DIR_OPTS] = DEFAULT_SYNC_FOLDER,
+    email: Annotated[str, EMAIL_OPTS] = None,
     server: str = SERVER_OPTS,
-    data_dir: Path = DATA_DIR_OPTS,
     conf_path: Path = CONFIG_OPTS,
     port: int = PORT_OPTS,
-    no_open_dir: bool = NO_OPEN_OPTS,
+    open_dir: Annotated[bool, OPEN_DIR_OPTS] = True,
     reload: bool = RELOAD_OPTS,
 ):
     """Run the SyftBox client"""
@@ -84,7 +86,7 @@ def client(
     # prompt & validate if no config
     # generate config
     # open_sync_folder
-    if not no_open_dir:
+    if open_dir:
         open_sync_folder(data_dir)
 
     # todo set config for fastapi app like this?
