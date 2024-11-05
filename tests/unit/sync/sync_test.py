@@ -379,15 +379,21 @@ def test_sync_invalid_local_environment(datasite_1: Client):
     sync_service.start()
     time.sleep(sync_service.sync_interval * 2)
     assert sync_service.is_alive()
+
     # Deleting the previous state file stops the sync
     shutil.rmtree(sync_folder.as_posix())
-    time.sleep(sync_service.sync_interval * 2)
 
+    max_wait_time = 5
+    start_time = time.time()
+    while sync_service.is_alive() and time.time() - start_time < max_wait_time:
+        time.sleep(0.1)
     assert not sync_service.is_alive()
 
     # Restarting is not possible
     sync_service.start()
-    time.sleep(sync_service.sync_interval * 2)
+    start_time = time.time()
+    while sync_service.is_alive() and time.time() - start_time < max_wait_time:
+        time.sleep(0.1)
     assert not sync_service.is_alive()
 
 
