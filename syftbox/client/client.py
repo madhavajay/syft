@@ -415,6 +415,7 @@ def run_client(
     open_dir and open_sync_folder(client_config.sync_folder)
 
     # set the config in the fastapi's app state
+    os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = str(client_config.config_path)
     app.state.config = client_config
 
     # Run the FastAPI app

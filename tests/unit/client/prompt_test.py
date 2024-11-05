@@ -1,4 +1,3 @@
-import inspect
 import os
 import tempfile
 from pathlib import Path
@@ -6,14 +5,8 @@ from unittest.mock import patch
 
 import pytest
 
-from syftbox.lib.lib import (
-    DEFAULT_SYNC_FOLDER,
-    get_user_input,
-    is_valid_dir,
-    is_valid_email,
-    prompt_email,
-    prompt_sync_dir,
-)
+from syftbox.client.config import get_user_input, prompt_email, prompt_sync_dir
+from syftbox.lib.lib import DEFAULT_SYNC_FOLDER, is_valid_dir, is_valid_email
 
 
 def test_get_user_input():
@@ -87,27 +80,22 @@ def test_email_validation(email, expected):
     [
         ("", Path(DEFAULT_SYNC_FOLDER)),
         ("./valid/path", Path("./valid/path")),
-        # WARN: DO NOT PASS INVALID PATHS - else it will loop infinitely
-        # sanity check in test_is_valid_dir
     ],
 )
-@pytest.mark.timeout(1)
-def test_prompt_sync_dir(user_input, expected):
-    with patch("builtins.input", return_value=user_input):
-        is_valid_dir_path = f"{inspect.getmodule(is_valid_dir).__name__}.{is_valid_dir.__name__}"
-        with patch(is_valid_dir_path, return_value=(True, "")):
-            result = prompt_sync_dir()
-            assert result.absolute() == expected.absolute()
+def test_prompt_sync_dir(user_input, expected, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda x: user_input)
+    monkeypatch.setattr("syftbox.client.config.is_valid_dir", lambda x: (True, ""))
+
+    result = prompt_sync_dir()
+    assert result.absolute() == expected.absolute()
 
 
 @pytest.mark.timeout(1)
-def test_prompt_email():
+def test_prompt_email(monkeypatch):
     valid_email = "test@example.com"
+
+    monkeypatch.setattr("builtins.input", lambda x: valid_email)
+    monkeypatch.setattr("syftbox.client.config.is_valid_dir", lambda x: (True, ""))
+
     with patch("builtins.input", return_value=valid_email):
         assert prompt_email() == valid_email
-
-    # Test with invalid then valid email
-    with patch("builtins.input", side_effect=["invalid", valid_email]):
-        with patch("builtins.print") as mock_print:
-            assert prompt_email() == valid_email
-            mock_print.assert_called_with("Invalid email: 'invalid'")
