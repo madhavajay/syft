@@ -2,11 +2,10 @@ import enum
 import hashlib
 import threading
 import zipfile
-from collections import defaultdict
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 import py_fast_rsync
 from loguru import logger
@@ -23,8 +22,9 @@ from syftbox.client.plugins.sync.endpoints import (
     get_diff,
     get_metadata,
 )
+from syftbox.client.plugins.sync.exceptions import FatalSyncError, SyncEnvironmentError
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
-from syftbox.client.plugins.sync.sync import SyncSide
+from syftbox.client.plugins.sync.sync import DatasiteState, SyncSide
 from syftbox.lib.lib import Client, SyftPermission
 from syftbox.server.sync.hash import hash_file
 from syftbox.server.sync.models import FileMetadata
@@ -78,8 +78,8 @@ def create_local(client: Client, remote_syncstate: FileMetadata):
     abs_path.write_bytes(content_bytes)
 
 
-def create_local_batch(client: Client, remote_syncstates: list[FileMetadata]):
-    paths = [str(remote_syncstate.data.path) for remote_syncstate in remote_syncstates]
+def create_local_batch(client: Client, remote_syncstates: list[Path]):
+    paths = [str(path) for path in remote_syncstates]
     content_bytes = download_bulk(client.server_client, paths)
     zip_file = zipfile.ZipFile(BytesIO(content_bytes))
     zip_file.extractall(client.sync_folder)
@@ -125,6 +125,15 @@ class SyncDecision(BaseModel):
             update_local(client, self.local_syncstate, self.remote_syncstate)
 
         self.is_executed = True
+
+    @property
+    def path(self) -> Path:
+        if self.local_syncstate:
+            return self.local_syncstate.path
+        elif self.remote_syncstate:
+            return self.remote_syncstate.path
+
+        raise ValueError("No path found in SyncDecision")
 
     @property
     def action_type(self):
@@ -303,8 +312,9 @@ class SyncDecisionTuple(BaseModel):
         in_sync = current_remote_syncstate == current_local_syncstate
         conflict = local_modified and remote_modified and not in_sync
 
+        path = current_local_syncstate.path if current_local_syncstate else current_remote_syncstate.path
         logger.debug(
-            f"local_modified: {local_modified}, remote_modified: {remote_modified}, in_sync: {in_sync}, conflict: {conflict}"
+            f"{path} local_modified: {local_modified}, remote_modified: {remote_modified}, in_sync: {in_sync}, conflict: {conflict}"
         )
 
         if in_sync:
@@ -344,6 +354,24 @@ class SyncDecisionTuple(BaseModel):
                     remote_decision=noop(),
                 )
 
+    def is_noop(self) -> bool:
+        return (
+            self.local_decision.operation == SyncDecisionType.NOOP
+            and self.remote_decision.operation == SyncDecisionType.NOOP
+        )
+
+    @property
+    def info_message(self) -> Optional[str]:
+        messages = []
+        if self.local_decision.operation != SyncDecisionType.NOOP:
+            messages.append(f"Syncing {self.local_decision.path} with decision: {self.local_decision.action_type.name}")
+        if self.remote_decision.operation != SyncDecisionType.NOOP:
+            messages.append(
+                f"Syncing {self.remote_decision.path} with decision: {self.remote_decision.action_type.name}"
+            )
+
+        return ". ".join(messages) if messages else "Syncing {self.local_decision.path} with decision: NOOP"
+
 
 class LocalState(BaseModel):
     path: Path
@@ -351,10 +379,21 @@ class LocalState(BaseModel):
 
     @model_validator(mode="after")
     def init_dir(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with threading.Lock():
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            if not self.path.exists():
+                self.save()
         return self
 
     def insert(self, path: Path, state: FileMetadata):
+        if not self.path.is_file():
+            # If the LocalState file does not exist, the sync environment is corrupted and syncing should be aborted
+
+            # NOTE: this can occur when the user deletes the sync folder, but a different plugin re-creates it.
+            # If the sync folder exists but the LocalState file does not, it means the sync folder was deleted
+            # during syncing and might cause unexpected behavior like deleting files on the remote
+            raise SyncEnvironmentError("Your previous sync state has been deleted by a different process.")
+
         if state is None:
             self.states.pop(path, None)
         else:
@@ -381,31 +420,41 @@ class SyncConsumer:
         self.client = client
         self.queue = queue
         self.previous_state = LocalState(path=Path(client.sync_folder) / ".syft" / "local_syncstate.json")
-        self.previous_state.load()
+        try:
+            self.previous_state.load()
+        except Exception as e:
+            raise SyncEnvironmentError(f"Failed to load previous sync state: {e}")
+
+    def validate_sync_environment(self):
+        if not Path(self.client.sync_folder).is_dir():
+            raise SyncEnvironmentError("Your sync folder has been deleted by a different process.")
+        if not self.previous_state.path.is_file():
+            raise SyncEnvironmentError("Your previous sync state has been deleted by a different process.")
 
     def consume_all(self):
-        batched_items: Dict[SyncActionType, list[SyncQueueItem]] = defaultdict(list)
         while not self.queue.empty():
+            self.validate_sync_environment()
             item = self.queue.get(timeout=0.1)
-            if self.get_decisions(item).local_decision.action_type == SyncActionType.CREATE_LOCAL:
-                batched_items[SyncActionType.CREATE_LOCAL].append(item)
-                continue
-
             try:
                 self.process_filechange(item)
+            except FatalSyncError as e:
+                # Fatal error, syncing should be interrupted
+                raise e
             except Exception as e:
                 logger.exception(f"Failed to sync file {item.data.path}. Reason: {e}")
 
-        download_items = batched_items[SyncActionType.CREATE_LOCAL]
-        if download_items:
-            self.batch_download(download_items)
-
-    def batch_download(self, download_items: list[SyncQueueItem]):
-        create_local_batch(self.client, download_items)
-        for item in download_items:
+    def download_all_missing(self, datasite_states: list[DatasiteState]):
+        missing_files = []
+        for datasite_state in datasite_states:
+            for file in datasite_state.remote_state:
+                path = file.path
+                if not self.previous_state.states.get(path):
+                    missing_files.append(path)
+        create_local_batch(self.client, missing_files)
+        for path in missing_files:
             self.previous_state.insert(
-                path=item.data.path,
-                state=self.get_decisions(item).result_local_state,
+                path=path,
+                state=self.get_current_local_syncstate(path),
             )
 
     def get_decisions(self, item: SyncQueueItem) -> SyncDecisionTuple:
@@ -415,19 +464,13 @@ class SyncConsumer:
         # TODO, rename to remote
         current_server_state = self.get_current_server_state(path)
 
-        # local_hash = current_local_syncstate.hash if current_local_syncstate else None
-        # server_hash = current_server_state.hash if current_server_state else None
-        # previous_local_hash = previous_local_syncstate.hash if previous_local_syncstate else None
-
-        # logger.debug(
-        #     f"Processing {path} with local hash {local_hash}, server hash {server_hash}, previous local hash {previous_local_hash}"
-        # )
-
         return SyncDecisionTuple.from_states(current_local_syncstate, previous_local_syncstate, current_server_state)
 
     def process_decision(self, item: SyncQueueItem, decision: SyncDecisionTuple) -> None:
         abs_path = item.data.local_abs_path
 
+        # Ensure no changes are made if the sync environment is corrupted
+        self.validate_sync_environment()
         if decision.local_decision.is_valid(abs_path=abs_path, show_warnings=True):
             decision.local_decision.execute(self.client)
 
@@ -439,9 +482,8 @@ class SyncConsumer:
 
     def process_filechange(self, item: SyncQueueItem) -> None:
         decisions = self.get_decisions(item)
-        logger.debug(
-            f"Processing {item.data.path} with decisions {decisions.local_decision.operation}, {decisions.remote_decision.operation}"
-        )
+        if not decisions.is_noop():
+            logger.info(decisions.info_message)
         self.process_decision(item, decisions)
 
     def get_current_local_syncstate(self, path: Path) -> Optional[FileMetadata]:

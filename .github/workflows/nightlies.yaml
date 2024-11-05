@@ -1,4 +1,4 @@
-name: Nightlies
+name: Tests - Nightlies
 
 on:
   schedule:
@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  call-apps-tests:
+  apps:
     if: github.repository == 'OpenMined/syft' # don't run on forks
     uses: OpenMined/syft/.github/workflows/apps-tests.yaml@main
 
-  call-e2e-tests:
+  e2e:
     if: github.repository == 'OpenMined/syft' # don't run on forks
     uses: OpenMined/syft/.github/workflows/e2e-tests.yaml@main
