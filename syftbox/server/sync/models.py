@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 
 class DiffRequest(BaseModel):
@@ -72,7 +72,7 @@ class FileMetadata(BaseModel):
     hash: str
     signature: str
     file_size: int = 0
-    last_modified: datetime
+    last_modified: AwareDatetime
 
     @property
     def signature_bytes(self) -> bytes:

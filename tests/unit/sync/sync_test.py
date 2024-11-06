@@ -5,7 +5,6 @@ import time
 from pathlib import Path
 
 import faker
-import pytest
 from fastapi.testclient import TestClient
 from loguru import logger
 
@@ -397,14 +396,17 @@ def test_sync_invalid_local_environment(datasite_1: Client):
     assert not sync_service.is_alive()
 
 
-@pytest.mark.skip("This is for manual testing")
+# @pytest.mark.skip("This is for manual testing")
 def test_n_datasites(tmp_path: Path, server_client: TestClient, datasite_1: Client):
-    n = 10
-    files_per_datasite = 32
+    server_settings: ServerSettings = server_client.app_state["server_settings"]
+    print(server_settings.snapshot_folder)
+
+    n = 2
+    files_per_datasite = 8
 
     logger.debug(f"Creating {n} datasites")
 
-    emails = [f"datasite_{i}@openmined.org" for i in range(n)]
+    emails = [f"datasite{i}@openmined.org" for i in range(n)]
     other_datasites: list[Client] = [setup_datasite(tmp_path, server_client, email) for email in emails]
 
     other_datasite_trees = [
@@ -427,6 +429,17 @@ def test_n_datasites(tmp_path: Path, server_client: TestClient, datasite_1: Clie
         sync_service = SyncManager(datasite)
         sync_service.run_single_thread()
 
+    time.sleep(1)
+
     logger.debug("syncing main datasite")
     sync_service_1 = SyncManager(datasite_1)
+    states = sync_service_1.get_datasite_states()
+    assert len(states) == n + 1
+    for state in states:
+        out_of_sync_permissions, out_of_sync_files = state.get_out_of_sync_files()
+        assert out_of_sync_permissions
+        assert out_of_sync_files
+
     sync_service_1.run_single_thread()
+
+    print(server_client.app_state["server_settings"].snapshot_folder)
