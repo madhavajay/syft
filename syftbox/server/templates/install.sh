@@ -188,7 +188,7 @@ show_debug_and_exit() {
     echo "Alias           : $py"
     echo "Version         : $($py -V)"
     echo "which           : $(which $py)"
-    echo "python/[ip env vars"
+    echo "python env vars"
     env | grep -E "(PYTHON|PIP)" || echo "-"
     echo
     info "Python Virtual Environment"

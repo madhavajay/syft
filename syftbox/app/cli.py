@@ -8,10 +8,16 @@ from typing_extensions import Annotated
 from syftbox.app.manager import install_app, list_app, uninstall_app
 from syftbox.lib.lib import DEFAULT_CONFIG_PATH, ClientConfig
 
-app = Typer(name="SyftBox Apps", pretty_exceptions_enable=False, no_args_is_help=True, help="Manage SyftBox apps")
+app = Typer(
+    name="SyftBox Apps",
+    help="Manage SyftBox apps",
+    no_args_is_help=True,
+    pretty_exceptions_enable=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 state = {"config": None}
 
-CONFIG_OPTS = Option("-c", "--config", "--config-path", help="Path to the SyftBox config file")
+CONFIG_OPTS = Option("-c", "--config", "--config_path", help="Path to the SyftBox config file")
 
 
 @app.command()
@@ -54,7 +60,7 @@ def uninstall(
     config = load_conf(config_path)
     result = uninstall_app(app_name, config)
     if not result:
-        rprint(f"App not found [bold]'{app_name}'[/bold]")
+        rprint(f"[bold red]Error:[/bold red] '{app_name}' app not found")
         sys.exit(1)
 
     rprint(f"Uninstalled app [bold]'{app_name}'[/bold] from {result}")
