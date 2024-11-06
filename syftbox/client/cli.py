@@ -4,10 +4,10 @@ from rich import print as rprint
 from typer import Context, Option, Typer
 from typing_extensions import Annotated
 
+from syftbox.client.cli_setup import setup_config_interactive
 from syftbox.client.client import run_client
-from syftbox.client.config import setup_config_interactive
 from syftbox.client.utils.net import get_free_port, is_port_in_use
-from syftbox.lib.lib import DEFAULT_CONFIG_PATH, DEFAULT_SERVER_URL, DEFAULT_SYNC_FOLDER
+from syftbox.lib.constants import DEFAULT_CONFIG_PATH, DEFAULT_DATA_DIR, DEFAULT_PORT, DEFAULT_SERVER_URL
 
 app = Typer(
     name="SyftBox Client",
@@ -74,11 +74,11 @@ REPORT_PATH_OPTS = Option(
 @app.callback(invoke_without_command=True)
 def client(
     ctx: Context,
-    data_dir: Annotated[Path, DATA_DIR_OPTS] = DEFAULT_SYNC_FOLDER,
+    data_dir: Annotated[Path, DATA_DIR_OPTS] = DEFAULT_DATA_DIR,
     email: Annotated[str, EMAIL_OPTS] = None,
     server: Annotated[str, SERVER_OPTS] = DEFAULT_SERVER_URL,
     config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
-    port: Annotated[int, PORT_OPTS] = 8080,
+    port: Annotated[int, PORT_OPTS] = DEFAULT_PORT,
     open_dir: Annotated[bool, OPEN_OPTS] = True,
     verbose: Annotated[bool, VERBOSE_OPTS] = False,
 ):

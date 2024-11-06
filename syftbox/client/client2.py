@@ -4,9 +4,9 @@ from pathlib import Path
 import httpx
 from pid import PidFile, PidFileAlreadyLockedError
 
-from syftbox.client.config import SyftClientConfig
 from syftbox.client.exceptions import SyftBoxAlreadyRunning
-from syftbox.lib.permissions import SyftPermission
+from syftbox.lib.client_config import SyftClientConfig
+from syftbox.lib.lib import SyftPermission
 from syftbox.lib.workspace import SyftWorkspace
 
 
@@ -18,8 +18,8 @@ class SyftClient:
     This should not be used by apps.
     """
 
-    def __init__(self, settings: SyftClientConfig):
-        self.config = settings
+    def __init__(self, config: SyftClientConfig):
+        self.config = config
         self.workspace = SyftWorkspace(self.config.data_dir)
         self.pid = PidFile(pidname="syftbox.pid", piddir=self.workspace.data_dir)
         self.server_client = httpx.Client(
@@ -37,7 +37,7 @@ class SyftClient:
         try:
             self.pid.create()
         except PidFileAlreadyLockedError as e:
-            raise SyftBoxAlreadyRunning("There's another Syftbox client running with this config") from e
+            raise SyftBoxAlreadyRunning(f"There's another Syftbox client running on {self.config.data_dir}") from e
 
         self.workspace.mkdirs()
 
@@ -70,15 +70,17 @@ class SyftClient:
 
         if not SyftPermission.exists(self.public_dir):
             SyftPermission.readwrite(self.public_dir, owner=self.config.email).save()
+        pass
 
 
 if __name__ == "__main__":
     conf = SyftClientConfig(
-        data_dir=Path("./data").resolve(),
+        data_dir=Path(".clients/test@openmined.org").resolve(),
         email="test@openmined.org",
         client_url="http://localhost:8000",
         path="./data/config.json",
     )
+    conf.save()
     client = SyftClient(conf)
     client.start()
     client.init_datasite()

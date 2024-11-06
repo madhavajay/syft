@@ -1,6 +1,5 @@
-class SyftBoxException(Exception):
-    pass
+from syftbox.lib.exceptions import SyftBoxException
 
 
-class SyftBoxAlreadyRunning(Exception):
+class SyftBoxAlreadyRunning(SyftBoxException):
     pass
