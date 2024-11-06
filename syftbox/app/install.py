@@ -4,11 +4,12 @@ import platform
 import re
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import mkdtemp
 from types import SimpleNamespace
 
-from typing_extensions import Any, Optional, Tuple
+from typing_extensions import Any, Optional
 
 from syftbox.lib.lib import ClientConfig
 
@@ -654,7 +655,15 @@ def check_app_config(tmp_clone_path) -> Optional[SimpleNamespace]:
     return None
 
 
-def install(client_config: ClientConfig, repository: str, branch: str) -> Tuple[str, Exception]:
+@dataclass
+class InstallResult:
+    app_name: str
+    app_path: Path
+    error: Optional[Exception]
+    reason: Optional[str]
+
+
+def install(client_config: ClientConfig, repository: str, branch: str) -> InstallResult:
     """
     Installs an application by cloning the repository, checking compatibility, and running installation scripts.
 
@@ -770,6 +779,6 @@ def install(client_config: ClientConfig, repository: str, branch: str) -> Tuple[
             update_app_config_file(app_config_path, sanitized_path, app_config)
 
         app_dir = Path(app_config_path)
-        return dict(app_name=app_dir.name, app_dir=app_dir, repo=sanitize_git_path), None
+        return InstallResult(app_name=app_dir.name, app_path=app_dir, error=None, reason=None)
     except Exception as e:
-        return (step, e)
+        return InstallResult(app_name="", app_path=Path(""), error=e, reason=step)

@@ -1,10 +1,10 @@
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from ..lib import ClientConfig
-from .install import install
+from .install import InstallResult, install
 
 
 @dataclass
@@ -13,7 +13,7 @@ class InstalledApps:
     apps: List[Path]
 
 
-def install_app(config: ClientConfig, repository: str, branch: str = "main") -> Tuple[str, Exception]:
+def install_app(config: ClientConfig, repository: str, branch: str = "main") -> InstallResult:
     return install(config, repository, branch)
 
 

@@ -37,12 +37,12 @@ def install(
 ):
     """Install a new Syftbox app"""
     config = load_conf(config_path)
-    result, err = install_app(config, repository, branch)
-    if err:
-        rprint(f"[bold red]Error:[/bold red] {err}")
+    result = install_app(config, repository, branch)
+    if result.error:
+        rprint(f"[bold red]Error:[/bold red] {result.error}")
         sys.exit(1)
 
-    rprint(f"Installed app [bold]'{result["app_name"]}'[/bold]\nLocation: {result["app_dir"]}")
+    rprint(f"Installed app [bold]'{result.app_name}'[/bold]\nLocation: {result.app_path}")
 
 
 @app.command()
