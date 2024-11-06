@@ -16,7 +16,7 @@ def debug_report() -> str:
     apps = []
     try:
         client_config = ClientConfig.load(config_path)
-        apps = list_app(client_config)["apps"]
+        apps_dir, apps = list_app(client_config)
         client_config = asdict(client_config)
         del client_config["_server_client"]
     except Exception:
@@ -44,6 +44,7 @@ def debug_report() -> str:
             "command": syftbox_path or "syftbox executable not found in PATH",
             "client_config_path": str(config_path),
             "client_config": client_config,
+            "apps_dir": str(apps_dir),
             "apps": apps,
         },
         "syftbox_env": {key: value for key, value in os.environ.items() if key.startswith("SYFT")},
