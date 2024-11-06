@@ -19,7 +19,7 @@ def debug_report() -> str:
         client_config = ClientConfig.load(config_path)
         result = list_app(client_config)
         app_dir = str(result.apps_dir)
-        apps = result.apps
+        apps = [app.name for app in result.apps]
         client_config = asdict(client_config)
         del client_config["_server_client"]
     except Exception:
