@@ -9,7 +9,11 @@ from syftbox.client.config import setup_config_interactive
 from syftbox.client.utils.net import get_free_port, is_port_in_use
 from syftbox.lib.lib import DEFAULT_CONFIG_PATH, DEFAULT_SERVER_URL, DEFAULT_SYNC_FOLDER
 
-app = Typer(name="SyftBox Client", pretty_exceptions_enable=False)
+app = Typer(
+    name="SyftBox Client",
+    pretty_exceptions_enable=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 
 # Define options separately to keep the function signature clean
 # fmt: off

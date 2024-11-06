@@ -8,9 +8,10 @@ from syftbox.server.cli import app as server_cli
 
 app = Typer(
     name="SyftBox",
-    no_args_is_help=True,
     help="SyftBox CLI",
+    no_args_is_help=True,
     pretty_exceptions_enable=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 

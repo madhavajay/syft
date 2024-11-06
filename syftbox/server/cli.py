@@ -7,7 +7,11 @@ from typer import Context, Option, Typer
 from syftbox.client.cli import VERBOSE_OPTS
 from syftbox.server.server import app as fastapi_app
 
-app = Typer(name="SyftBox Server", pretty_exceptions_enable=False)
+app = Typer(
+    name="SyftBox Server",
+    pretty_exceptions_enable=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 
 
 # Define options separately to keep the function signature clean
