@@ -24,7 +24,7 @@ def list(config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH):
         rprint(f"No apps installed in {result['apps_path']}")
         sys.exit(1)
 
-    rprint(f"Apps installed in {result["apps_path"]}:")
+    rprint(f"Apps installed in {result['apps_path']}:")
     for app in result["apps"]:
         rprint(f"- [bold cyan]{app}[/bold cyan]")
 
@@ -42,7 +42,7 @@ def install(
         rprint(f"[bold red]Error:[/bold red] {err}")
         sys.exit(1)
 
-    rprint(f"Installed app [bold]'{result["app_name"]}'[/bold]\nLocation: {result["app_dir"]}")
+    rprint(f"Installed app [bold]'{result['app_name']}'[/bold]\nLocation: {result['app_dir']}")
 
 
 @app.command()
