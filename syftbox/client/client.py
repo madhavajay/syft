@@ -406,7 +406,7 @@ def copy_folder_icon(sync_folder: Path):
         logger.info("Directory icons are disabled")
         return
 
-    if platform.system():
+    if platform.system() == "macos":
         macos.copy_icon_file(ICON_FOLDER, sync_folder)
 
 

@@ -4,11 +4,12 @@ import platform
 import re
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import mkdtemp
 from types import SimpleNamespace
 
-from typing_extensions import Any, Optional, Tuple
+from typing_extensions import Any, Optional
 
 from syftbox.lib.lib import ClientConfig
 
@@ -635,26 +636,23 @@ def update_app_config_file(app_path: str, sanitized_git_path: str, app_config) -
 
 
 def check_app_config(tmp_clone_path) -> Optional[SimpleNamespace]:
-    try:
-        app_config_path = Path(tmp_clone_path) / "config.json"
-        if os.path.exists(app_config_path):
-            app_config = load_config(app_config_path)
-            step = "Loading config.json"
-            print(step)
-            # NOTE:
-            # Check OS platform compatibility
-            # Handles if app isn't compatible with the target os system.
-            step = "Checking platform compatibility."
-            print(step)
-            check_os_compatibility(app_config)
-
-            return app_config
-    except Exception as e:
-        print("No app config", e)
+    app_config_path = Path(tmp_clone_path) / "config.json"
+    if os.path.exists(app_config_path):
+        app_config = load_config(app_config_path)
+        check_os_compatibility(app_config)
+        return app_config
     return None
 
 
-def install(client_config: ClientConfig, repository: str, branch: str) -> Tuple[str, Exception]:
+@dataclass
+class InstallResult:
+    app_name: str
+    app_path: Path
+    error: Optional[Exception]
+    details: Optional[str]
+
+
+def install(client_config: ClientConfig, repository: str, branch: str) -> InstallResult:
     """
     Installs an application by cloning the repository, checking compatibility, and running installation scripts.
 
@@ -700,7 +698,7 @@ def install(client_config: ClientConfig, repository: str, branch: str) -> Tuple[
         # Sanitize git repository path
         # Handles: bad format repository path.
         # Returns: Sanitized repository path.
-        step = "Checking app name"
+        step = "checking app name"
 
         sanitized_path = repository
         if not os.path.exists(repository):
@@ -712,7 +710,7 @@ def install(client_config: ClientConfig, repository: str, branch: str) -> Tuple[
             # Handles: Repository path doesn't exits / isn't public.
             # Handles: If /tmp/apps/<repository_name> already exists (replaces it)
             # Returns: Path where the repository folder was cloned temporarily.
-            step = "Pulling App"
+            step = "pulling App"
             tmp_clone_path = clone_repository(sanitized_path, branch)
 
             # NOTE:
@@ -724,7 +722,13 @@ def install(client_config: ClientConfig, repository: str, branch: str) -> Tuple[
             tmp_clone_path = os.path.abspath(repository)
 
         # make optional
-        app_config = check_app_config(tmp_clone_path)
+        app_config = None
+        try:
+            check_app_config(tmp_clone_path)
+        except Exception:
+            # this function is run in cli context
+            # dont loguru here, either rprint or bubble up the error
+            app_config = None
 
         # NOTE:
         # Moves the repository from /tmp to ~/.syftbox/apps/<repository_name>
@@ -738,7 +742,7 @@ def install(client_config: ClientConfig, repository: str, branch: str) -> Tuple[
         else:
             # Creates a Symbolic Link ( ~/Desktop/Syftbox/app/<rep> -> ~/.syftbox/apps/<rep>)
             # Handles: If ~/.syftbox/apps/<repository_name> already exists (replaces it)
-            step = "Creating Symbolic Link"
+            step = "creating Symbolic Link"
             output_path = f"{client_config.sync_folder}/apps/{tmp_clone_path.split('/')[-1]}"
             app_config_path = create_symbolic_link(
                 client_config=client_config,
@@ -750,14 +754,14 @@ def install(client_config: ClientConfig, repository: str, branch: str) -> Tuple[
         # Executes config.json pre-install command list
         # Handles: Exceptions from pre-install command execution
         if app_config:
-            step = "Running pre-install commands"
+            step = "running pre-install commands"
             run_pre_install(app_config, app_config_path)
 
         # NOTE:
         # Executes config.json post-install command list
         # Handles: Exceptions from post-install command execution
         if app_config:
-            step = "Running post-install commands"
+            step = "running post-install commands"
             run_post_install(app_config, app_config_path)
 
         # NOTE:
@@ -766,10 +770,10 @@ def install(client_config: ClientConfig, repository: str, branch: str) -> Tuple[
         # Handles: If apps.json already have the repository_name  app listed.
         # Handles: If apps.json exists but doesn't have the repository_name app listed.
         if app_config:
-            step = "Updating apps.json config"
+            step = "updating apps.json config"
             update_app_config_file(app_config_path, sanitized_path, app_config)
 
         app_dir = Path(app_config_path)
-        return dict(app_name=app_dir.name, app_dir=app_dir, repo=sanitize_git_path), None
+        return InstallResult(app_name=app_dir.name, app_path=app_dir, error=None, details=None)
     except Exception as e:
-        return (step, e)
+        return InstallResult(app_name="", app_path=Path(""), error=e, details=step)
