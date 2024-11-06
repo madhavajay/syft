@@ -17,7 +17,7 @@ app = Typer(
 )
 state = {"config": None}
 
-CONFIG_OPTS = Option("-c", "--config", "--config-path", help="Path to the SyftBox config file")
+CONFIG_OPTS = Option("-c", "--config", "--config_path", help="Path to the SyftBox config file")
 
 
 @app.command()
@@ -60,7 +60,7 @@ def uninstall(
     config = load_conf(config_path)
     result = uninstall_app(app_name, config)
     if not result:
-        rprint(f"App not found [bold]'{app_name}'[/bold]")
+        rprint(f"[bold red]Error:[/bold red] '{app_name}' app not found")
         sys.exit(1)
 
     rprint(f"Uninstalled app [bold]'{app_name}'[/bold] from {result}")
