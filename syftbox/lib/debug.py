@@ -13,9 +13,13 @@ from syftbox.lib import DEFAULT_CONFIG_PATH, ClientConfig
 def debug_report() -> str:
     config_path = os.environ.get("SYFTBOX_CLIENT_CONFIG_PATH", DEFAULT_CONFIG_PATH)
     client_config = None
+    apps = []
+    app_dir = None
     try:
         client_config = ClientConfig.load(config_path)
-        app_list = list_app(client_config)
+        result = list_app(client_config)
+        app_dir = str(result.apps_dir)
+        apps = result.apps
         client_config = asdict(client_config)
         del client_config["_server_client"]
     except Exception:
@@ -43,8 +47,8 @@ def debug_report() -> str:
             "command": syftbox_path or "syftbox executable not found in PATH",
             "client_config_path": str(config_path),
             "client_config": client_config,
-            "apps_dir": str(app_list.apps_dir),
-            "apps": app_list.apps,
+            "apps_dir": app_dir,
+            "apps": apps,
         },
         "syftbox_env": {key: value for key, value in os.environ.items() if key.startswith("SYFT")},
     }
