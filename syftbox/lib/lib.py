@@ -446,10 +446,13 @@ class ResettableTimer:
 class SharedState:
     def __init__(self, client_config: ClientConfig):
         self.data = {}
-        self.lock = Lock()
         self.client_config = client_config
         self.timers: dict[str:ResettableTimer] = {}
         self.fs_events = []
+
+    @property
+    def lock(self):
+        return Lock()
 
     @property
     def sync_folder(self) -> str:
