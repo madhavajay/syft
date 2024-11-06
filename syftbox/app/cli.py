@@ -20,13 +20,13 @@ def list(config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH):
     config = load_conf(config_path)
     result = list_app(config)
 
-    if len(result["apps"]) == 0:
-        rprint(f"No apps installed in {result['apps_path']}")
-        sys.exit(1)
+    if len(result.apps) == 0:
+        rprint(f"No apps installed in {result.apps_dir}")
+        sys.exit(0)
 
-    rprint(f"Apps installed in {result["apps_path"]}:")
-    for app in result["apps"]:
-        rprint(f"- [bold cyan]{app}[/bold cyan]")
+    rprint(f"Apps installed in {result.apps_dir}")
+    for app in result.apps:
+        rprint(f"- [bold cyan]{app.name}[/bold cyan]")
 
 
 @app.command()
@@ -37,12 +37,12 @@ def install(
 ):
     """Install a new Syftbox app"""
     config = load_conf(config_path)
-    result, err = install_app(config, repository, branch)
-    if err:
-        rprint(f"[bold red]Error:[/bold red] {err}")
+    result = install_app(config, repository, branch)
+    if result.error:
+        rprint(f"[bold red]Error:[/bold red] {result.error}")
         sys.exit(1)
 
-    rprint(f"Installed app [bold]'{result["app_name"]}'[/bold]\nLocation: {result["app_dir"]}")
+    rprint(f"Installed app [bold]'{result.app_name}'[/bold]\nLocation: {result.app_path}")
 
 
 @app.command()
