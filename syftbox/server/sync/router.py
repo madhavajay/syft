@@ -13,8 +13,8 @@ from syftbox.lib.lib import PermissionTree, SyftPermission, filter_metadata
 from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.sync.db import (
     get_all_datasites,
-    get_all_metadata,
     get_db,
+    get_one_metadata,
 )
 from syftbox.server.sync.file_store import FileStore, SyftFile
 
@@ -50,7 +50,10 @@ def get_file_metadata(
 ) -> list[FileMetadata]:
     # TODO check permissions
 
-    return get_all_metadata(conn, path_like=req.path_like)
+    try:
+        return get_one_metadata(conn, path=req.path_like)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -74,6 +77,26 @@ def get_diff(
     )
 
 
+@router.post("/datasite_states", response_model=dict[str, list[FileMetadata]])
+def get_datasite_states(
+    conn: sqlite3.Connection = Depends(get_db_connection),
+    file_store: FileStore = Depends(get_file_store),
+    server_settings: ServerSettings = Depends(get_server_settings),
+    email: str = Header(),
+) -> dict[str, list[FileMetadata]]:
+    all_datasites = get_all_datasites(conn)
+    datasite_states: dict[str, list[FileMetadata]] = {}
+    for datasite in all_datasites:
+        try:
+            datasite_state = dir_state(RelativePath(datasite), file_store, server_settings, email)
+        except Exception as e:
+            logger.error(f"Failed to get dir state for {datasite}: {e}")
+            continue
+        datasite_states[datasite] = datasite_state
+
+    return datasite_states
+
+
 @router.post("/dir_state", response_model=list[FileMetadata])
 def dir_state(
     dir: RelativePath,
@@ -81,6 +104,9 @@ def dir_state(
     server_settings: ServerSettings = Depends(get_server_settings),
     email: str = Header(),
 ) -> list[FileMetadata]:
+    if dir.is_absolute():
+        raise HTTPException(status_code=400, detail="dir must be relative")
+
     full_path = server_settings.snapshot_folder / dir
     # get the top level perm file
     try:
@@ -94,10 +120,10 @@ def dir_state(
     return filtered_metadata
 
 
-@router.post("/get_metadata", response_model=list[FileMetadata])
+@router.post("/get_metadata", response_model=FileMetadata)
 def get_metadata(
-    metadata: list[FileMetadata] = Depends(get_file_metadata),
-) -> list[FileMetadata]:
+    metadata: FileMetadata = Depends(get_file_metadata),
+) -> FileMetadata:
     return metadata
 
 
@@ -106,12 +132,16 @@ def apply_diffs(
     req: ApplyDiffRequest,
     file_store: FileStore = Depends(get_file_store),
 ) -> ApplyDiffResponse:
-    file = file_store.get(req.path)
+    try:
+        file = file_store.get(req.path)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="file not found")
+
     result = py_fast_rsync.apply(file.data, req.diff_bytes)
     new_hash = hashlib.sha256(result).hexdigest()
 
     if new_hash != req.expected_hash:
-        raise HTTPException(status_code=400, detail="expected_hash mismatch")
+        raise HTTPException(status_code=400, detail="hash mismatch, skipped writing")
 
     if SyftPermission.is_permission_file(file.metadata.path) and not SyftPermission.is_valid(result):
         raise HTTPException(status_code=400, detail="invalid syftpermission contents, skipped writing")
@@ -136,6 +166,9 @@ def create_file(
 ) -> JSONResponse:
     #
     relative_path = RelativePath(file.filename)
+    if "%" in file.filename:
+        raise HTTPException(status_code=400, detail="filename cannot contain '%'")
+
     contents = file.file.read()
 
     if SyftPermission.is_permission_file(relative_path) and not SyftPermission.is_valid(contents):
@@ -156,8 +189,8 @@ def download_file(
     try:
         abs_path = file_store.get(req.path).absolute_path
         return FileResponse(abs_path)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="file not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/datasites", response_model=list[str])

@@ -1,4 +1,4 @@
-name: PR Tests
+name: Tests - PR
 
 on:
   workflow_dispatch:
@@ -7,7 +7,6 @@ on:
 
   pull_request:
     branches:
-      - dev
       - main
 
 concurrency:
@@ -15,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pr-tests:
+  unit:
     strategy:
       max-parallel: 99
       matrix:
@@ -79,7 +78,7 @@ jobs:
         run: |
           tox -e syft.test.unit
 
-  pr-integration-tests:
+  integration:
     strategy:
       max-parallel: 99
       matrix:

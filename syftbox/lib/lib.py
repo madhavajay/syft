@@ -4,8 +4,9 @@ import base64
 import hashlib
 import json
 import os
-import platform
 import re
+import shutil
+import tempfile
 import threading
 import zlib
 from dataclasses import dataclass, field
@@ -15,9 +16,8 @@ from threading import Lock
 import httpx
 import requests
 from loguru import logger
-from typing_extensions import Any, Optional, Self, Union
+from typing_extensions import Any, Optional, Self, Tuple, Union
 
-from syftbox.client.utils import macos
 from syftbox.server.sync.models import FileMetadata
 
 from .exceptions import ClientConfigException
@@ -26,12 +26,14 @@ current_dir = Path(__file__).parent
 ASSETS_FOLDER = current_dir.parent / "assets"
 DEFAULT_PORT = 8082
 ICON_FOLDER = ASSETS_FOLDER / "icon"
-DEFAULT_SYNC_FOLDER = os.path.expanduser("~/Desktop/SyftBox")
-DEFAULT_CONFIG_FOLDER = os.path.expanduser("~/.syftbox")
-DEFAULT_CONFIG_PATH = os.path.join(DEFAULT_CONFIG_FOLDER, "client_config.json")
-DEFAULT_LOGS_PATH = os.path.join(DEFAULT_CONFIG_FOLDER, "logs", "syftbox.log")
+DEFAULT_SERVER_URL = "https://syftbox.openmined.org"
+DEFAULT_SYNC_FOLDER = Path("~/SyftBox").expanduser().resolve()
+DEFAULT_CONFIG_FOLDER = Path("~/.syftbox").expanduser().resolve()
+DEFAULT_CONFIG_PATH = Path(DEFAULT_CONFIG_FOLDER, "client_config.json")
+DEFAULT_LOGS_PATH = Path(DEFAULT_CONFIG_FOLDER, "logs", "syftbox.log")
 
 USER_GROUP_GLOBAL = "GLOBAL"
+DIR_NOT_EMPTY = "Directory is not empty"
 
 ICON_FILE = "Icon"  # special
 IGNORE_FILES = []
@@ -60,6 +62,9 @@ def pack(obj) -> Any:
     if isinstance(obj, dict):
         return {k: pack(v) for k, v in obj.items()}
 
+    if isinstance(obj, Path):
+        return str(obj)
+
     raise Exception(f"Unable to pack type: {type(obj)} value: {obj}")
 
 
@@ -83,7 +88,7 @@ class Jsonable:
         return self.to_dict()[key]
 
     @classmethod
-    def load(cls, file_or_bytes: str | Path | bytes) -> Self:
+    def load(cls, file_or_bytes: Union[str, Path, bytes]) -> Self:
         try:
             if isinstance(file_or_bytes, (str, Path)):
                 with open(file_or_bytes) as f:
@@ -125,15 +130,21 @@ class SyftPermission(Jsonable):
         return path.name == "_.syftperm"
 
     @classmethod
-    def is_valid(cls, path_or_bytes: str | Path | bytes):
+    def is_valid(cls, path_or_bytes: Union[str, Path, bytes]):
         try:
             SyftPermission.load(path_or_bytes)
             return True
         except Exception:
             return False
 
+    def is_admin(self, email: str) -> bool:
+        return email in self.admin
+
     def has_read_permission(self, email: str) -> bool:
         return email in self.read or USER_GROUP_GLOBAL in self.read
+
+    def has_write_permission(self, email: str) -> bool:
+        return email in self.write or USER_GROUP_GLOBAL in self.write
 
     def __eq__(self, other):
         if not isinstance(other, SyftPermission):
@@ -368,8 +379,6 @@ class PermissionTree(Jsonable):
             current_perm_level += "/" + part
             next_perm_file = perm_file_path(current_perm_level)
             if next_perm_file in self.tree:
-                # we could do some overlay with defaults but
-                # for now lets just use a fully defined overwriting perm file
                 next_perm = self.tree[next_perm_file]
                 current_perm = next_perm
 
@@ -387,7 +396,7 @@ def filter_metadata(
     metadata_list: list[FileMetadata],
     perm_tree: PermissionTree,
     snapshot_folder: Path,
-):
+) -> list[FileMetadata]:
     filtered_metadata = []
     for metadata in metadata_list:
         perm_file_at_path = perm_tree.permission_for_path((snapshot_folder / metadata.path).as_posix())
@@ -515,24 +524,14 @@ def str_to_bool(bool_str: Optional[str]) -> bool:
     return result
 
 
-def validate_email(email: str) -> bool:
-    # Define a regex pattern for a valid email
-    email_regex = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
-
-    # Use the match method to check if the email fits the pattern
-    if re.match(email_regex, email):
-        return True
-    return False
-
-
 @dataclass
 class Client(Jsonable):
     config_path: Path
-    sync_folder: Optional[Path] = None
-    port: Optional[int] = None
-    email: Optional[str] = None
-    token: Optional[int] = None
+    sync_folder: Path
+    email: str
+    port: int = DEFAULT_PORT
     server_url: str = "http://localhost:5001"
+    token: Optional[int] = None
     email_token: Optional[str] = None
     autorun_plugins: Optional[list[str]] = field(default_factory=lambda: ["init", "create_datasite", "sync", "apps"])
     _server_client: Optional[httpx.Client] = None
@@ -597,94 +596,64 @@ class Client(Jsonable):
         return Path(full_path)
 
     @classmethod
-    def load(cls, filepath: Optional[int] = None) -> Self:
+    def load(cls, filepath: Optional[Path] = None) -> Self:
         try:
             if filepath is None:
                 config_path = os.getenv("SYFTBOX_CLIENT_CONFIG_PATH", DEFAULT_CONFIG_PATH)
                 filepath = config_path
             return super().load(filepath)
-        except Exception:
+        except Exception as e:
             raise ClientConfigException(
                 f"Unable to load Client config from {filepath}."
                 "If you are running this outside of syftbox app runner you must supply "
                 "the Client config path like so: \n"
                 "SYFTBOX_CLIENT_CONFIG_PATH=~/.syftbox/client_config.json"
-            )
+            ) from e
 
 
 ClientConfig = Client
 
 
-def get_user_input(prompt, default: Optional[str] = None):
-    if default:
-        prompt = f"{prompt} (default: {default}): "
-    user_input = input(prompt).strip()
-    return user_input if user_input else default
-
-
-def load_or_create_config(args) -> ClientConfig:
-    syft_config_dir = os.path.abspath(os.path.expanduser("~/.syftbox"))
-    os.makedirs(syft_config_dir, exist_ok=True)
-
-    client_config = None
+def is_valid_dir(path: Union[str, Path], check_empty=True, check_writable=True) -> Tuple[bool, str]:
     try:
-        client_config = ClientConfig.load(args.config_path)
-    except Exception:
-        pass
+        if not path:
+            return False, "Empty path"
 
-    if client_config is None and args.config_path:
-        config_path = os.path.abspath(os.path.expanduser(args.config_path))
-        client_config = ClientConfig(config_path=config_path)
+        # Convert to Path object if string
+        dir_path = Path(path).expanduser().resolve()
 
-    if client_config is None:
-        # config_path = get_user_input("Path to config file?", DEFAULT_CONFIG_PATH)
-        config_path = os.path.abspath(os.path.expanduser(config_path))
-        client_config = ClientConfig(config_path=config_path)
+        # Must not be a reserved path
+        if dir_path.is_reserved():
+            return False, "Reserved path"
 
-    if args.sync_folder:
-        sync_folder = os.path.abspath(os.path.expanduser(args.sync_folder))
-        client_config.sync_folder = sync_folder
+        if dir_path.exists():
+            if not dir_path.is_dir():
+                return False, "Path is not a directory"
 
-    if client_config.sync_folder is None:
-        sync_folder = get_user_input(
-            "Where do you want to Sync SyftBox to?",
-            DEFAULT_SYNC_FOLDER,
-        )
-        sync_folder = os.path.abspath(os.path.expanduser(sync_folder))
-        client_config.sync_folder = sync_folder
+            if check_empty and any(dir_path.iterdir()):
+                return False, DIR_NOT_EMPTY
+        elif check_writable:
+            # Try to create a temporary file to test write permissions on parent
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+                testfile = tempfile.TemporaryFile(dir=dir_path)
+                testfile.close()
+                shutil.rmtree(dir_path)
+            except Exception as e:
+                return False, str(e)
 
-    if args.server:
-        client_config.server_url = args.server
+        # all checks passed
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
-    if not os.path.exists(client_config.sync_folder):
-        os.makedirs(client_config.sync_folder, exist_ok=True)
 
-    if platform.system() == "Darwin":
-        macos.copy_icon_file(ICON_FOLDER, client_config.sync_folder)
+def is_valid_email(email: str) -> bool:
+    # Define a regex pattern for a valid email
+    # from: https://stackoverflow.com/a/21608610
+    email_regex = r"\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*"
 
-    if args.email:
-        client_config.email = args.email
-
-    if client_config.email is None:
-        email = get_user_input("What is your email address? ")
-        if not validate_email(email):
-            raise Exception(f"Invalid email: {email}")
-        client_config.email = email
-
-    if args.port:
-        client_config.port = args.port
-
-    if client_config.port is None:
-        port = int(get_user_input("Enter the port to use", DEFAULT_PORT))
-        client_config.port = port
-
-    email_token = os.environ.get("EMAIL_TOKEN", None)
-    if email_token:
-        client_config.email_token = email_token
-
-    # Migrate Old Server URL to HTTPS
-    if client_config.server_url == "http://20.168.10.234:8080":
-        client_config.server_url = "https://syftbox.openmined.org"
-
-    client_config.save(args.config_path)
-    return client_config
+    # Use the match method to check if the email fits the pattern
+    if re.match(email_regex, email):
+        return True
+    return False

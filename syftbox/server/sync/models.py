@@ -88,7 +88,7 @@ class FileMetadata(BaseModel):
     path: Path
     hash: str
     signature: str
-    file_size: int = 0  # limit file sizes?
+    file_size: int = 0
     last_modified: datetime
 
     @property
@@ -98,6 +98,10 @@ class FileMetadata(BaseModel):
     @property
     def hash_bytes(self) -> bytes:
         return base64.b85decode(self.hash)
+
+    @property
+    def datasite_name(self) -> str:
+        return self.path.parts[0]
 
     def __eq__(self, value: Any):
         if not isinstance(value, FileMetadata):

@@ -1,15 +1,15 @@
-import argparse
 import json
 import os
 import platform
 import re
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import mkdtemp
 from types import SimpleNamespace
 
-from typing_extensions import Any, Optional, Tuple
+from typing_extensions import Any, Optional
 
 from syftbox.lib.lib import ClientConfig
 
@@ -93,9 +93,7 @@ def sanitize_git_path(path: str) -> str:
     if re.match(pattern, path):
         return path
     else:
-        raise ValueError(
-            "Invalid Git repository path format. (eg: OpenMined/logged_in)"
-        )
+        raise ValueError("Invalid Git repository path format. (eg: OpenMined/logged_in)")
 
 
 def delete_folder_if_exists(folder_path: str) -> None:
@@ -203,9 +201,7 @@ def clone_repository(sanitized_git_path: str, branch: str) -> str:
         )
     repo_url = f"https://github.com/{sanitized_git_path}.git"
     if not is_repo_accessible(repo_url):
-        raise ValueError(
-            "The provided repository path doesn't seems to be accessible. Please check it out."
-        )
+        raise ValueError(f"Cannot access repository {repo_url}")
 
     # Clone repository in /tmp
     tmp_path = mkdtemp(prefix="syftbox_app_")
@@ -272,9 +268,7 @@ def dict_to_namespace(data: Any) -> Any:
         This will allow you to access dictionary values using dot notation like attributes.
     """
     if isinstance(data, dict):
-        return SimpleNamespace(
-            **{key: dict_to_namespace(value) for key, value in data.items()}
-        )
+        return SimpleNamespace(**{key: dict_to_namespace(value) for key, value in data.items()})
     elif isinstance(data, list):
         return [dict_to_namespace(item) for item in data]
     else:
@@ -324,7 +318,7 @@ def load_config(path: str) -> SimpleNamespace:
         This will load the configuration and allow access to its values using attribute access.
     """
     if not os.path.exists(path):
-        raise ValueError("Couln't find the json config file for this path.")
+        raise ValueError(f"config not found - {path}")
     try:
         error_msg = "File isn't in JSON format."
         with open(path, "r") as f:
@@ -336,9 +330,7 @@ def load_config(path: str) -> SimpleNamespace:
     return dict_to_namespace(data)
 
 
-def create_symbolic_link(
-    client_config: ClientConfig, app_path: str, sanitized_path: str
-):
+def create_symbolic_link(client_config: ClientConfig, app_path: str, sanitized_path: str):
     """
     Creates a symbolic link from the application directory in the Syftbox directory to the user's sync folder.
 
@@ -368,9 +360,7 @@ def create_symbolic_link(
     """
     # TODO: Create a Symlink function
     # - Handles if path doesn't exists.
-    target_symlink_path = (
-        f"{str(client_config.sync_folder)}/apps/{sanitized_path.split('/')[-1]}"
-    )
+    target_symlink_path = f"{str(client_config.sync_folder)}/apps/{sanitized_path.split('/')[-1]}"
 
     # Create the symlink
     if os.path.exists(target_symlink_path) and os.path.islink(target_symlink_path):
@@ -383,9 +373,7 @@ def create_symbolic_link(
     return target_symlink_path
 
 
-def move_repository_to_syftbox(
-    client_config: ClientConfig, tmp_clone_path: str, sanitized_path: str
-) -> str:
+def move_repository_to_syftbox(client_config: ClientConfig, tmp_clone_path: str, sanitized_path: str) -> str:
     """
     Moves a cloned Git repository to the Syftbox directory.
 
@@ -575,14 +563,12 @@ def get_current_commit(app_path: str) -> str:
     try:
         # Navigate to the repository path and get the current commit hash
         commit_hash = (
-            subprocess.check_output(
-                ["git", "-C", app_path, "rev-parse", "HEAD"], stderr=subprocess.STDOUT
-            )
+            subprocess.check_output(["git", "-C", app_path, "rev-parse", "HEAD"], stderr=subprocess.STDOUT)
             .strip()
             .decode("utf-8")
         )
         return commit_hash
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         return "local"
 
 
@@ -650,26 +636,23 @@ def update_app_config_file(app_path: str, sanitized_git_path: str, app_config) -
 
 
 def check_app_config(tmp_clone_path) -> Optional[SimpleNamespace]:
-    try:
-        app_config_path = Path(tmp_clone_path) / "config.json"
-        if os.path.exists(app_config_path):
-            app_config = load_config(app_config_path)
-            step = "Loading config.json"
-            print(step)
-            # NOTE:
-            # Check OS platform compatibility
-            # Handles if app isn't compatible with the target os system.
-            step = "Checking platform compatibility."
-            print(step)
-            check_os_compatibility(app_config)
-
-            return app_config
-    except Exception as e:
-        print("No app config", e)
+    app_config_path = Path(tmp_clone_path) / "config.json"
+    if os.path.exists(app_config_path):
+        app_config = load_config(app_config_path)
+        check_os_compatibility(app_config)
+        return app_config
     return None
 
 
-def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
+@dataclass
+class InstallResult:
+    app_name: str
+    app_path: Path
+    error: Optional[Exception]
+    details: Optional[str]
+
+
+def install(client_config: ClientConfig, repository: str, branch: str) -> InstallResult:
     """
     Installs an application by cloning the repository, checking compatibility, and running installation scripts.
 
@@ -709,24 +692,17 @@ def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
         ```
         This will install the application, and if an error occurs, it will indicate the step where the failure happened.
     """
-    parser = argparse.ArgumentParser(description="Run FastAPI server")
-
-    parser.add_argument("repository", type=str, help="App repository")
-
-    parser.add_argument("--branch", type=str, default="main", help="repository branch")
-
-    args = parser.parse_args()
     step = ""
     try:
         # NOTE:
         # Sanitize git repository path
         # Handles: bad format repository path.
         # Returns: Sanitized repository path.
-        step = "Checking app name"
+        step = "checking app name"
 
-        sanitized_path = args.repository
-        if not os.path.exists(args.repository):
-            sanitized_path = sanitize_git_path(args.repository)
+        sanitized_path = repository
+        if not os.path.exists(repository):
+            sanitized_path = sanitize_git_path(repository)
 
             # NOTE:
             # Clones the app repository
@@ -734,8 +710,8 @@ def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
             # Handles: Repository path doesn't exits / isn't public.
             # Handles: If /tmp/apps/<repository_name> already exists (replaces it)
             # Returns: Path where the repository folder was cloned temporarily.
-            step = "Pulling App"
-            tmp_clone_path = clone_repository(sanitized_path, args.branch)
+            step = "pulling App"
+            tmp_clone_path = clone_repository(sanitized_path, branch)
 
             # NOTE:
             # Load config.json
@@ -743,15 +719,21 @@ def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
             # Handles: config.json version is different from syftbox config version.
             # Returns: Loaded app config as SimpleNamespace instance.
         else:
-            tmp_clone_path = os.path.abspath(args.repository)
+            tmp_clone_path = os.path.abspath(repository)
 
         # make optional
-        app_config = check_app_config(tmp_clone_path)
+        app_config = None
+        try:
+            check_app_config(tmp_clone_path)
+        except Exception:
+            # this function is run in cli context
+            # dont loguru here, either rprint or bubble up the error
+            app_config = None
 
         # NOTE:
         # Moves the repository from /tmp to ~/.syftbox/apps/<repository_name>
         # Handles: If ~/.syftbox/apps/<repository_name> already exists (replaces it)
-        if not os.path.exists(args.repository):
+        if not os.path.exists(repository):
             app_config_path = move_repository_to_syftbox(
                 client_config,
                 tmp_clone_path=tmp_clone_path,
@@ -760,10 +742,8 @@ def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
         else:
             # Creates a Symbolic Link ( ~/Desktop/Syftbox/app/<rep> -> ~/.syftbox/apps/<rep>)
             # Handles: If ~/.syftbox/apps/<repository_name> already exists (replaces it)
-            step = "Creating Symbolic Link"
-            output_path = (
-                f"{client_config.sync_folder}/apps/{tmp_clone_path.split('/')[-1]}"
-            )
+            step = "creating Symbolic Link"
+            output_path = f"{client_config.sync_folder}/apps/{tmp_clone_path.split('/')[-1]}"
             app_config_path = create_symbolic_link(
                 client_config=client_config,
                 app_path=output_path,
@@ -774,14 +754,14 @@ def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
         # Executes config.json pre-install command list
         # Handles: Exceptions from pre-install command execution
         if app_config:
-            step = "Running pre-install commands"
+            step = "running pre-install commands"
             run_pre_install(app_config, app_config_path)
 
         # NOTE:
         # Executes config.json post-install command list
         # Handles: Exceptions from post-install command execution
         if app_config:
-            step = "Running post-install commands"
+            step = "running post-install commands"
             run_post_install(app_config, app_config_path)
 
         # NOTE:
@@ -790,17 +770,10 @@ def install(client_config: ClientConfig) -> Optional[Tuple[str, Exception]]:
         # Handles: If apps.json already have the repository_name  app listed.
         # Handles: If apps.json exists but doesn't have the repository_name app listed.
         if app_config:
-            step = "Updating apps.json config"
+            step = "updating apps.json config"
             update_app_config_file(app_config_path, sanitized_path, app_config)
 
-        app_name = app_config_path.split("/")[-1]
-        parts = app_config_path.split("/apps/")
-        print(
-            "------------------------------------\n"
-            f"Datasite Path: {parts[0]}\n"
-            f"In SyftBox: /apps/{parts[-1]}\n"
-            "------------------------------------\n\n"
-            f"✅ App {app_name} installed\n"
-        )
+        app_dir = Path(app_config_path)
+        return InstallResult(app_name=app_dir.name, app_path=app_dir, error=None, details=None)
     except Exception as e:
-        return (step, e)
+        return InstallResult(app_name="", app_path=Path(""), error=e, details=step)

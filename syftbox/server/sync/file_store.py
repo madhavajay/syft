@@ -31,7 +31,7 @@ class FileStore:
 
     def get(self, path: RelativePath) -> SyftFile:
         with get_db(self.db_path) as conn:
-            metadata = db.get_metadata(conn, path=str(path))
+            metadata = db.get_one_metadata(conn, path=str(path))
             abs_path = self.server_settings.snapshot_folder / metadata.path
             return SyftFile(metadata=metadata, data=self._read_bytes(abs_path), absolute_path=abs_path)
 
@@ -58,5 +58,5 @@ class FileStore:
 
     def list(self, path: RelativePath) -> list[FileMetadata]:
         with get_db(self.db_path) as conn:
-            metadata = db.get_all_metadata(conn, path_like=f"{path.as_posix()}%")
+            metadata = db.get_all_metadata(conn, path_like=path.as_posix())
             return metadata

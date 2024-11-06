@@ -41,12 +41,18 @@ class FileChangeInfo(BaseModel, frozen=True):
 
 
 class DatasiteState:
-    def __init__(self, client: Client, email: str):
+    def __init__(self, client: Client, email: str, remote_state: Optional[list[FileMetadata]] = None) -> None:
+        """A class to represent the state of a datasite
+
+        Args:
+            client (Client): User client
+            email (str): Email of the datasite
+            remote_state (Optional[list[FileMetadata]], optional): Remote state of the datasite.
+                If not provided, it will be fetched from the server. Defaults to None.
         """
-        NOTE DatasiteState is not threadsafe, this should be handled by the caller
-        """
-        self.client = client
-        self.email = email
+        self.client: Client = client
+        self.email: str = email
+        self.remote_state: Optional[list[FileMetadata]] = remote_state
 
     def __repr__(self) -> str:
         return f"DatasiteState<{self.email}>"
@@ -60,7 +66,11 @@ class DatasiteState:
         return hash_dir(self.path, root_dir=self.client.sync_folder)
 
     def get_remote_state(self) -> list[FileMetadata]:
-        return get_remote_state(self.client.server_client, email=self.client.email, path=Path(self.email))
+        if self.remote_state is None:
+            self.remote_state = get_remote_state(
+                self.client.server_client, email=self.client.email, path=Path(self.email)
+            )
+        return self.remote_state
 
     def get_out_of_sync_files(
         self,
@@ -97,8 +107,8 @@ class DatasiteState:
 
             try:
                 change_info = compare_fileinfo(self.client.sync_folder, afile, local_info, remote_info)
-            except Exception:
-                logger.exception(f"Failed to compare file {afile}")
+            except Exception as e:
+                logger.exception(f"Failed to compare file {afile}. Reason: {e}")
                 continue
 
             if change_info is not None:
