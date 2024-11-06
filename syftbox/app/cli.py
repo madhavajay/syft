@@ -8,7 +8,13 @@ from typing_extensions import Annotated
 from syftbox.app.manager import install_app, list_app, uninstall_app
 from syftbox.lib.lib import DEFAULT_CONFIG_PATH, ClientConfig
 
-app = Typer(name="SyftBox Apps", pretty_exceptions_enable=False, no_args_is_help=True, help="Manage SyftBox apps")
+app = Typer(
+    name="SyftBox Apps",
+    help="Manage SyftBox apps",
+    no_args_is_help=True,
+    pretty_exceptions_enable=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 state = {"config": None}
 
 CONFIG_OPTS = Option("-c", "--config", "--config-path", help="Path to the SyftBox config file")
