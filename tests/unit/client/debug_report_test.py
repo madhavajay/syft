@@ -1,30 +1,4 @@
-from pathlib import Path
-
-import pytest
-
-from syftbox.lib import ClientConfig
 from syftbox.lib.debug import debug_report, debug_report_yaml
-
-
-@pytest.fixture
-def mocked_config(monkeypatch, tmp_path):
-    def mock_load(*args, **kwargs):
-        config_path = Path(tmp_path, "config.json")
-        sync_folder = Path(tmp_path, "sync")
-        conf = ClientConfig(
-            config_path=config_path,
-            sync_folder=sync_folder,
-            email="test@openmined.org",
-        )
-        conf.save()
-        sync_folder.mkdir(parents=True, exist_ok=True)
-        return conf
-
-    monkeypatch.setattr(ClientConfig, "load", mock_load)
-
-    yield
-
-    monkeypatch.undo()
 
 
 def test_debug_report(mocked_config):
