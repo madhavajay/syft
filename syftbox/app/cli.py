@@ -20,13 +20,13 @@ def list(config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH):
     config = load_conf(config_path)
     result = list_app(config)
 
-    if len(result["apps"]) == 0:
-        rprint(f"No apps installed in {result['apps_path']}")
-        sys.exit(1)
+    if len(result.apps) == 0:
+        rprint(f"No apps installed in {result.apps_dir}")
+        sys.exit(0)
 
-    rprint(f"Apps installed in {result["apps_path"]}:")
-    for app in result["apps"]:
-        rprint(f"- [bold cyan]{app}[/bold cyan]")
+    rprint(f"Apps installed in {result.apps_dir}")
+    for app in result.apps:
+        rprint(f"- [bold cyan]{app.name}[/bold cyan]")
 
 
 @app.command()
