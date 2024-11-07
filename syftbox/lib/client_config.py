@@ -80,7 +80,7 @@ class SyftClientConfig(BaseModel):
             data = json.loads(path.read_text())
             return cls(path=path, **data)
         except Exception as e:
-            raise ClientConfigException(f"Failed to load config from '{conf_path}'") from e
+            raise ClientConfigException(f"Failed to load config from '{conf_path}' - {e}")
 
     @classmethod
     def exists(cls, path: PathLike) -> bool:
