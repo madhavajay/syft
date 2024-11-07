@@ -25,7 +25,10 @@ class FileStore:
 
     def delete(self, path: RelativePath) -> None:
         with get_db(self.db_path) as conn:
-            db.delete_file_metadata(conn, str(path))
+            try:
+                db.delete_file_metadata(conn, str(path))
+            except ValueError:
+                pass
             abs_path = self.server_settings.snapshot_folder / path
             abs_path.unlink(missing_ok=True)
 
@@ -33,6 +36,9 @@ class FileStore:
         with get_db(self.db_path) as conn:
             metadata = db.get_one_metadata(conn, path=str(path))
             abs_path = self.server_settings.snapshot_folder / metadata.path
+
+            if not Path(abs_path).exists():
+                self.delete(metadata.path.as_posix())
             return SyftFile(metadata=metadata, data=self._read_bytes(abs_path), absolute_path=abs_path)
 
     def _read_bytes(self, path: AbsolutePath) -> bytes:
