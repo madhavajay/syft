@@ -20,7 +20,7 @@ class SyftBoxUser(FastHttpUser):
         self.remote_state: dict[str, list[endpoints.FileMetadata]] = {}
 
         # patch client for update_remote function
-        self.client.sync_folder = Path(self.email)
+        self.client.sync_folder = Path(".")
         self.client.server_client = self.client
 
         self.filepath = self.init_file()
@@ -38,23 +38,22 @@ class SyftBoxUser(FastHttpUser):
             pass
         return filepath
 
-    # @task
-    # def sync_datasites(self):
-    #     remote_datasite_states = endpoints.get_datasite_states(
-    #         self.client,
-    #         email=self.email,
-    #     )
-    #     # logger.info(f"Syncing {len(remote_datasite_states)} datasites")
-    #     all_files = []
-    #     for email, remote_state in remote_datasite_states.items():
-    #         all_files.extend(remote_state)
+    @task
+    def sync_datasites(self):
+        remote_datasite_states = endpoints.get_datasite_states(
+            self.client,
+            email=self.email,
+        )
+        # logger.info(f"Syncing {len(remote_datasite_states)} datasites")
+        all_files = []
+        for email, remote_state in remote_datasite_states.items():
+            all_files.extend(remote_state)
 
-    #     all_paths = [str(f.path) for f in all_files][:10]
-    #     logger.info(f"Downloading {len(all_paths)} files")
-    #     endpoints.download_bulk(
-    #         self.client,
-    #         all_paths,
-    #     )
+        all_paths = [str(f.path) for f in all_files][:10]
+        endpoints.download_bulk(
+            self.client,
+            all_paths,
+        )
 
     @task
     def apply_diff(self):
@@ -67,3 +66,7 @@ class SyftBoxUser(FastHttpUser):
             local_syncstate=local_syncstate,
             remote_syncstate=remote_syncstate,
         )
+
+    @task
+    def download(self):
+        endpoints.download(self.client, self.filepath)
