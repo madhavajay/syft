@@ -1,7 +1,6 @@
 import os
 import platform
 import sys
-import time
 from pathlib import Path
 
 import httpx
@@ -13,6 +12,7 @@ from pid import PidFile, PidFileAlreadyLockedError
 from syftbox.client import __version__
 from syftbox.client.client import create_application
 from syftbox.client.exceptions import SyftBoxAlreadyRunning
+from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils import error_reporting, file_manager, macos
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.ignore import create_default_ignore_file
@@ -45,6 +45,7 @@ class SyftClient:
             base_url=str(self.config.server_url),
             follow_redirects=True,
         )
+        self.sync_manager = SyncManager(self.workspace, self.server_client)
         self.__local_server: uvicorn.Server = None
 
     @property
@@ -78,6 +79,9 @@ class SyftClient:
         self.workspace.mkdirs()
         # client.init_datasite()
         # client.register_self()
+        # self.sync_manager.start()
+        # self.run_apps()
+        # self.__run_local_server()
         self.__run_local_server()
 
     def __run_local_server(self):
@@ -108,6 +112,7 @@ class SyftClient:
     def shutdown(self):
         if self.__local_server:
             self.__local_server.shutdown()
+        # self.sync_manager.stop()
         self.pid.close()
 
     def init_datasite(self):
@@ -174,7 +179,7 @@ class SyftClient:
 
 def run_client(
     client_config: SyftClientConfig,
-    open_dir: bool,
+    open_dir: bool = False,
     log_level: str = "INFO",
     verbose: bool = False,
 ):
@@ -193,6 +198,8 @@ def run_client(
         logger.info("Directory icons are disabled")
     copy_icons = not disable_icons
 
+    run_migrations(client_config)
+
     try:
         client = SyftClient(client_config, log_level=log_level)
         open_dir and client.open_sync_folder()
@@ -209,17 +216,27 @@ def run_client(
         client.shutdown()
 
 
+def run_migrations(config: SyftClientConfig):
+    # todo - move datasite workspaces to correct location
+    # ws = SyftWorkspace(config.data_dir)
+    # old_datasite_path = Path(ws.data_dir, config.email)
+
+    # if old_datasite_path.exists():
+    #     ws.mkdirs()
+    #     # todo shutil move things
+    return
+
+
 if __name__ == "__main__":
     conf = SyftClientConfig(
+        path=".clients/test@openmined.org/config.json",
         data_dir=Path(".clients/test@openmined.org").resolve(),
         email="test@openmined.org",
         client_url="http://localhost:8000",
-        path="./data/config.json",
     )
     conf.save()
     client = SyftClient(conf)
     client.start()
     client.register_self()
     client.init_datasite()
-    time.sleep(30)
     client.shutdown()

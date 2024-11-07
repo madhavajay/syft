@@ -23,7 +23,7 @@ from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.routers import datasite_router, file_router, plugin_router, state_router
 from syftbox.client.utils import macos
 from syftbox.client.utils.error_reporting import make_error_report
-from syftbox.lib import ClientConfig, SharedState
+from syftbox.lib.lib import ClientConfig, SharedState
 from syftbox.lib.logger import setup_logger
 
 from .routers.plugin_router import start_plugin
