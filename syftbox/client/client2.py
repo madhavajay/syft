@@ -1,15 +1,17 @@
+import asyncio
 import os
 import platform
 import sys
+from functools import lru_cache
 from pathlib import Path
-from time import sleep
 
 import httpx
 import uvicorn
 from loguru import logger
 from pid import PidFile, PidFileAlreadyLockedError
 
-from syftbox.client.client import create_application
+from syftbox.client.api import create_api
+from syftbox.client.base import SyftClientContext
 from syftbox.client.exceptions import SyftBoxAlreadyRunning
 from syftbox.client.utils import error_reporting, file_manager, macos
 from syftbox.lib.client_config import SyftClientConfig
@@ -26,11 +28,19 @@ ICON_FOLDER = ASSETS_FOLDER / "icon"
 
 
 class SyftClient:
-    """Syftbox Client
+    """The SyftBox Client
 
-    Contains all the components of a syftbox client.
-    Only one instance can run for a given workspace.
-    This should not be used by apps.
+    This is the main SyftBox client that handles workspace data, server
+    communication, and local API services. Only one client instance can run
+    for a given workspace directory.
+
+    Warning:
+        This class should not be imported directly by sub-systems.
+        Use the provided interfaces and context objects instead.
+
+    Raises:
+        SyftBoxAlreadyRunning: If another client is already running for the same workspace
+        Exception: If the client fails to start due to any reason
     """
 
     def __init__(self, config: SyftClientConfig, log_level: str = "INFO"):
@@ -46,9 +56,9 @@ class SyftClient:
         # self.sync_manager = SyncManager(self.workspace, self.server_client)
         self.__local_server: uvicorn.Server = None
 
-    # @property
-    # def config_path(self) -> Path:
-    #     return self.config.path
+    @property
+    def config_path(self) -> Path:
+        return self.config.path
 
     @property
     def is_registered(self) -> bool:
@@ -72,8 +82,8 @@ class SyftClient:
     def start(self):
         try:
             self.pid.create()
-        except PidFileAlreadyLockedError as e:
-            raise SyftBoxAlreadyRunning(f"There's another Syftbox client running on {self.config.data_dir}") from e
+        except PidFileAlreadyLockedError:
+            raise SyftBoxAlreadyRunning(f"Another instance of SyftBox is running on {self.config.data_dir}")
 
         logger.info("Started SyftBox client")
 
@@ -87,8 +97,8 @@ class SyftClient:
         # self.sync_manager.start()
         # run the apps
         # self.run_apps()
-        # start the local server
-        # self.__run_local_server()
+        # start the local server - blocks main thread
+        return self.__run_local_server()
 
     def open_sync_folder(self):
         file_manager.open_dir(self.workspace.datasites)
@@ -101,7 +111,7 @@ class SyftClient:
     def shutdown(self):
         logger.info("Shutting down SyftBox client")
         if self.__local_server:
-            self.__local_server.shutdown()
+            asyncio.run(self.__local_server.shutdown())
         # self.sync_manager.stop()
         self.pid.close()
 
@@ -118,12 +128,10 @@ class SyftClient:
                 logger.info(f"creating datasite at {self.datasite}")
                 self.__create_datasite()
             except Exception as e:
-                logger.error("Failed to create datasite")
-                logger.exception(e)
-
+                logger.error("Failed to create datasite", e)
                 # this is a problematic scenario - probably because you can't setup the basic
                 # datasite structure. So, we should probably just exit here.
-                raise SyftBoxException("Failed to initialize datasite") from e
+                raise SyftBoxException(f"Failed to initialize datasite - {e}")
 
         if not self.public_dir.is_dir():
             try:
@@ -149,24 +157,25 @@ class SyftClient:
             logger.info("Email registration successful")
         except Exception as e:
             logger.error(f"Failed to register {self.config.email} with the server", e)
-            raise SyftBoxException("Failed to register with the server") from e
+            raise SyftBoxException(f"Failed to register with the server - {e}")
+
+    @lru_cache(1)
+    def as_context(self) -> SyftClientContext:
+        """Projects self as a context object"""
+        return SyftClientContext(self.config, self.workspace, self.server_client)
 
     def __run_local_server(self):
         logger.info(f"Starting local server on {self.config.client_url}")
-        app = create_application()
+        app = create_api(self.as_context())
         self.__local_server = uvicorn.Server(
             config=uvicorn.Config(
                 app=app,
                 host=self.config.client_url.host,
                 port=self.config.client_url.port,
                 log_level=self.log_level.lower(),
-                timeout_graceful_shutdown=0,
             )
         )
-        self.__local_server.run()
-
-        if not self.__local_server.started:
-            raise SyftBoxException("Failed to start the local server")
+        return self.__local_server.run()
 
     def __create_datasite(self):
         # create the datasite directory and the root perm file
@@ -257,13 +266,12 @@ if __name__ == "__main__":
             path=conf_path,
             data_dir=data_dir,
             email=email,
-            client_url="https://syftboxstage.openmined.org",
+            server_url="https://syftboxstage.openmined.org",
+            port=8081,
         ).save()
     try:
         client = SyftClient(conf)
         client.start()
-        logger.info("Chilling...")
-        sleep(30)
     except KeyboardInterrupt:
         pass
     except Exception as e:
