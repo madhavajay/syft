@@ -59,7 +59,7 @@ jobs:
 
       - name: Install SyftBox
         run: |
-          uv tool install --upgrade syftbox
+          uv tool install --upgrade .
 
       - name: Pre-test checks
         run: |

@@ -244,7 +244,10 @@ def download_file(
     abs_path = server_settings.snapshot_folder / metadata.path
     if not Path(abs_path).exists():
         # could be a stale db entry, remove from db
-        delete_file_metadata(conn, metadata.path.as_posix())
+        try:
+            delete_file_metadata(conn, metadata.path.as_posix())
+        except ValueError:
+            pass
         raise HTTPException(status_code=404, detail="file not found")
     return FileResponse(abs_path)
 
