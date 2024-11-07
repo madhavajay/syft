@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 import faker
+import pytest
 from fastapi.testclient import TestClient
 from loguru import logger
 
@@ -396,7 +397,7 @@ def test_sync_invalid_local_environment(datasite_1: Client):
     assert not sync_service.is_alive()
 
 
-# @pytest.mark.skip("This is for manual testing")
+@pytest.mark.skip("This is for manual testing")
 def test_n_datasites(tmp_path: Path, server_client: TestClient, datasite_1: Client):
     server_settings: ServerSettings = server_client.app_state["server_settings"]
     print(server_settings.snapshot_folder)
