@@ -16,7 +16,7 @@ jobs:
           # - tutorial-apps@pretrained_model_aggregator
           # - tutorial-apps@pretrained_model_local
         python-version: ["3.9"]
-        runner: [syftbox-sh-linux-x64, sh-macos-arm64]
+        runner: [syftbox-sh-linux-x64, scaleway-macOS-arm64]
       fail-fast: false
 
     runs-on: ${{ matrix.runner }}

@@ -39,11 +39,6 @@ jobs:
         with:
           version: "1.7"
 
-      - name: "Print environment"
-        run: |
-          echo $(env)
-
-
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
