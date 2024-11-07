@@ -31,7 +31,7 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
     if not conf:
         # first time setup
         if data_dir == DEFAULT_DATA_DIR:
-            data_dir = prompt_sync_dir()
+            data_dir = prompt_data_dir()
 
         if not email:
             email = prompt_email()
@@ -62,7 +62,7 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
     return conf
 
 
-def prompt_sync_dir(default_dir: Path = DEFAULT_DATA_DIR) -> Path:
+def prompt_data_dir(default_dir: Path = DEFAULT_DATA_DIR) -> Path:
     prompt_dir = "[bold]Where do you want SyftBox to store data?[/bold] [grey70]Press Enter for default[/grey70]"
     prompt_overwrite = "[bold yellow]Directory '{sync_folder}' is not empty![/bold yellow] Do you want to overwrite it?"
 

@@ -1,9 +1,8 @@
 import logging
 import os
 
-from syftbox.lib import SyftPermission, perm_file_path
 from syftbox.lib.ignore import create_default_ignore_file
-from syftbox.lib.lib import Client
+from syftbox.lib.lib import Client, SyftPermission, perm_file_path
 
 logger = logging.getLogger(__name__)
 

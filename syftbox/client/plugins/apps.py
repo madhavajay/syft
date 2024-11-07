@@ -13,10 +13,7 @@ from croniter import croniter
 from loguru import logger
 from typing_extensions import Any, Optional, Union
 
-from syftbox.lib import (
-    SyftPermission,
-    perm_file_path,
-)
+from syftbox.lib.lib import SyftPermission, perm_file_path
 
 BOOTSTRAPPED = False
 

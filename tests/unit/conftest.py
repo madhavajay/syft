@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from syftbox.lib import ClientConfig
+from syftbox.lib.lib import ClientConfig
 
 
 @pytest.fixture
