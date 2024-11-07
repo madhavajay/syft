@@ -7,7 +7,7 @@ class SyftWorkspace:
     Each workspace is expected to be unique for a client.
 
     ```txt
-        root/
+        data_dir/
         ├── apps/                       <-- installed apps
         ├── plugins/                    <-- plugins data
         └── datasites/                  <-- synced datasites
@@ -18,8 +18,8 @@ class SyftWorkspace:
     ```
     """
 
-    def __init__(self, root_dir: PathLike):
-        self.data_dir = to_path(root_dir)
+    def __init__(self, data_dir: PathLike):
+        self.data_dir = to_path(data_dir)
 
         # datasites dir
         self.datasites = self.data_dir / "datasites"

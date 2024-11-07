@@ -17,3 +17,6 @@ DEFAULT_LOGS_PATH = Path(DEFAULT_CONFIG_DIR, "logs", "syftbox.log")
 
 # Default data directory for the client
 DEFAULT_DATA_DIR = Path(Path.home(), "SyftBox")
+
+# Permissions file name
+PERM_FILE = "_.syftperm"

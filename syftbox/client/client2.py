@@ -13,9 +13,10 @@ from syftbox.client.client import create_application
 from syftbox.client.exceptions import SyftBoxAlreadyRunning
 from syftbox.client.utils import error_reporting, file_manager, macos
 from syftbox.lib.client_config import SyftClientConfig
+from syftbox.lib.constants import PERM_FILE
 from syftbox.lib.exceptions import SyftBoxException
 from syftbox.lib.ignore import create_default_ignore_file
-from syftbox.lib.lib import SyftPermission, perm_file_path
+from syftbox.lib.lib import SyftPermission
 from syftbox.lib.logger import setup_logger
 from syftbox.lib.workspace import SyftWorkspace
 
@@ -45,20 +46,23 @@ class SyftClient:
         # self.sync_manager = SyncManager(self.workspace, self.server_client)
         self.__local_server: uvicorn.Server = None
 
+    # @property
+    # def config_path(self) -> Path:
+    #     return self.config.path
+
     @property
     def is_registered(self) -> bool:
+        """Check if the current user is registered with the server"""
         return bool(self.config.token)
 
     @property
-    def config_path(self) -> Path:
-        return self.config.path
-
-    @property
     def datasite(self) -> Path:
+        """The datasite directory for the current user"""
         return self.workspace.datasites / self.config.email
 
     @property
     def public_dir(self) -> Path:
+        """The public directory for the current user"""
         return self.datasite / "public"
 
     @property
@@ -105,54 +109,50 @@ class SyftClient:
         if self.datasite.exists():
             return
 
-        # create workspace/datasites/.syftignore
-        create_default_ignore_file(self.workspace)
+        # Create workspace/datasites/.syftignore
+        create_default_ignore_file(self.workspace.datasites)
 
-        # 3. Create perm file for the datasite
-        file_path = Path(perm_file_path(self.datasite))
-        if file_path.exists():
-            perm_file = SyftPermission.load(file_path)
-        else:
-            logger.info(f"> {self.config.email} Creating Datasite + Permfile")
+        # Create perm file for the datasite
+        if not self.datasite.is_dir():
             try:
-                perm_file = SyftPermission.datasite_default(self.config.email)
-                perm_file.save(str(file_path))
+                logger.info(f"creating datasite at {self.datasite}")
+                self.__create_datasite()
             except Exception as e:
-                logger.error("Failed to create perm file")
+                logger.error("Failed to create datasite")
                 logger.exception(e)
 
-        # 4. create a public folder
-        public_path = self.datasite / "public"
-        public_path.mkdir(parents=True, exist_ok=True)
+                # this is a problematic scenario - probably because you can't setup the basic
+                # datasite structure. So, we should probably just exit here.
+                raise SyftBoxException("Failed to initialize datasite") from e
 
-        # 5. Create perm file for the public folder
-        public_file_path = Path(perm_file_path(public_path))
-        if public_file_path.exists():
-            public_perm_file = SyftPermission.load(public_file_path)
-        else:
-            logger.info(f"> {self.config.email} Creating Public Permfile")
+        if not self.public_dir.is_dir():
             try:
-                public_perm_file = SyftPermission.mine_with_public_read(self.config.email)
-                public_perm_file.save(str(public_file_path))
+                logger.info(f"creating public dir in datasite at {self.public_dir}")
+                self.__create_public_folder()
             except Exception as e:
-                logger.error("Failed to create perm file")
-                logger.exception(e)
+                # not a big deal if we can't create the public folder
+                # more likely that the above step fails than this
+                logger.error("Failed to create folder with public perms", e)
 
     def register_self(self):
         """Register the user's email with the SyftBox cache server"""
         if self.is_registered:
             return
 
-        # TODO + FIXME - once we have JWT, we should not store token in config!
-        # ideally in OS keychain (using keyring) or
-        # in a separate location under self.workspace.plugins
-        token = self.__register_email()
-        self.config.token = str(token)
-        self.config.save()
-        logger.info("Email registration successful")
+        try:
+            token = self.__register_email()
+            # TODO + FIXME - once we have JWT, we should not store token in config!
+            # ideally in OS keychain (using keyring) or
+            # in a separate location under self.workspace.plugins
+            self.config.token = str(token)
+            self.config.save()
+            logger.info("Email registration successful")
+        except Exception as e:
+            logger.error(f"Failed to register {self.config.email} with the server", e)
+            raise SyftBoxException("Failed to register with the server") from e
 
     def __run_local_server(self):
-        logger.info(f"> Starting local server on {self.config.client_url}")
+        logger.info(f"Starting local server on {self.config.client_url}")
         app = create_application()
         self.__local_server = uvicorn.Server(
             config=uvicorn.Config(
@@ -168,32 +168,26 @@ class SyftClient:
         if not self.__local_server.started:
             raise SyftBoxException("Failed to start the local server")
 
+    def __create_datasite(self):
+        # create the datasite directory and the root perm file
+        self.datasite.mkdir(parents=True, exist_ok=True)
+        perms = SyftPermission.datasite_default(self.config.email)
+        perms.save(str(self.datasite / PERM_FILE))
+
+    def __create_public_folder(self):
+        # create a public folder & public perm file
+        self.public_dir.mkdir(parents=True, exist_ok=True)
+        perms = SyftPermission.mine_with_public_read(self.config.email)
+        perms.save(str(self.public_dir / PERM_FILE))
+
     def __register_email(self) -> str:
-        """
-        Register the user's email with the SyftBox cache server
-        raises: SyftBoxException
-        """
-
         # TODO - this should probably be wrapped in a SyftCacheServer API?
-
-        token = None
-        try:
-            response = self.server_client.post(
-                "/register",
-                json={"email": self.config.email},
-            )
-            response.raise_for_status()
-            token = response.json().get("token")
-        except Exception as e:
-            # if we fail to register, then we should bubble up the error
-            raise SyftBoxException(
-                f"Failed to register {self.config.email} on server {self.server_client.base_url}"
-            ) from e
-
-        if not token:
-            raise SyftBoxException(f"Got empty token from the server {self.server_client.base_url}")
-
-        return token
+        response = self.server_client.post(
+            "/register",
+            json={"email": self.config.email},
+        )
+        response.raise_for_status()
+        return response.json().get("token")
 
     def __enter__(self):
         return self
@@ -268,7 +262,6 @@ if __name__ == "__main__":
     try:
         client = SyftClient(conf)
         client.start()
-
         logger.info("Chilling...")
         sleep(30)
     except KeyboardInterrupt:
