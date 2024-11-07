@@ -21,7 +21,7 @@ class ErrorReport(BaseModel):
     @classmethod
     def from_client_config(cls, client_config: SyftClientConfig):
         return cls(
-            client_config=client_config.model_dump(exclude=["token"]),
+            client_config=client_config.as_dict(),
             server_version=try_get_server_version(client_config.server_url),
         )
 

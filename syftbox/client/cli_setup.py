@@ -24,7 +24,7 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
 
     # try to load the existing config
     try:
-        conf = SyftClientConfig.load(config_path)
+        conf = SyftClientConfig.load(config_path, migrate=True)
     except ClientConfigException:
         pass
 

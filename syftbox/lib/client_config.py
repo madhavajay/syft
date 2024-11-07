@@ -69,12 +69,14 @@ class SyftClientConfig(BaseModel):
         return v
 
     @classmethod
-    def load(cls, conf_path: Optional[PathLike] = None) -> Self:
+    def load(cls, conf_path: Optional[PathLike] = None, migrate=False) -> Self:
         try:
             # args or env or default
             path = conf_path or os.getenv(CONFIG_PATH_ENV, DEFAULT_CONFIG_PATH)
             path = to_path(path)
-            path = cls.migrate(path)  # todo migration stuff we can remove later
+            # todo migration stuff we can remove later
+            if migrate:
+                path = cls.migrate(path)
             data = json.loads(path.read_text())
             return cls(path=path, **data)
         except Exception as e:
@@ -86,29 +88,35 @@ class SyftClientConfig(BaseModel):
 
     @classmethod
     def migrate(cls, path: PathLike) -> Path:
+        migrated_path = path
+
         # check if there's a legacy config file around the requested path
         # if yes, then rename it to the new path
         legacy_path = Path(path.parent, LEGACY_CONFIG_NAME)
         if legacy_path.exists():
             new_path = Path(path.parent, DEFAULT_CONFIG_PATH.name)
-            path = legacy_path.rename(new_path)
+            migrated_path = legacy_path.rename(new_path)
 
         # we tried to load /path/to/client_config.json that doesn't exist
         # so we change the path to /path/to/config.json (above makes sure we have this file)
         if path.name == LEGACY_CONFIG_NAME:
-            return Path(path.parent, DEFAULT_CONFIG_PATH.name)
+            migrated_path = Path(path.parent, DEFAULT_CONFIG_PATH.name)
 
-        return path
+        return migrated_path
+
+    def as_dict(self, exclude=None):
+        return self.model_dump(exclude=exclude, exclude_none=True, warnings="none")
 
     def as_json(self, indent=4):
         return self.model_dump_json(indent=indent, exclude_none=True, warnings="none")
 
-    def save(self):
+    def save(self) -> Self:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(self.as_json())
+        return self
 
 
 if __name__ == "__main__":
-    conf = SyftClientConfig.load(".clients/config.json")
-    print(conf)
+    conf = SyftClientConfig.load(".clients/client_config.json", migrate=True)
     conf.save()
+    print(conf)
