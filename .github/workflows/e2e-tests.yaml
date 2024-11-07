@@ -39,6 +39,11 @@ jobs:
         with:
           version: "1.7"
 
+      - name: "Print Arch"
+        run: |
+          echo "Arch: $(uname -m)"
+          echo "OS: $(uname -s)"
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
