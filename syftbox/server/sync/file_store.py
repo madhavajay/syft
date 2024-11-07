@@ -39,6 +39,7 @@ class FileStore:
 
             if not Path(abs_path).exists():
                 self.delete(metadata.path.as_posix())
+                raise ValueError("File not found")
             return SyftFile(metadata=metadata, data=self._read_bytes(abs_path), absolute_path=abs_path)
 
     def get_metadata(self, path: RelativePath) -> FileMetadata:
