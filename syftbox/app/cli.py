@@ -6,7 +6,9 @@ from typer import Argument, Exit, Option, Typer
 from typing_extensions import Annotated
 
 from syftbox.app.manager import install_app, list_app, uninstall_app
-from syftbox.lib.lib import DEFAULT_CONFIG_PATH, ClientConfig
+from syftbox.lib.client_config import SyftClientConfig
+from syftbox.lib.constants import DEFAULT_CONFIG_PATH
+from syftbox.lib.workspace import SyftWorkspace
 
 app = Typer(
     name="SyftBox Apps",
@@ -23,8 +25,8 @@ CONFIG_OPTS = Option("-c", "--config", "--config_path", help="Path to the SyftBo
 @app.command()
 def list(config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH):
     """List all installed Syftbox apps"""
-    config = load_conf(config_path)
-    result = list_app(config)
+    workspace = get_workspace(config_path)
+    result = list_app(workspace)
 
     if len(result.apps) == 0:
         rprint(f"No apps installed in {result.apps_dir}")
@@ -42,8 +44,8 @@ def install(
     config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
 ):
     """Install a new Syftbox app"""
-    config = load_conf(config_path)
-    result = install_app(config, repository, branch)
+    workspace = get_workspace(config_path)
+    result = install_app(workspace, repository, branch)
     if result.error:
         rprint(f"[bold red]Error:[/bold red] {result.error}")
         sys.exit(1)
@@ -57,8 +59,8 @@ def uninstall(
     config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
 ):
     """Uninstall a Syftbox app"""
-    config = load_conf(config_path)
-    result = uninstall_app(app_name, config)
+    workspace = get_workspace(config_path)
+    result = uninstall_app(app_name, workspace)
     if not result:
         rprint(f"[bold red]Error:[/bold red] '{app_name}' app not found")
         sys.exit(1)
@@ -75,9 +77,10 @@ def uninstall(
 #     pass
 
 
-def load_conf(config_path: Path):
+def get_workspace(config_path: Path) -> SyftWorkspace:
     try:
-        return ClientConfig.load(config_path)
+        conf = SyftClientConfig.load(config_path)
+        return SyftWorkspace(conf)
     except Exception:
         msg = (
             f"[bold red]Error:[/bold red] Couldn't load config at: [yellow]{config_path}[/yellow].\n"
