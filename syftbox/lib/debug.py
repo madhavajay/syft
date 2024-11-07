@@ -23,11 +23,11 @@ def debug_report(config_path: Optional[PathLike] = None) -> str:
         client_config = SyftClientConfig.load(config_path)
         workspace = SyftWorkspace(client_config.data_dir)
         result = list_app(workspace)
-        app_dir = str(result.apps_dir)
+        app_dir = result.apps_dir
         apps = [app.name for app in result.apps]
-        client_config = client_config.as_dict(exclude="token")
+        client_config = client_config.as_dict(exclude={"token"})
     except Exception as e:
-        logger.error("Error loading client config", e)
+        logger.exception("Error loading client config", e)
         pass
 
     syftbox_path = shutil.which("syftbox")
@@ -71,4 +71,5 @@ def debug_report_yaml(config_path: Optional[PathLike] = None) -> str:
     yaml.add_multi_representer(PurePath, str_representer)
     yaml.add_representer(Url, str_representer)
 
-    return yaml.dump(debug_report(config_path), default_flow_style=False, sort_keys=False)
+    report = debug_report(config_path)
+    return yaml.dump(report, default_flow_style=False, sort_keys=False)

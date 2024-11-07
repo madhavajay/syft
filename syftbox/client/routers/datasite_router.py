@@ -1,8 +1,11 @@
 # routers/datasite_router.py
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.encoders import jsonable_encoder
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel
+
+from syftbox.client.routers.common import APIContext
 
 router = APIRouter()
 
@@ -14,12 +17,13 @@ class DatasiteRequest(BaseModel):
 
 
 @router.get("/")
-async def list_datasites(request: Request):
+async def list_datasites(ctx: APIContext):
     """List all available datasites"""
 
     try:
-        datasites = request.app.state.shared_state.get("my_datasites", [])
-        return {"datasites": jsonable_encoder(datasites)}
+        datasites_path: Path = ctx.workspace.datasites
+        datasites = [p.name for p in datasites_path.glob("*") if ("@" in p and p.is_dir())]
+        return {"datasites": datasites}
     except Exception as e:
         logger.error(f"Error listing datasites: {e}")
         raise HTTPException(status_code=500, detail="Failed to list datasites")
