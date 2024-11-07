@@ -160,6 +160,9 @@ def create_file(
     if "%" in file.filename:
         raise HTTPException(status_code=400, detail="filename cannot contain '%'")
 
+    if file_store.exists(relative_path):
+        raise HTTPException(status_code=400, detail="file already exists")
+
     contents = file.file.read()
 
     if SyftPermission.is_permission_file(relative_path) and not SyftPermission.is_valid(contents):

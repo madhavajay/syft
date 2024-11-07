@@ -42,6 +42,14 @@ class FileStore:
                 raise ValueError("File not found")
             return SyftFile(metadata=metadata, data=self._read_bytes(abs_path), absolute_path=abs_path)
 
+    def exists(self, path: RelativePath) -> bool:
+        with get_db(self.db_path) as conn:
+            try:
+                db.get_one_metadata(conn, path=str(path))
+                return True
+            except ValueError:
+                return False
+
     def get_metadata(self, path: RelativePath) -> FileMetadata:
         with get_db(self.db_path) as conn:
             metadata = db.get_one_metadata(conn, path=str(path))
@@ -56,12 +64,8 @@ class FileStore:
         abs_path = self.server_settings.snapshot_folder / path
         abs_path.parent.mkdir(exist_ok=True, parents=True)
 
-        with open(abs_path, "wb") as f:
-            # better to use async aiosqlite
-            f.write(contents)
-
+        abs_path.write_bytes(contents)
         cursor = conn.cursor()
-
         metadata = hash_file(abs_path, root_dir=self.server_settings.snapshot_folder)
         db.save_file_metadata(cursor, metadata)
         conn.commit()
