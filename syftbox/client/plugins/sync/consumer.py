@@ -441,9 +441,7 @@ class SyncConsumer:
                 # Fatal error, syncing should be interrupted
                 raise e
             except Exception as e:
-                logger.error(
-                    f"Failed to sync file {item.data.path}. The file will be retried in the next sync. Reason: {e}"
-                )
+                logger.error(f"Failed to sync file {item.data.path}, it will be retried in the next sync. Reason: {e}")
 
     def download_all_missing(self, datasite_states: list[DatasiteState]):
         missing_files = []
