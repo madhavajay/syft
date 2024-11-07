@@ -13,7 +13,7 @@ DEFAULT_CONFIG_DIR = Path(Path.home(), ".syftbox")
 DEFAULT_CONFIG_PATH = Path(DEFAULT_CONFIG_DIR, "config.json")
 
 # Default logs directory for the client
-DEFAULT_LOGS_PATH = Path(DEFAULT_CONFIG_DIR, "logs", "syftbox.log")
+DEFAULT_LOGS_DIR = Path(DEFAULT_CONFIG_DIR, "logs")
 
 # Default data directory for the client
 DEFAULT_DATA_DIR = Path(Path.home(), "SyftBox")

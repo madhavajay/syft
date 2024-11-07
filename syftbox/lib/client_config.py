@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from pydantic import AliasChoices, AnyHttpUrl, BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic_core import Url
 from typing_extensions import Self
 
 from syftbox.lib.constants import DEFAULT_CONFIG_PATH, DEFAULT_DATA_DIR, DEFAULT_SERVER_URL
@@ -67,6 +68,12 @@ class SyftClientConfig(BaseModel):
         elif isinstance(v, int):
             return str(v)
         return v
+
+    def set_server_url(self, server: str):
+        self.server_url = Url(server)
+
+    def set_port(self, port: int):
+        self.client_url = Url(f"http://127.0.0.1:{port}")
 
     @classmethod
     def load(cls, conf_path: Optional[PathLike] = None, migrate=False) -> Self:

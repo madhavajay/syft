@@ -1,6 +1,7 @@
 import asyncio
 import os
 import platform
+import shutil
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -17,7 +18,7 @@ from syftbox.client.utils import error_reporting, file_manager, macos
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.constants import PERM_FILE
 from syftbox.lib.exceptions import SyftBoxException
-from syftbox.lib.ignore import create_default_ignore_file
+from syftbox.lib.ignore import IGNORE_FILENAME, create_default_ignore_file
 from syftbox.lib.lib import SyftPermission
 from syftbox.lib.logger import setup_logger
 from syftbox.lib.workspace import SyftWorkspace
@@ -49,10 +50,7 @@ class SyftClient:
 
         self.workspace = SyftWorkspace(self.config.data_dir)
         self.pid = PidFile(pidname="syftbox.pid", piddir=self.workspace.data_dir)
-        self.server_client = httpx.Client(
-            base_url=str(self.config.server_url),
-            follow_redirects=True,
-        )
+        self.server_client = httpx.Client(base_url=str(self.config.server_url), follow_redirects=True)
         # self.sync_manager = SyncManager(self.workspace, self.server_client)
         self.__local_server: uvicorn.Server = None
 
@@ -87,6 +85,11 @@ class SyftClient:
 
         logger.info("Started SyftBox client")
 
+        # commit the config to disk
+        self.config.save()
+
+        # first run any migrations
+        self.__migrate()
         # create the workspace directories
         self.workspace.mkdirs()
         # register the email with the server
@@ -100,6 +103,15 @@ class SyftClient:
         # start the local server - blocks main thread
         return self.__run_local_server()
 
+    def shutdown(self):
+        logger.info("Shutting down SyftBox client")
+        if self.__local_server:
+            ret = asyncio.run(self.__local_server.shutdown())
+            logger.debug(f"Local server shutdown result: {ret}")
+        # self.sync_manager.stop()
+        self.pid.close()
+        logger.debug("SyftBox client shutdown complete")
+
     def open_sync_folder(self):
         file_manager.open_dir(self.workspace.datasites)
 
@@ -107,13 +119,6 @@ class SyftClient:
         self.workspace.mkdirs()
         if platform.system() == "Darwin":
             macos.copy_icon_file(ICON_FOLDER, self.workspace.datasites)
-
-    def shutdown(self):
-        logger.info("Shutting down SyftBox client")
-        if self.__local_server:
-            asyncio.run(self.__local_server.shutdown())
-        # self.sync_manager.stop()
-        self.pid.close()
 
     def init_datasite(self):
         if self.datasite.exists():
@@ -128,10 +133,9 @@ class SyftClient:
                 logger.info(f"creating datasite at {self.datasite}")
                 self.__create_datasite()
             except Exception as e:
-                logger.error("Failed to create datasite", e)
                 # this is a problematic scenario - probably because you can't setup the basic
                 # datasite structure. So, we should probably just exit here.
-                raise SyftBoxException(f"Failed to initialize datasite - {e}")
+                raise SyftBoxException(f"Failed to initialize datasite - {e}") from e
 
         if not self.public_dir.is_dir():
             try:
@@ -140,13 +144,12 @@ class SyftClient:
             except Exception as e:
                 # not a big deal if we can't create the public folder
                 # more likely that the above step fails than this
-                logger.error("Failed to create folder with public perms", e)
+                logger.exception("Failed to create folder with public perms", e)
 
     def register_self(self):
         """Register the user's email with the SyftBox cache server"""
         if self.is_registered:
             return
-
         try:
             token = self.__register_email()
             # TODO + FIXME - once we have JWT, we should not store token in config!
@@ -156,8 +159,7 @@ class SyftClient:
             self.config.save()
             logger.info("Email registration successful")
         except Exception as e:
-            logger.error(f"Failed to register {self.config.email} with the server", e)
-            raise SyftBoxException(f"Failed to register with the server - {e}")
+            raise SyftBoxException(f"Failed to register with the server - {e}") from e
 
     @lru_cache(1)
     def as_context(self) -> SyftClientContext:
@@ -191,12 +193,32 @@ class SyftClient:
 
     def __register_email(self) -> str:
         # TODO - this should probably be wrapped in a SyftCacheServer API?
-        response = self.server_client.post(
-            "/register",
-            json={"email": self.config.email},
-        )
+        response = self.server_client.post("/register", json={"email": self.config.email})
         response.raise_for_status()
         return response.json().get("token")
+
+    def __migrate(self):
+        # check for old dir structure and migrate to new
+        # data_dir == sync_folder
+        old_sync_folder = self.workspace.data_dir
+        old_datasite_path = Path(old_sync_folder, self.config.email)
+        if old_datasite_path.exists():
+            logger.info("Migrating to new datasite structure")
+            self.workspace.mkdirs()
+
+            # create the datasites directory & move all under it
+            for dir in old_sync_folder.glob("*@*"):
+                dir.rename(self.workspace.datasites / dir.name)
+
+            # move syftignore file
+            old_ignore_file = old_sync_folder / IGNORE_FILENAME
+            if old_ignore_file.exists():
+                old_ignore_file.rename(self.workspace.datasites / IGNORE_FILENAME)
+
+            old_sync_state = old_sync_folder / ".syft" / "local_syncstate.json"
+            if old_sync_state.exists():
+                old_sync_state.rename(self.workspace.plugins / old_sync_state.name)
+                shutil.rmtree(str(old_sync_state.parent))
 
     def __enter__(self):
         return self
@@ -209,29 +231,24 @@ def run_client(
     client_config: SyftClientConfig,
     open_dir: bool = False,
     log_level: str = "INFO",
-    verbose: bool = False,
 ):
     """Run the SyftBox client"""
-
-    log_level = "DEBUG" if verbose else log_level
-    setup_logger(log_level)
+    setup_logger(log_level, log_dir=client_config.data_dir / "logs")
 
     error_config = error_reporting.make_error_report(client_config)
-    logger.info(f"Client metadata: {error_config.model_dump_json(indent=2)}")
+    logger.info(f"Client metadata\n{error_config.model_dump_json(indent=2)}")
 
     # a flag to disable icons
     # GitHub CI needs to zip sync dir in tests and fails when it encounters Icon\r files
     disable_icons = str(os.getenv("SYFTBOX_DISABLE_ICONS")).lower() in ("true", "1")
     if disable_icons:
-        logger.info("Directory icons are disabled")
+        logger.debug("Directory icons are disabled")
     copy_icons = not disable_icons
-
-    run_migrations(client_config)
 
     try:
         client = SyftClient(client_config, log_level=log_level)
-        open_dir and client.open_sync_folder()
         copy_icons and client.copy_icons()
+        open_dir and client.open_sync_folder()
         client.start()
     except SyftBoxAlreadyRunning as e:
         logger.error(e)
@@ -239,42 +256,24 @@ def run_client(
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt. Shutting down the client")
     except Exception as e:
-        logger.error(f"Failed to start the client: {e}")
+        logger.exception("Unhandled exception when starting the client", e)
     finally:
         client.shutdown()
-
-
-def run_migrations(config: SyftClientConfig):
-    # TODO - move datasite workspaces to correct location
-    # ws = SyftWorkspace(config.data_dir)
-    # old_datasite_path = Path(ws.data_dir, config.email)
-
-    # if old_datasite_path.exists():
-    #     ws.mkdirs()
-    #     # TODO shutil move things
-    return
 
 
 if __name__ == "__main__":
-    email = "test@openmined.org"
-    data_dir = Path(f".clients/{email}").resolve()
-    conf_path = data_dir / "config.json"
-    if SyftClientConfig.exists(conf_path):
-        conf = SyftClientConfig.load(conf_path)
-    else:
-        conf = SyftClientConfig(
-            path=conf_path,
-            data_dir=data_dir,
-            email=email,
-            server_url="https://syftboxstage.openmined.org",
-            port=8081,
-        ).save()
-    try:
-        client = SyftClient(conf)
-        client.start()
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        logger.error(e)
-    finally:
-        client.shutdown()
+    # email = "test@openmined.org"
+    # data_dir = Path(f".clients/{email}").resolve()
+    # conf_path = data_dir / "config.json"
+    # if SyftClientConfig.exists(conf_path):
+    #     conf = SyftClientConfig.load(conf_path)
+    # else:
+    #     conf = SyftClientConfig(
+    #         path=conf_path,
+    #         data_dir=data_dir,
+    #         email=email,
+    #         server_url="https://syftboxstage.openmined.org",
+    #         port=8081,
+    #     ).save()
+    conf = SyftClientConfig.load(migrate=True)
+    run_client(conf, open_dir=True, log_level="DEBUG")

@@ -47,18 +47,17 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
     else:
         # if cli args changed, then we update the config
         # not sure if we really need this
-        # but keeping it or removing it both has it's pros/cons
         if email and email != conf.email:
             conf.email = email
-        if data_dir and data_dir != conf.sync_folder:
-            conf.sync_folder = data_dir
+        if data_dir and data_dir != conf.data_dir:
+            conf.data_dir = data_dir
         if server and server != conf.server_url:
-            conf.server_url = server
-        if port and port != conf.port:
-            conf.port = port
+            conf.set_server_url(server)
+        if port != conf.client_url.port:
+            conf.set_port(port)
 
-    conf.data_dir.mkdir(parents=True, exist_ok=True)
-    conf.save()
+    # DO NOT SAVE THE CONFIG HERE.
+    # We don't know if the client will accept the config yet
     return conf
 
 
