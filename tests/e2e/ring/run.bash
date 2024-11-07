@@ -31,10 +31,11 @@ bg_start_client() {
     info "Starting client email=$email port=$port"
 
     run_bg syftbox client \
-        --config_path=$CONFIG_DIR/$user.json \
-        --sync_folder=$CLIENT_DIR/$user \
+        --config=$CONFIG_DIR/$user.json \
+        --data-dir=$CLIENT_DIR/$user \
         --email=$email \
         --port=$port \
+        --no-open-dir \
         --server=http://localhost:5001 &> $LOGS_DIR/client.$1.log
 }
 
