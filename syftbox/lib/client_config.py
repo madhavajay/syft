@@ -57,7 +57,7 @@ class SyftClientConfig(BaseModel):
     @field_validator("client_url", mode="before")
     def port_to_url(cls, val):
         if isinstance(val, int):
-            return f"http://localhost:{val}"
+            return f"http://127.0.0.1:{val}"
         return val
 
     @field_validator("token", mode="before")
