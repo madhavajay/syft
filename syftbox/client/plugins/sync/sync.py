@@ -97,7 +97,7 @@ class DatasiteState:
         local_state_dict = {file.path: file for file in local_state}
         remote_state_dict = {file.path: file for file in remote_state}
         all_files = set(local_state_dict.keys()) | set(remote_state_dict.keys())
-        all_files_filtered = filter_ignored_paths(client=self.client, paths=list(all_files))
+        all_files_filtered = filter_ignored_paths(client=self.client.workspace, paths=list(all_files))
 
         all_changes = []
 
