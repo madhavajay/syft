@@ -5,8 +5,6 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from loguru import logger
-
 from syftbox.server.settings import ServerSettings
 from syftbox.server.sync.models import FileMetadata
 
@@ -129,33 +127,20 @@ def move_with_transaction(
 
     shutil.copy(origin_path, temp_path)
 
-    cursor = conn.cursor()
-    try:
-        # Update database entry
-        from_path = metadata.path
-        relative_path = origin_path.relative_to(server_settings.snapshot_folder)
-        metadata.path = relative_path
-        save_file_metadata(conn, metadata)
+    # Update database entry
+    from_path = metadata.path
+    relative_path = origin_path.relative_to(server_settings.snapshot_folder)
+    metadata.path = relative_path
 
-        conn.commit()
+    cur = conn.cursor()
+    save_file_metadata(cur, metadata)
+    cur.close()
+    conn.commit()
 
-        # WARNING: between the move and the commit
-        # the database will be in an inconsistent state
+    # WARNING: between the move and the commit
+    # the database will be in an inconsistent state
 
-        shutil.move(from_path, origin_path)
-
-    except sqlite3.IntegrityError as e:
-        # Rollback the transaction in case of error
-        conn.rollback()
-        logger.error(f"Failed to update metadata for {metadata.path}. Rolled back.")
-
-        # raise the original error
-        raise e
-    finally:
-        # Clean up
-        cursor.close()
-        conn.close()
-
-        # Delete the temp file if it exists
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+    shutil.move(from_path, origin_path)
+    # Delete the temp file if it exists
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
