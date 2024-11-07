@@ -17,7 +17,7 @@ jobs:
         # os: [ubuntu-latest, macos-latest]
         e2e-test: ["ring"]
         python-version: ["3.9", "3.12"]
-        runner: [syftbox-sh-linux-x64, sh-macos-arm64]
+        runner: [syftbox-sh-linux-x64, scaleway-macOS-arm64]
       fail-fast: false
 
     runs-on: ${{ matrix.runner }}
@@ -40,22 +40,10 @@ jobs:
           version: "1.7"
 
       - name: Set up Python ${{ matrix.python-version }}
-        if: startsWith(matrix.runner, 'syftbox-sh-linux')
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      # challenge here is actions/setup-python@v5 requires write access to /Users/runner/hostedtoolcache
-      # but current custom macos runner does not allow writing to that dir (even sudo won't work)
-      # so we need to use this weird way to install python on macos
-      - name: Set up Python ${{ matrix.python-version }} (uv managed)
-        if: startsWith(matrix.runner, 'sh-macos')
-        run: |
-          uv python install ${{ matrix.python-version }}
-          uv venv --python ${{ matrix.python-version }} .venv${{ matrix.python-version }}
-          uv tool update-shell
-          source $HOME/.profile
-          source .venv${{ matrix.python-version }}/bin/activate
 
       - name: Install SyftBox
         run: |
