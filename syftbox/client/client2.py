@@ -2,25 +2,22 @@ import os
 import platform
 import sys
 from pathlib import Path
+from time import sleep
 
 import httpx
 import uvicorn
-from httpx import codes as status_code
 from loguru import logger
 from pid import PidFile, PidFileAlreadyLockedError
 
-from syftbox.client import __version__
 from syftbox.client.client import create_application
 from syftbox.client.exceptions import SyftBoxAlreadyRunning
-from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils import error_reporting, file_manager, macos
 from syftbox.lib.client_config import SyftClientConfig
+from syftbox.lib.exceptions import SyftBoxException
 from syftbox.lib.ignore import create_default_ignore_file
 from syftbox.lib.lib import SyftPermission, perm_file_path
 from syftbox.lib.logger import setup_logger
 from syftbox.lib.workspace import SyftWorkspace
-
-from ..lib.exceptions import SyftBoxException
 
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_FOLDER = SCRIPT_DIR.parent / "assets"
@@ -45,7 +42,7 @@ class SyftClient:
             base_url=str(self.config.server_url),
             follow_redirects=True,
         )
-        self.sync_manager = SyncManager(self.workspace, self.server_client)
+        # self.sync_manager = SyncManager(self.workspace, self.server_client)
         self.__local_server: uvicorn.Server = None
 
     @property
@@ -74,15 +71,85 @@ class SyftClient:
         except PidFileAlreadyLockedError as e:
             raise SyftBoxAlreadyRunning(f"There's another Syftbox client running on {self.config.data_dir}") from e
 
-        logger.info(f"> Starting SyftBox Client: {__version__} Python {platform.python_version()}")
+        logger.info("Started SyftBox client")
 
+        # create the workspace directories
         self.workspace.mkdirs()
-        # client.init_datasite()
-        # client.register_self()
+        # register the email with the server
+        self.register_self()
+        # init the datasite on local machine
+        self.init_datasite()
+        # start the sync manager
         # self.sync_manager.start()
+        # run the apps
         # self.run_apps()
+        # start the local server
         # self.__run_local_server()
-        self.__run_local_server()
+
+    def open_sync_folder(self):
+        file_manager.open_dir(self.workspace.datasites)
+
+    def copy_icons(self):
+        self.workspace.mkdirs()
+        if platform.system() == "Darwin":
+            macos.copy_icon_file(ICON_FOLDER, self.workspace.datasites)
+
+    def shutdown(self):
+        logger.info("Shutting down SyftBox client")
+        if self.__local_server:
+            self.__local_server.shutdown()
+        # self.sync_manager.stop()
+        self.pid.close()
+
+    def init_datasite(self):
+        if self.datasite.exists():
+            return
+
+        # create workspace/datasites/.syftignore
+        create_default_ignore_file(self.workspace)
+
+        # 3. Create perm file for the datasite
+        file_path = Path(perm_file_path(self.datasite))
+        if file_path.exists():
+            perm_file = SyftPermission.load(file_path)
+        else:
+            logger.info(f"> {self.config.email} Creating Datasite + Permfile")
+            try:
+                perm_file = SyftPermission.datasite_default(self.config.email)
+                perm_file.save(str(file_path))
+            except Exception as e:
+                logger.error("Failed to create perm file")
+                logger.exception(e)
+
+        # 4. create a public folder
+        public_path = self.datasite / "public"
+        public_path.mkdir(parents=True, exist_ok=True)
+
+        # 5. Create perm file for the public folder
+        public_file_path = Path(perm_file_path(public_path))
+        if public_file_path.exists():
+            public_perm_file = SyftPermission.load(public_file_path)
+        else:
+            logger.info(f"> {self.config.email} Creating Public Permfile")
+            try:
+                public_perm_file = SyftPermission.mine_with_public_read(self.config.email)
+                public_perm_file.save(str(public_file_path))
+            except Exception as e:
+                logger.error("Failed to create perm file")
+                logger.exception(e)
+
+    def register_self(self):
+        """Register the user's email with the SyftBox cache server"""
+        if self.is_registered:
+            return
+
+        # TODO + FIXME - once we have JWT, we should not store token in config!
+        # ideally in OS keychain (using keyring) or
+        # in a separate location under self.workspace.plugins
+        token = self.__register_email()
+        self.config.token = str(token)
+        self.config.save()
+        logger.info("Email registration successful")
 
     def __run_local_server(self):
         logger.info(f"> Starting local server on {self.config.client_url}")
@@ -101,74 +168,32 @@ class SyftClient:
         if not self.__local_server.started:
             raise SyftBoxException("Failed to start the local server")
 
-    def open_sync_folder(self):
-        file_manager.open_dir(self.workspace.datasites)
+    def __register_email(self) -> str:
+        """
+        Register the user's email with the SyftBox cache server
+        raises: SyftBoxException
+        """
 
-    def copy_icons(self):
-        self.workspace.mkdirs()
-        if platform.system() == "Darwin":
-            macos.copy_icon_file(ICON_FOLDER, self.workspace.datasites)
+        # TODO - this should probably be wrapped in a SyftCacheServer API?
 
-    def shutdown(self):
-        if self.__local_server:
-            self.__local_server.shutdown()
-        # self.sync_manager.stop()
-        self.pid.close()
-
-    def init_datasite(self):
-        # 1. create the datasite directory
-        self.datasite.mkdir(exist_ok=True)
-
-        # 2. create syftignore
-        create_default_ignore_file(self.workspace)
-
-        # 3. Create perm file for the datasite
-        file_path = Path(perm_file_path(self.datasite))
-        if file_path.exists():
-            perm_file = SyftPermission.load(file_path)
-        else:
-            logger.info(f"> {self.config.email} Creating Datasite + Permfile")
-            try:
-                perm_file = SyftPermission.datasite_default(self.config.email)
-                perm_file.save(str(file_path))
-            except Exception as e:
-                logger.error("Failed to create perm file")
-                logger.exception(e)
-
-        # 4. create a public folder
-        public_path = self.datasite / "public"
-        public_path.mkdir(exist_ok=True)
-
-        # 5. Create perm file for the public folder
-        public_file_path = Path(perm_file_path(public_path))
-        if public_file_path.exists():
-            public_perm_file = SyftPermission.load(public_file_path)
-        else:
-            logger.info(f"> {self.config.email} Creating Public Permfile")
-            try:
-                public_perm_file = SyftPermission.mine_with_public_read(self.config.email)
-                public_perm_file.save(str(public_file_path))
-            except Exception as e:
-                logger.error("Failed to create perm file")
-                logger.exception(e)
-
-    def register_self(self):
-        if self.is_registered:
-            return
+        token = None
         try:
-            response = self.server_client.post("/register", json={"email": self.config.email})
-        except httpx.ConnectError as e:
-            logger.error(f"Failed to connect to the server: {self.server_client.base_url}: {e}")
-            return
+            response = self.server_client.post(
+                "/register",
+                json={"email": self.config.email},
+            )
+            response.raise_for_status()
+            token = response.json().get("token")
+        except Exception as e:
+            # if we fail to register, then we should bubble up the error
+            raise SyftBoxException(
+                f"Failed to register {self.config.email} on server {self.server_client.base_url}"
+            ) from e
 
-        if response.status_code == status_code.OK:
-            if "token" in response.json():
-                self.config.token = response.json()["token"]
-                self.config.save()
-                logger.info("Registration successful")
-                return
+        if not token:
+            raise SyftBoxException(f"Got empty token from the server {self.server_client.base_url}")
 
-        logger.error(f"Failed to register: {response.text}")
+        return token
 
     def __enter__(self):
         return self
@@ -209,7 +234,7 @@ def run_client(
         logger.error(e)
         sys.exit(1)
     except KeyboardInterrupt:
-        logger.info("Shutting down the client")
+        logger.info("Received keyboard interrupt. Shutting down the client")
     except Exception as e:
         logger.error(f"Failed to start the client: {e}")
     finally:
@@ -217,26 +242,38 @@ def run_client(
 
 
 def run_migrations(config: SyftClientConfig):
-    # todo - move datasite workspaces to correct location
+    # TODO - move datasite workspaces to correct location
     # ws = SyftWorkspace(config.data_dir)
     # old_datasite_path = Path(ws.data_dir, config.email)
 
     # if old_datasite_path.exists():
     #     ws.mkdirs()
-    #     # todo shutil move things
+    #     # TODO shutil move things
     return
 
 
 if __name__ == "__main__":
-    conf = SyftClientConfig(
-        path=".clients/test@openmined.org/config.json",
-        data_dir=Path(".clients/test@openmined.org").resolve(),
-        email="test@openmined.org",
-        client_url="http://localhost:8000",
-    )
-    conf.save()
-    client = SyftClient(conf)
-    client.start()
-    client.register_self()
-    client.init_datasite()
-    client.shutdown()
+    email = "test@openmined.org"
+    data_dir = Path(f".clients/{email}").resolve()
+    conf_path = data_dir / "config.json"
+    if SyftClientConfig.exists(conf_path):
+        conf = SyftClientConfig.load(conf_path)
+    else:
+        conf = SyftClientConfig(
+            path=conf_path,
+            data_dir=data_dir,
+            email=email,
+            client_url="https://syftboxstage.openmined.org",
+        ).save()
+    try:
+        client = SyftClient(conf)
+        client.start()
+
+        logger.info("Chilling...")
+        sleep(30)
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        logger.error(e)
+    finally:
+        client.shutdown()
