@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 import uvicorn
+from httpx import codes as status_code
 from loguru import logger
 from pid import PidFile, PidFileAlreadyLockedError
 
@@ -14,10 +15,12 @@ from syftbox.client.client import create_application
 from syftbox.client.exceptions import SyftBoxAlreadyRunning
 from syftbox.client.utils import error_reporting, file_manager, macos
 from syftbox.lib.client_config import SyftClientConfig
-from syftbox.lib.exceptions import SyftBoxException
-from syftbox.lib.lib import SyftPermission
+from syftbox.lib.ignore import create_default_ignore_file
+from syftbox.lib.lib import SyftPermission, perm_file_path
 from syftbox.lib.logger import setup_logger
 from syftbox.lib.workspace import SyftWorkspace
+
+from ..lib.exceptions import SyftBoxException
 
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_FOLDER = SCRIPT_DIR.parent / "assets"
@@ -39,7 +42,7 @@ class SyftClient:
         self.workspace = SyftWorkspace(self.config.data_dir)
         self.pid = PidFile(pidname="syftbox.pid", piddir=self.workspace.data_dir)
         self.server_client = httpx.Client(
-            base_url=self.config.server_url,
+            base_url=str(self.config.server_url),
             follow_redirects=True,
         )
         self.__local_server: uvicorn.Server = None
@@ -73,6 +76,8 @@ class SyftClient:
         logger.info(f"> Starting SyftBox Client: {__version__} Python {platform.python_version()}")
 
         self.workspace.mkdirs()
+        # client.init_datasite()
+        # client.register_self()
         self.__run_local_server()
 
     def __run_local_server(self):
@@ -106,12 +111,59 @@ class SyftClient:
         self.pid.close()
 
     def init_datasite(self):
-        if not SyftPermission.exists(self.datasite):
-            SyftPermission.private(self.datasite, owner=self.config.email).save()
+        # 1. create the datasite directory
+        self.datasite.mkdir(exist_ok=True)
 
-        if not SyftPermission.exists(self.public_dir):
-            SyftPermission.readwrite(self.public_dir, owner=self.config.email).save()
-        pass
+        # 2. create syftignore
+        create_default_ignore_file(self.workspace)
+
+        # 3. Create perm file for the datasite
+        file_path = Path(perm_file_path(self.datasite))
+        if file_path.exists():
+            perm_file = SyftPermission.load(file_path)
+        else:
+            logger.info(f"> {self.config.email} Creating Datasite + Permfile")
+            try:
+                perm_file = SyftPermission.datasite_default(self.config.email)
+                perm_file.save(str(file_path))
+            except Exception as e:
+                logger.error("Failed to create perm file")
+                logger.exception(e)
+
+        # 4. create a public folder
+        public_path = self.datasite / "public"
+        public_path.mkdir(exist_ok=True)
+
+        # 5. Create perm file for the public folder
+        public_file_path = Path(perm_file_path(public_path))
+        if public_file_path.exists():
+            public_perm_file = SyftPermission.load(public_file_path)
+        else:
+            logger.info(f"> {self.config.email} Creating Public Permfile")
+            try:
+                public_perm_file = SyftPermission.mine_with_public_read(self.config.email)
+                public_perm_file.save(str(public_file_path))
+            except Exception as e:
+                logger.error("Failed to create perm file")
+                logger.exception(e)
+
+    def register_self(self):
+        if self.is_registered:
+            return
+        try:
+            response = self.server_client.post("/register", json={"email": self.config.email})
+        except httpx.ConnectError as e:
+            logger.error(f"Failed to connect to the server: {self.server_client.base_url}: {e}")
+            return
+
+        if response.status_code == status_code.OK:
+            if "token" in response.json():
+                self.config.token = response.json()["token"]
+                self.config.save()
+                logger.info("Registration successful")
+                return
+
+        logger.error(f"Failed to register: {response.text}")
 
     def __enter__(self):
         return self
@@ -167,6 +219,7 @@ if __name__ == "__main__":
     conf.save()
     client = SyftClient(conf)
     client.start()
+    client.register_self()
     client.init_datasite()
     time.sleep(30)
     client.shutdown()
