@@ -41,6 +41,11 @@ class FileStore:
                 self.delete(metadata.path.as_posix())
             return SyftFile(metadata=metadata, data=self._read_bytes(abs_path), absolute_path=abs_path)
 
+    def get_metadata(self, path: RelativePath) -> FileMetadata:
+        with get_db(self.db_path) as conn:
+            metadata = db.get_one_metadata(conn, path=str(path))
+            return metadata
+
     def _read_bytes(self, path: AbsolutePath) -> bytes:
         with open(path, "rb") as f:
             return f.read()

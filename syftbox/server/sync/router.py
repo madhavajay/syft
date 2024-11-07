@@ -14,7 +14,6 @@ from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.sync.db import (
     get_all_datasites,
     get_db,
-    get_one_metadata,
 )
 from syftbox.server.sync.file_store import FileStore, SyftFile
 
@@ -42,18 +41,6 @@ def get_file_store(request: Request):
         server_settings=request.state.server_settings,
     )
     yield store
-
-
-def get_file_metadata(
-    req: FileMetadataRequest,
-    conn=Depends(get_db_connection),
-) -> list[FileMetadata]:
-    # TODO check permissions
-
-    try:
-        return get_one_metadata(conn, path=req.path_like)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -122,9 +109,13 @@ def dir_state(
 
 @router.post("/get_metadata", response_model=FileMetadata)
 def get_metadata(
-    metadata: FileMetadata = Depends(get_file_metadata),
+    req: FileMetadataRequest,
+    file_store: FileStore = Depends(get_file_store),
 ) -> FileMetadata:
-    return metadata
+    try:
+        return file_store.get_metadata(req.path_like)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/apply_diff", response_model=ApplyDiffResponse)
