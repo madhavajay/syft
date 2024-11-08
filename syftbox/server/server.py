@@ -26,6 +26,8 @@ from syftbox.lib import (
     Jsonable,
     get_datasites,
 )
+from syftbox.server.logger import setup_logger
+from syftbox.server.middleware import LoguruMiddleware
 from syftbox.server.settings import ServerSettings, get_server_settings
 
 from .sync import db, hash
@@ -156,10 +158,11 @@ async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
     logger.info("> Shutting down server")
 
 
+setup_logger()
 app = FastAPI(lifespan=lifespan)
 app.include_router(sync_router)
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
-
+app.add_middleware(LoguruMiddleware)
 # Define the ASCII art
 ascii_art = rf"""
  ____         __ _   ____
