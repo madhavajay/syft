@@ -110,6 +110,7 @@ class SyftClient:
 
     def stop_sync(self):
         """Stop file syncing"""
+        logger.info("Stopping file sync")
         self.__sync_manager.stop()
 
     def shutdown(self):
@@ -117,7 +118,7 @@ class SyftClient:
         if self.__local_server:
             ret = asyncio.run(self.__local_server.shutdown())
             logger.debug(f"Local server shutdown result: {ret}")
-        # self.sync_manager.stop()
+        self.stop_sync()
         self.pid.close()
         logger.debug("SyftBox client shutdown complete")
 
