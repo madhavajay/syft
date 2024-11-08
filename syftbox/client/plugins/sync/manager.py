@@ -75,6 +75,7 @@ class SyncManager:
         try:
             permission_changes, file_changes = datasite.get_out_of_sync_files()
             total = len(permission_changes) + len(file_changes)
+
             if total != 0:
                 logger.debug(
                     f"Enqueuing {len(permission_changes)} permissions and {len(file_changes)} files for {datasite.email}"

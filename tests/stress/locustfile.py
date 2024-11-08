@@ -1,7 +1,12 @@
-from locust import FastHttpUser, between, task
-from loguru import logger
+import uuid
+from pathlib import Path
 
-from syftbox.client.plugins.sync import endpoints
+from locust import FastHttpUser, between, task
+
+from syftbox.client.plugins.sync import consumer, endpoints
+from syftbox.server.sync.hash import hash_file
+
+file_name = Path("loadtest.txt")
 
 
 class SyftBoxUser(FastHttpUser):
@@ -13,6 +18,25 @@ class SyftBoxUser(FastHttpUser):
         self.datasites = []
         self.email = "aziz@openmined.org"
         self.remote_state: dict[str, list[endpoints.FileMetadata]] = {}
+
+        # patch client for update_remote function
+        self.client.sync_folder = Path(".")
+        self.client.server_client = self.client
+
+        self.filepath = self.init_file()
+
+    def init_file(self) -> Path:
+        # create a file on local and send to server
+        filepath = self.client.sync_folder / file_name
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        filepath.touch()
+        filepath.write_text(uuid.uuid4().hex)
+        local_syncstate = hash_file(filepath.absolute(), root_dir=filepath.parent.absolute())
+        try:
+            endpoints.create(self.client, local_syncstate.path, filepath.read_bytes())
+        except endpoints.SyftServerError:
+            pass
+        return filepath
 
     @task
     def sync_datasites(self):
@@ -26,8 +50,23 @@ class SyftBoxUser(FastHttpUser):
             all_files.extend(remote_state)
 
         all_paths = [str(f.path) for f in all_files][:10]
-        logger.info(f"Downloading {len(all_paths)} files")
         endpoints.download_bulk(
             self.client,
             all_paths,
         )
+
+    @task
+    def apply_diff(self):
+        self.filepath.write_text(uuid.uuid4().hex)
+        local_syncstate = hash_file(self.filepath, root_dir=self.client.sync_folder)
+        remote_syncstate = endpoints.get_metadata(self.client, local_syncstate.path)
+
+        consumer.update_remote(
+            self.client,
+            local_syncstate=local_syncstate,
+            remote_syncstate=remote_syncstate,
+        )
+
+    @task
+    def download(self):
+        endpoints.download(self.client, self.filepath)

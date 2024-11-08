@@ -113,6 +113,23 @@ def create_folders(folders: list[str]) -> None:
             os.makedirs(folder, exist_ok=True)
 
 
+def init_db(settings: ServerSettings) -> None:
+    # might take very long as snapshot folder grows
+    logger.info(f"> Collecting Files from {settings.snapshot_folder.absolute()}")
+    files = hash.collect_files(settings.snapshot_folder.absolute())
+    logger.info("> Hashing files")
+    metadata = hash.hash_files(files, settings.snapshot_folder)
+    logger.info(f"> Updating file hashes at {settings.file_db_path.absolute()}")
+    con = db.get_db(settings.file_db_path.absolute())
+    cur = con.cursor()
+    for m in metadata:
+        db.save_file_metadata(cur, m)
+
+    cur.close()
+    con.commit()
+    con.close()
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
     # Startup
@@ -129,20 +146,7 @@ async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
     logger.info("> Loading Users")
     logger.info(users)
 
-    # might take very long as snapshot folder grows
-    logger.info(f"> Collecting Files from {settings.snapshot_folder.absolute()}")
-    files = hash.collect_files(settings.snapshot_folder.absolute())
-    logger.info("> Hashing files")
-    metadata = hash.hash_files(files, settings.snapshot_folder)
-    logger.info(f"> Updating file hashes at {settings.file_db_path.absolute()}")
-    con = db.get_db(settings.file_db_path.absolute())
-    cur = con.cursor()
-    for m in metadata:
-        db.save_file_metadata(cur, m)
-
-    cur.close()
-    con.commit()
-    con.close()
+    init_db(settings)
 
     yield {
         "server_settings": settings,

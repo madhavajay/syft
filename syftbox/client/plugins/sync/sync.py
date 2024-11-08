@@ -110,7 +110,9 @@ class DatasiteState:
             try:
                 change_info = compare_fileinfo(self.client_ctx.datasites, afile, local_info, remote_info)
             except Exception as e:
-                logger.exception(f"Failed to compare file {afile}. Reason: {e}")
+                logger.error(
+                    f"Failed to compare file {afile.as_posix()}, it will be retried in the next sync. Reason: {e}"
+                )
                 continue
 
             if change_info is not None:
