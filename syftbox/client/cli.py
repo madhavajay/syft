@@ -99,7 +99,8 @@ def client(
 
     client_config = setup_config_interactive(config_path, email, data_dir, server, port)
     log_level = "DEBUG" if verbose else "INFO"
-    run_client(client_config=client_config, open_dir=open_dir, log_level=log_level)
+    code = run_client(client_config=client_config, open_dir=open_dir, log_level=log_level)
+    sys.exit(code)
 
 
 @app.command()

@@ -2,7 +2,6 @@ import asyncio
 import os
 import platform
 import shutil
-import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -88,9 +87,6 @@ class SyftClient:
 
         # commit the config to disk
         self.config.save()
-
-        # first run any migrations
-        self.__migrate()
         # create the workspace directories
         self.workspace.mkdirs()
         # register the email with the server
@@ -106,21 +102,23 @@ class SyftClient:
 
     def start_sync(self):
         """Start file syncing"""
+        if self.__sync_manager.is_alive():
+            return
         self.__sync_manager.start()
 
     def stop_sync(self):
         """Stop file syncing"""
+        if not self.__sync_manager.is_alive():
+            return
         logger.info("Stopping file sync")
         self.__sync_manager.stop()
 
     def shutdown(self):
-        logger.info("Shutting down SyftBox client")
         if self.__local_server:
-            ret = asyncio.run(self.__local_server.shutdown())
-            logger.debug(f"Local server shutdown result: {ret}")
+            _result = asyncio.run(self.__local_server.shutdown())
         self.stop_sync()
         self.pid.close()
-        logger.debug("SyftBox client shutdown complete")
+        logger.info("SyftBox client shutdown complete")
 
     def open_sync_folder(self):
         file_manager.open_dir(self.workspace.datasites)
@@ -128,7 +126,7 @@ class SyftClient:
     def copy_icons(self):
         self.workspace.mkdirs()
         if platform.system() == "Darwin":
-            macos.copy_icon_file(ICON_FOLDER, self.workspace.datasites)
+            macos.copy_icon_file(ICON_FOLDER, self.workspace.data_dir)
 
     def init_datasite(self):
         if self.datasite.exists():
@@ -207,30 +205,6 @@ class SyftClient:
         response.raise_for_status()
         return response.json().get("token")
 
-    def __migrate(self):
-        # check for old dir structure and migrate to new
-        # data_dir == sync_folder
-        old_sync_folder = self.workspace.data_dir
-        old_datasite_path = Path(old_sync_folder, self.config.email)
-        if old_datasite_path.exists():
-            logger.info("Migrating to new datasite structure")
-            self.workspace.mkdirs()
-
-            # create the datasites directory & move all under it
-            for dir in old_sync_folder.glob("*@*"):
-                dir.rename(self.workspace.datasites / dir.name)
-
-            # move syftignore file
-            old_ignore_file = old_sync_folder / IGNORE_FILENAME
-            if old_ignore_file.exists():
-                old_ignore_file.rename(self.workspace.datasites / IGNORE_FILENAME)
-
-            # move old sync state file
-            old_sync_state = old_sync_folder / ".syft" / "local_syncstate.json"
-            if old_sync_state.exists():
-                old_sync_state.rename(self.workspace.datasites / old_sync_state.name)
-                shutil.rmtree(str(old_sync_state.parent))
-
     def __enter__(self):
         return self
 
@@ -267,11 +241,38 @@ class SyftClientContext(SyftClientInterface):
         return f"SyftClientContext<{self.config.email}, {self.config.data_dir}>"
 
 
+def run_migration(client_config: SyftClientConfig):
+    new_ws = SyftWorkspace(client_config.data_dir)
+
+    # check for old dir structure and migrate to new
+    # data_dir == sync_folder
+    old_sync_folder = new_ws.data_dir
+    old_datasite_path = Path(old_sync_folder, client_config.email)
+    if old_datasite_path.exists():
+        logger.info("Migrating to new datasite structure")
+        new_ws.mkdirs()
+
+        # create the datasites directory & move all under it
+        for dir in old_sync_folder.glob("*@*"):
+            dir.rename(new_ws.datasites / dir.name)
+
+        # move syftignore file
+        old_ignore_file = old_sync_folder / IGNORE_FILENAME
+        if old_ignore_file.exists():
+            old_ignore_file.rename(new_ws.datasites / IGNORE_FILENAME)
+
+        # move old sync state file
+        old_sync_state = old_sync_folder / ".syft" / "local_syncstate.json"
+        if old_sync_state.exists():
+            old_sync_state.rename(new_ws.plugins / "local_syncstate.json")
+            shutil.rmtree(str(old_sync_state.parent))
+
+
 def run_client(
     client_config: SyftClientConfig,
     open_dir: bool = False,
     log_level: str = "INFO",
-):
+) -> int:
     """Run the SyftBox client"""
     setup_logger(log_level, log_dir=client_config.data_dir / "logs")
 
@@ -284,24 +285,30 @@ def run_client(
     if disable_icons:
         logger.debug("Directory icons are disabled")
     copy_icons = not disable_icons
+    client = None
 
     try:
+        run_migration(client_config)
         client = SyftClient(client_config, log_level=log_level)
         copy_icons and client.copy_icons()
         open_dir and client.open_sync_folder()
         client.start()
     except SyftBoxAlreadyRunning as e:
         logger.error(e)
-        sys.exit(1)
+        return -1
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt. Shutting down the client")
     except Exception as e:
         logger.exception("Unhandled exception when starting the client", e)
+        return -2
     finally:
-        client.shutdown()
+        client and client.shutdown()
+    return 0
 
 
 if __name__ == "__main__":
+    import sys
+
     # email = "test@openmined.org"
     # data_dir = Path(f".clients/{email}").resolve()
     # conf_path = data_dir / "config.json"
@@ -316,4 +323,5 @@ if __name__ == "__main__":
     #         port=8081,
     #     ).save()
     conf = SyftClientConfig.load(migrate=True)
-    run_client(conf, open_dir=True, log_level="DEBUG")
+    code = run_client(conf, open_dir=True, log_level="DEBUG")
+    sys.exit(code)

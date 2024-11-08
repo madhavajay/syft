@@ -46,9 +46,6 @@ class SyncManager:
         logger.info(f"Sync started, syncing every {self.sync_interval} seconds")
         self.thread = t
 
-    def setup(self):
-        self.change_log_folder.mkdir(exist_ok=True)
-
     def enqueue(self, change: FileChangeInfo) -> None:
         self.queue.put(SyncQueueItem(priority=change.get_priority(), data=change))
 

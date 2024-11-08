@@ -420,7 +420,7 @@ class SyncConsumer:
     def __init__(self, client: SyftClientInterface, queue: SyncQueue):
         self.client = client
         self.queue = queue
-        self.previous_state = LocalState(path=Path(client.workspace.datasites) / ".syft" / "local_syncstate.json")
+        self.previous_state = LocalState(path=Path(client.workspace.plugins) / "local_syncstate.json")
         try:
             self.previous_state.load()
         except Exception as e:
