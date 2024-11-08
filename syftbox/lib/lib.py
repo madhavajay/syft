@@ -8,16 +8,12 @@ import threading
 import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from threading import Lock
 
-import httpx
 import requests
 from loguru import logger
 from typing_extensions import Any, Optional, Self, Union
 
 from syftbox.server.sync.models import FileMetadata
-
-from .exceptions import ClientConfigException
 
 current_dir = Path(__file__).parent
 ASSETS_FOLDER = current_dir.parent / "assets"
@@ -439,39 +435,6 @@ class ResettableTimer:
                 self.timer = None
 
 
-class SharedState:
-    def __init__(self, client_config: ClientConfig):
-        self.data = {}
-        self.client_config = client_config
-        self.timers: dict[str:ResettableTimer] = {}
-        self.fs_events = []
-
-    @property
-    def lock(self):
-        return Lock()
-
-    @property
-    def sync_folder(self) -> str:
-        return self.client_config.sync_folder
-
-    def get(self, key, default=None):
-        with self.lock:
-            if key == "my_datasites":
-                return self._get_datasites()
-            return self.data.get(key, default)
-
-    def set(self, key, value):
-        with self.lock:
-            self.data[key] = value
-
-    def _get_datasites(self):
-        syft_folder = self.data.get(self.client_config.sync_folder)
-        if not syft_folder or not os.path.exists(syft_folder):
-            return []
-
-        return [folder for folder in os.listdir(syft_folder) if os.path.isdir(os.path.join(syft_folder, folder))]
-
-
 def get_root_data_path() -> Path:
     # get the PySyft / data directory to share datasets between notebooks
     # on Linux and MacOS the directory is: ~/.syft/data"
@@ -521,93 +484,3 @@ def str_to_bool(bool_str: Optional[str]) -> bool:
     if bool_str == "true" or bool_str == "1":
         result = True
     return result
-
-
-@dataclass
-class Client(Jsonable):
-    config_path: Path
-    sync_folder: Path
-    email: str
-    port: int = DEFAULT_PORT
-    server_url: str = "http://localhost:5001"
-    token: Optional[int] = None
-    email_token: Optional[str] = None
-    autorun_plugins: Optional[list[str]] = field(default_factory=lambda: ["init", "create_datasite", "sync", "apps"])
-    _server_client: Optional[httpx.Client] = None
-
-    @property
-    def is_registered(self) -> bool:
-        return self.token is not None
-
-    @property
-    def server_client(self) -> httpx.Client:
-        if self._server_client is None:
-            self._server_client = httpx.Client(
-                base_url=self.server_url,
-                follow_redirects=True,
-            )
-        return self._server_client
-
-    def close(self):
-        if self._server_client:
-            self._server_client.close()
-
-    def save(self, path: Optional[int] = None) -> None:
-        if path is None:
-            path = self.config_path
-        super().save(path)
-
-    @property
-    def datasite_path(self) -> Path:
-        return Path(self.sync_folder) / self.email
-
-    @property
-    def manifest_path(self) -> Path:
-        return os.path.join(self.datasite_path, "public/manifest/manifest.json")
-
-    def get_datasites(self: str) -> list[str]:
-        datasites = []
-        folders = os.listdir(self.sync_folder)
-        for folder in folders:
-            if "@" in folder:
-                datasites.append(folder)
-        return datasites
-
-    def use(self):
-        os.environ["SYFTBOX_CURRENT_CLIENT"] = self.config_path
-        os.environ["SYFTBOX_SYNC_DIR"] = self.sync_folder
-        logger.info(f"> Setting Sync Dir to: {self.sync_folder}")
-
-    def create_folder(self, path: str, permission: SyftPermission):
-        os.makedirs(path, exist_ok=True)
-        permission.save(path)
-
-    @property
-    def root_dir(self) -> Path:
-        root_dir = Path(os.path.abspath(os.path.dirname(self.file_path) + "/../"))
-        return root_dir
-
-    def create_public_folder(self, path: str):
-        full_path = self.root_dir / path
-        os.makedirs(str(full_path), exist_ok=True)
-        public_read = SyftPermission.mine_with_public_read(email=self.datasite)
-        public_read.save(full_path)
-        return Path(full_path)
-
-    @classmethod
-    def load(cls, filepath: Optional[Path] = None) -> Self:
-        try:
-            if filepath is None:
-                config_path = os.getenv("SYFTBOX_CLIENT_CONFIG_PATH", DEFAULT_CONFIG_PATH)
-                filepath = config_path
-            return super().load(filepath)
-        except Exception as e:
-            raise ClientConfigException(
-                f"Unable to load Client config from {filepath}."
-                "If you are running this outside of syftbox app runner you must supply "
-                "the Client config path like so: \n"
-                "SYFTBOX_CLIENT_CONFIG_PATH=~/.syftbox/client_config.json"
-            ) from e
-
-
-ClientConfig = Client

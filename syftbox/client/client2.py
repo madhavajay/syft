@@ -13,6 +13,7 @@ from pid import PidFile, PidFileAlreadyLockedError
 from syftbox.client.api import create_api
 from syftbox.client.base import SyftClientInterface
 from syftbox.client.exceptions import SyftBoxAlreadyRunning
+from syftbox.client.plugins.apps import AppRunner
 from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils import error_reporting, file_manager, macos
 from syftbox.lib.client_config import SyftClientConfig
@@ -53,6 +54,7 @@ class SyftClient:
         self.server_client = httpx.Client(base_url=str(self.config.server_url), follow_redirects=True)
         self.__sync_manager: SyncManager = SyncManager(self.as_context())
         self.__local_server: uvicorn.Server = None
+        self.__app_runner: AppRunner = AppRunner(self.as_context())
 
     @property
     def config_path(self) -> Path:
@@ -95,8 +97,10 @@ class SyftClient:
         self.init_datasite()
         # start the sync manager
         self.start_sync()
+
         # run the apps
-        # self.run_apps()
+        self.run_apps()
+
         # start the local server - blocks main thread
         return self.__run_local_server()
 
@@ -173,6 +177,12 @@ class SyftClient:
     def as_context(self) -> "SyftClientContext":
         """Return a lightweight context object of self to inject into subsystems"""
         return SyftClientContext(self.config, self.workspace, self.server_client)
+
+    def run_apps(self):
+        self.__app_runner.start()
+
+    def stop_apps(self):
+        self.__app_runner.stop()
 
     def __run_local_server(self):
         logger.info(f"Starting local server on {self.config.client_url}")
