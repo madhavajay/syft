@@ -25,34 +25,14 @@ class SyftClientInterface(Protocol):
     """
 
     config: SyftClientConfig
+    """Configuration settings for the Syft client."""
+
     workspace: SyftWorkspace
+    """Workspace instance managing data and computation."""
+
     server_client: httpx.Client
 
-
-class SyftClientContext(SyftClientInterface):
-    """
-    Concrete implementation of SyftClientInterface that provides a lightweight
-    context for subsystems.
-
-    This class encapsulates the minimal set of attributes needed by subsystems
-    without exposing the full SyftClient implementation.
-
-    It will be instantiated by SyftClient, but sub-systems can freely pass it around.
-    """
-
-    def __init__(
-        self,
-        config: SyftClientConfig,
-        workspace: SyftWorkspace,
-        server_client: httpx.Client,
-    ):
-        self.config = config
-        self.workspace = workspace
-        self.server_client = server_client
-
     @property
-    def datasites(self) -> Path:
-        return self.workspace.datasites
-
-    def __repr__(self) -> str:
-        return f"SyftClientContext<{self.config.email}>"
+    def datasite(self) -> Path:
+        """Path to the datasite directory for the current user."""
+        ...

@@ -12,7 +12,7 @@ from loguru import logger
 from pid import PidFile, PidFileAlreadyLockedError
 
 from syftbox.client.api import create_api
-from syftbox.client.base import SyftClientContext
+from syftbox.client.base import SyftClientInterface
 from syftbox.client.exceptions import SyftBoxAlreadyRunning
 from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils import error_reporting, file_manager, macos
@@ -66,12 +66,12 @@ class SyftClient:
 
     @property
     def datasite(self) -> Path:
-        """The datasite directory for the current user"""
+        """The datasite of the current user"""
         return self.workspace.datasites / self.config.email
 
     @property
     def public_dir(self) -> Path:
-        """The public directory for the current user"""
+        """The public directory in the datasite of the current user"""
         return self.datasite / "public"
 
     @property
@@ -172,8 +172,8 @@ class SyftClient:
             raise SyftBoxException(f"Failed to register with the server - {e}") from e
 
     @lru_cache(1)
-    def as_context(self) -> SyftClientContext:
-        """Projects self as a context object"""
+    def as_context(self) -> "SyftClientContext":
+        """Return a lightweight context object of self to inject into subsystems"""
         return SyftClientContext(self.config, self.workspace, self.server_client)
 
     def __run_local_server(self):
@@ -236,6 +236,35 @@ class SyftClient:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.shutdown()
+
+
+class SyftClientContext(SyftClientInterface):
+    """
+    Concrete implementation of SyftClientInterface that provides a lightweight
+    client context for subsystems.
+
+    This class encapsulates the minimal set of attributes needed by subsystems
+    without exposing the full SyftClient implementation.
+
+    It will be instantiated by SyftClient, but sub-systems can freely pass it around.
+    """
+
+    def __init__(
+        self,
+        config: SyftClientConfig,
+        workspace: SyftWorkspace,
+        server_client: httpx.Client,
+    ):
+        self.config = config
+        self.workspace = workspace
+        self.server_client = server_client
+
+    @property
+    def datasite(self) -> Path:
+        return self.workspace.datasites / self.config.email
+
+    def __repr__(self) -> str:
+        return f"SyftClientContext<{self.config.email}, {self.config.data_dir}>"
 
 
 def run_client(

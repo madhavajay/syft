@@ -20,15 +20,19 @@ class SyftWorkspace:
 
     def __init__(self, data_dir: PathLike):
         self.data_dir = to_path(data_dir)
+        """Path to the root directory of the workspace."""
 
         # datasites dir
         self.datasites = self.data_dir / "datasites"
+        """Path to the directory containing datasites."""
 
         # plugins dir
+        """Path to the directory containing plugins."""
         self.plugins = self.data_dir / "plugins"
 
         # apps dir
         self.apps = self.data_dir / "apps"
+        """Path to the directory containing apps."""
 
     def mkdirs(self):
         self.datasites.mkdir(parents=True, exist_ok=True)
