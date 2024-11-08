@@ -6,9 +6,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from syftbox.client.client2 import SyftClient as Client
 from syftbox.client.plugins.create_datasite import run as run_create_datasite_plugin
 from syftbox.client.plugins.init import run as run_init_plugin
-from syftbox.lib.lib import Client, ClientConfig, SharedState, perm_file_path
+from syftbox.lib.client_config import SyftClientConfig as ClientConfig
+from syftbox.lib.lib import perm_file_path
 from syftbox.server.server import app as server_app
 from syftbox.server.server import lifespan as server_lifespan
 from syftbox.server.settings import ServerSettings
