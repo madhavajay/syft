@@ -6,7 +6,7 @@ from typing import Optional
 from loguru import logger
 from pydantic import BaseModel
 
-from syftbox.client.base import SyftClientContext
+from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.endpoints import get_remote_state
 from syftbox.lib.ignore import filter_ignored_paths
 from syftbox.lib.lib import SyftPermission
@@ -42,17 +42,17 @@ class FileChangeInfo(BaseModel, frozen=True):
 
 class DatasiteState:
     def __init__(
-        self, client_ctx: SyftClientContext, email: str, remote_state: Optional[list[FileMetadata]] = None
+        self, client: SyftClientInterface, email: str, remote_state: Optional[list[FileMetadata]] = None
     ) -> None:
         """A class to represent the state of a datasite
 
         Args:
-            ctx (SyftClientContext): Context of the syft client
+            ctx (SyftClientInterface): Context of the syft client
             email (str): Email of the datasite
             remote_state (Optional[list[FileMetadata]], optional): Remote state of the datasite.
                 If not provided, it will be fetched from the server. Defaults to None.
         """
-        self.client_ctx: SyftClientContext = client_ctx
+        self.client: SyftClientInterface = client
         self.email: str = email
         self.remote_state: Optional[list[FileMetadata]] = remote_state
 
@@ -61,16 +61,16 @@ class DatasiteState:
 
     @property
     def path(self) -> Path:
-        p = self.client_ctx.datasites / self.email
+        p = self.client.workspace.datasites / self.email
         return p.expanduser().resolve()
 
     def get_current_local_state(self) -> list[FileMetadata]:
-        return hash_dir(self.path, root_dir=self.client_ctx.datasites)
+        return hash_dir(self.path, root_dir=self.client.workspace.datasites)
 
     def get_remote_state(self) -> list[FileMetadata]:
         if self.remote_state is None:
             self.remote_state = get_remote_state(
-                self.client_ctx.server_client, email=self.client_ctx.config.email, path=Path(self.email)
+                self.client.server_client, email=self.client.config.email, path=Path(self.email)
             )
         return self.remote_state
 
@@ -99,7 +99,7 @@ class DatasiteState:
         local_state_dict = {file.path: file for file in local_state}
         remote_state_dict = {file.path: file for file in remote_state}
         all_files = set(local_state_dict.keys()) | set(remote_state_dict.keys())
-        all_files_filtered = filter_ignored_paths(dir=self.client_ctx.datasites, paths=list(all_files))
+        all_files_filtered = filter_ignored_paths(dir=self.client.workspace.datasites, paths=list(all_files))
 
         all_changes = []
 
@@ -108,7 +108,7 @@ class DatasiteState:
             remote_info = remote_state_dict.get(afile)
 
             try:
-                change_info = compare_fileinfo(self.client_ctx.datasites, afile, local_info, remote_info)
+                change_info = compare_fileinfo(self.client.workspace.datasites, afile, local_info, remote_info)
             except Exception as e:
                 logger.error(
                     f"Failed to compare file {afile.as_posix()}, it will be retried in the next sync. Reason: {e}"

@@ -4,7 +4,7 @@ from typing import Optional
 
 from loguru import logger
 
-from syftbox.client.base import SyftClientContext
+from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.consumer import SyncConsumer
 from syftbox.client.plugins.sync.endpoints import get_datasite_states
 from syftbox.client.plugins.sync.exceptions import FatalSyncError
@@ -13,10 +13,10 @@ from syftbox.client.plugins.sync.sync import DatasiteState, FileChangeInfo
 
 
 class SyncManager:
-    def __init__(self, client_ctx: SyftClientContext):
-        self.client_ctx = client_ctx
+    def __init__(self, client: SyftClientInterface):
+        self.client = client
         self.queue = SyncQueue()
-        self.consumer = SyncConsumer(client_ctx=self.client_ctx, queue=self.queue)
+        self.consumer = SyncConsumer(client=self.client, queue=self.queue)
         self.sync_interval = 1  # seconds
         self.thread: Optional[Thread] = None
         self.is_stop_requested = False
@@ -54,19 +54,17 @@ class SyncManager:
 
     def get_datasite_states(self) -> list[DatasiteState]:
         try:
-            remote_datasite_states = get_datasite_states(
-                self.client_ctx.server_client, email=self.client_ctx.config.email
-            )
+            remote_datasite_states = get_datasite_states(self.client.server_client, email=self.client.config.email)
         except Exception as e:
             logger.error(f"Failed to retrieve datasites from server, only syncing own datasite. Reason: {e}")
             remote_datasite_states = {}
 
         # Ensure we are always syncing own datasite
-        if self.client_ctx.config.email not in remote_datasite_states:
-            remote_datasite_states[self.client_ctx.config.email] = []
+        if self.client.config.email not in remote_datasite_states:
+            remote_datasite_states[self.client.config.email] = []
 
         datasite_states = [
-            DatasiteState(self.client_ctx, email, remote_state=remote_state)
+            DatasiteState(self.client, email, remote_state=remote_state)
             for email, remote_state in remote_datasite_states.items()
         ]
         return datasite_states
