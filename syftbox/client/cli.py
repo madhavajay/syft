@@ -105,7 +105,7 @@ def report(path: Path = REPORT_PATH_OPTS):
     """Generate a report of the SyftBox client"""
     from datetime import datetime
 
-    from syftbox.lib.logger import zip_logs
+    from syftbox.client.logger import zip_logs
 
     name = f"syftbox_logs_{datetime.now().strftime('%Y_%m_%d_%H%M')}"
     output_path = Path(path, name).resolve()

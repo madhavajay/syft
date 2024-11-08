@@ -24,11 +24,11 @@ from loguru import logger
 from pydantic import BaseModel
 
 from syftbox import __version__
+from syftbox.client.logger import setup_logger
 from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils import macos
 from syftbox.client.utils.error_reporting import make_error_report
 from syftbox.lib import ClientConfig, SharedState
-from syftbox.lib.logger import setup_logger
 
 current_dir = Path(__file__).parent
 # Initialize FastAPI app and scheduler
