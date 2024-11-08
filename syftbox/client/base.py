@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import httpx
 from typing_extensions import Protocol
 
@@ -47,3 +49,10 @@ class SyftClientContext(SyftClientInterface):
         self.config = config
         self.workspace = workspace
         self.server_client = server_client
+
+    @property
+    def datasites(self) -> Path:
+        return self.workspace.datasites
+
+    def __repr__(self) -> str:
+        return f"SyftClientContext<{self.config.email}>"

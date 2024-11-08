@@ -11,6 +11,7 @@ import py_fast_rsync
 from loguru import logger
 from pydantic import BaseModel, model_validator
 
+from syftbox.client.base import SyftClientContext
 from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
 from syftbox.client.plugins.sync.endpoints import (
     SyftServerError,
@@ -25,7 +26,7 @@ from syftbox.client.plugins.sync.endpoints import (
 from syftbox.client.plugins.sync.exceptions import FatalSyncError, SyncEnvironmentError
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import DatasiteState, SyncSide
-from syftbox.lib.lib import Client, SyftPermission
+from syftbox.lib.lib import SyftPermission
 from syftbox.server.sync.hash import hash_file
 from syftbox.server.sync.models import FileMetadata
 
@@ -37,9 +38,9 @@ class SyncDecisionType(Enum):
     DELETE = 3
 
 
-def update_local(client: Client, local_syncstate: FileMetadata, remote_syncstate: FileMetadata):
-    diff = get_diff(client.server_client, local_syncstate.path, local_syncstate.signature_bytes)
-    abs_path = client.sync_folder / local_syncstate.path
+def update_local(client_ctx: SyftClientContext, local_syncstate: FileMetadata, remote_syncstate: FileMetadata):
+    diff = get_diff(client_ctx.server_client, local_syncstate.path, local_syncstate.signature_bytes)
+    abs_path = client_ctx.datasites / local_syncstate.path
     local_data = abs_path.read_bytes()
 
     new_data = py_fast_rsync.apply(local_data, diff.diff_bytes)
@@ -54,41 +55,41 @@ def update_local(client: Client, local_syncstate: FileMetadata, remote_syncstate
     abs_path.write_bytes(new_data)
 
 
-def update_remote(client: Client, local_syncstate: FileMetadata, remote_syncstate: FileMetadata):
-    abs_path = client.sync_folder / local_syncstate.path
+def update_remote(client_ctx: SyftClientContext, local_syncstate: FileMetadata, remote_syncstate: FileMetadata):
+    abs_path = client_ctx.datasites / local_syncstate.path
     local_data = abs_path.read_bytes()
 
     diff = py_fast_rsync.diff(remote_syncstate.signature_bytes, local_data)
-    apply_diff(client.server_client, local_syncstate.path, diff, local_syncstate.hash)
+    apply_diff(client_ctx.server_client, local_syncstate.path, diff, local_syncstate.hash)
 
 
-def delete_local(client: Client, remote_syncstate: FileMetadata):
-    abs_path = client.sync_folder / remote_syncstate.path
+def delete_local(client_ctx: SyftClientContext, remote_syncstate: FileMetadata):
+    abs_path = client_ctx.datasites / remote_syncstate.path
     abs_path.unlink()
 
 
-def delete_remote(client: Client, local_syncstate: FileMetadata):
-    delete(client.server_client, local_syncstate.path)
+def delete_remote(client_ctx: SyftClientContext, local_syncstate: FileMetadata):
+    delete(client_ctx.server_client, local_syncstate.path)
 
 
-def create_local(client: Client, remote_syncstate: FileMetadata):
-    abs_path = client.sync_folder / remote_syncstate.path
-    content_bytes = download(client.server_client, remote_syncstate.path)
+def create_local(client_ctx: SyftClientContext, remote_syncstate: FileMetadata):
+    abs_path = client_ctx.datasites / remote_syncstate.path
+    content_bytes = download(client_ctx.server_client, remote_syncstate.path)
     abs_path.parent.mkdir(parents=True, exist_ok=True)
     abs_path.write_bytes(content_bytes)
 
 
-def create_local_batch(client: Client, remote_syncstates: list[Path]):
+def create_local_batch(client_ctx: SyftClientContext, remote_syncstates: list[Path]):
     paths = [str(path) for path in remote_syncstates]
-    content_bytes = download_bulk(client.server_client, paths)
+    content_bytes = download_bulk(client_ctx.server_client, paths)
     zip_file = zipfile.ZipFile(BytesIO(content_bytes))
-    zip_file.extractall(client.sync_folder)
+    zip_file.extractall(client_ctx.datasites)
 
 
-def create_remote(client: Client, local_syncstate: FileMetadata):
-    abs_path = client.sync_folder / local_syncstate.path
+def create_remote(client_ctx: SyftClientContext, local_syncstate: FileMetadata):
+    abs_path = client_ctx.datasites / local_syncstate.path
     data = abs_path.read_bytes()
-    create(client.server_client, local_syncstate.path, data)
+    create(client_ctx.server_client, local_syncstate.path, data)
 
 
 class SyncActionType(Enum):
@@ -108,21 +109,21 @@ class SyncDecision(BaseModel):
     remote_syncstate: Optional[FileMetadata]
     is_executed: bool = False
 
-    def execute(self, client: Client):
+    def execute(self, client_ctx: SyftClientContext):
         if self.operation == SyncDecisionType.NOOP:
             pass
         elif self.action_type == SyncActionType.CREATE_REMOTE:
-            create_remote(client, self.local_syncstate)
+            create_remote(client_ctx, self.local_syncstate)
         elif self.action_type == SyncActionType.CREATE_LOCAL:
-            create_local(client, self.remote_syncstate)
+            create_local(client_ctx, self.remote_syncstate)
         elif self.action_type == SyncActionType.DELETE_REMOTE:
-            delete_remote(client, self.remote_syncstate)
+            delete_remote(client_ctx, self.remote_syncstate)
         elif self.action_type == SyncActionType.DELETE_LOCAL:
-            delete_local(client, self.local_syncstate)
+            delete_local(client_ctx, self.local_syncstate)
         elif self.action_type == SyncActionType.MODIFY_REMOTE:
-            update_remote(client, self.local_syncstate, self.remote_syncstate)
+            update_remote(client_ctx, self.local_syncstate, self.remote_syncstate)
         elif self.action_type == SyncActionType.MODIFY_LOCAL:
-            update_local(client, self.local_syncstate, self.remote_syncstate)
+            update_local(client_ctx, self.local_syncstate, self.remote_syncstate)
 
         self.is_executed = True
 
@@ -416,17 +417,17 @@ class LocalState(BaseModel):
 
 
 class SyncConsumer:
-    def __init__(self, client: Client, queue: SyncQueue):
-        self.client = client
+    def __init__(self, client_ctx: SyftClientContext, queue: SyncQueue):
+        self.client_ctx = client_ctx
         self.queue = queue
-        self.previous_state = LocalState(path=Path(client.sync_folder) / ".syft" / "local_syncstate.json")
+        self.previous_state = LocalState(path=Path(client_ctx.datasites) / ".syft" / "local_syncstate.json")
         try:
             self.previous_state.load()
         except Exception as e:
             raise SyncEnvironmentError(f"Failed to load previous sync state: {e}")
 
     def validate_sync_environment(self):
-        if not Path(self.client.sync_folder).is_dir():
+        if not Path(self.client_ctx.datasites).is_dir():
             raise SyncEnvironmentError("Your sync folder has been deleted by a different process.")
         if not self.previous_state.path.is_file():
             raise SyncEnvironmentError("Your previous sync state has been deleted by a different process.")
@@ -450,7 +451,7 @@ class SyncConsumer:
                 path = file.path
                 if not self.previous_state.states.get(path):
                     missing_files.append(path)
-        create_local_batch(self.client, missing_files)
+        create_local_batch(self.client_ctx, missing_files)
         for path in missing_files:
             self.previous_state.insert(
                 path=path,
@@ -472,10 +473,10 @@ class SyncConsumer:
         # Ensure no changes are made if the sync environment is corrupted
         self.validate_sync_environment()
         if decision.local_decision.is_valid(abs_path=abs_path, show_warnings=True):
-            decision.local_decision.execute(self.client)
+            decision.local_decision.execute(self.client_ctx)
 
         if decision.remote_decision.is_valid(abs_path=abs_path, show_warnings=True):
-            decision.remote_decision.execute(self.client)
+            decision.remote_decision.execute(self.client_ctx)
 
         if decision.is_executed:
             self.previous_state.insert(path=item.data.path, state=decision.result_local_state)
@@ -487,16 +488,16 @@ class SyncConsumer:
         self.process_decision(item, decisions)
 
     def get_current_local_syncstate(self, path: Path) -> Optional[FileMetadata]:
-        abs_path = self.client.sync_folder / path
+        abs_path = self.client_ctx.datasites / path
         if not abs_path.is_file():
             return None
-        return hash_file(abs_path, root_dir=self.client.sync_folder)
+        return hash_file(abs_path, root_dir=self.client_ctx.datasites)
 
     def get_previous_local_syncstate(self, path: Path) -> Optional[FileMetadata]:
         return self.previous_state.states.get(path, None)
 
     def get_current_server_state(self, path: Path) -> Optional[FileMetadata]:
         try:
-            return get_metadata(self.client.server_client, path)
+            return get_metadata(self.client_ctx.server_client, path)
         except SyftServerError:
             return None

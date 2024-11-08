@@ -14,6 +14,7 @@ from pid import PidFile, PidFileAlreadyLockedError
 from syftbox.client.api import create_api
 from syftbox.client.base import SyftClientContext
 from syftbox.client.exceptions import SyftBoxAlreadyRunning
+from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils import error_reporting, file_manager, macos
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.constants import PERM_FILE
@@ -51,7 +52,7 @@ class SyftClient:
         self.workspace = SyftWorkspace(self.config.data_dir)
         self.pid = PidFile(pidname="syftbox.pid", piddir=self.workspace.data_dir)
         self.server_client = httpx.Client(base_url=str(self.config.server_url), follow_redirects=True)
-        # self.sync_manager = SyncManager(self.workspace, self.server_client)
+        self.__sync_manager: SyncManager = SyncManager(self.as_context())
         self.__local_server: uvicorn.Server = None
 
     @property
@@ -97,11 +98,19 @@ class SyftClient:
         # init the datasite on local machine
         self.init_datasite()
         # start the sync manager
-        # self.sync_manager.start()
+        self.start_sync()
         # run the apps
         # self.run_apps()
         # start the local server - blocks main thread
         return self.__run_local_server()
+
+    def start_sync(self):
+        """Start file syncing"""
+        self.__sync_manager.start()
+
+    def stop_sync(self):
+        """Stop file syncing"""
+        self.__sync_manager.stop()
 
     def shutdown(self):
         logger.info("Shutting down SyftBox client")
@@ -215,9 +224,10 @@ class SyftClient:
             if old_ignore_file.exists():
                 old_ignore_file.rename(self.workspace.datasites / IGNORE_FILENAME)
 
+            # move old sync state file
             old_sync_state = old_sync_folder / ".syft" / "local_syncstate.json"
             if old_sync_state.exists():
-                old_sync_state.rename(self.workspace.plugins / old_sync_state.name)
+                old_sync_state.rename(self.workspace.datasites / old_sync_state.name)
                 shutil.rmtree(str(old_sync_state.parent))
 
     def __enter__(self):
