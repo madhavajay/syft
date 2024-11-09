@@ -7,16 +7,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from syftbox.client.client2 import SyftClient as Client
-from syftbox.client.plugins.create_datasite import run as run_create_datasite_plugin
-from syftbox.client.plugins.init import run as run_init_plugin
-from syftbox.lib.client_config import SyftClientConfig as ClientConfig
+from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.lib import perm_file_path
 from syftbox.server.server import app as server_app
 from syftbox.server.server import lifespan as server_lifespan
 from syftbox.server.settings import ServerSettings
 
 
-def wait_for_datasite_setup(client_config: ClientConfig, timeout=5):
+def wait_for_datasite_setup(client_config: SyftClientConfig, timeout=5):
     print("waiting for datasite setup...")
 
     perm_file = perm_file_path(str(client_config.datasite_path))
@@ -38,7 +36,7 @@ def setup_datasite(tmp_path: Path, server_client: TestClient, email: str) -> Cli
     client_path.unlink(missing_ok=True)
     client_path.mkdir(parents=True)
 
-    client_config = ClientConfig(
+    client_config = SyftClientConfig(
         config_path=str(client_path / "client_config.json"),
         sync_folder=str(client_path / "sync"),
         email=email,
@@ -48,21 +46,18 @@ def setup_datasite(tmp_path: Path, server_client: TestClient, email: str) -> Cli
 
     client_config._server_client = server_client
 
-    shared_state = SharedState(client_config=client_config)
-    run_init_plugin(shared_state)
-    run_create_datasite_plugin(shared_state)
     wait_for_datasite_setup(client_config)
     return client_config
 
 
 @pytest.fixture(scope="function")
-def datasite_1(tmp_path: Path, server_client: TestClient) -> ClientConfig:
+def datasite_1(tmp_path: Path, server_client: TestClient) -> Client:
     email = "user_1@openmined.org"
     return setup_datasite(tmp_path, server_client, email)
 
 
 @pytest.fixture(scope="function")
-def datasite_2(tmp_path: Path, server_client: TestClient) -> ClientConfig:
+def datasite_2(tmp_path: Path, server_client: TestClient) -> Client:
     email = "user_2@openmined.org"
     return setup_datasite(tmp_path, server_client, email)
 

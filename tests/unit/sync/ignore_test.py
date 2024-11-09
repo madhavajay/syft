@@ -1,10 +1,15 @@
+import shutil
+import tempfile
 from pathlib import Path
+
+import pytest
 
 from syftbox.client.plugins.sync.sync import DatasiteState
 from syftbox.client.utils.dir_tree import create_dir_tree
 from syftbox.client.utils.display import display_file_tree
+from syftbox.lib import Client
 from syftbox.lib.ignore import IGNORE_FILENAME, filter_ignored_paths
-from syftbox.lib.lib import Client
+from syftbox.lib.workspace import SyftWorkspace
 
 ignore_file = """
 # Exlude alice datasite
@@ -40,21 +45,30 @@ paths_with_result = [
 ]
 
 
-def test_ignore_file(datasite_1: Client):
+@pytest.fixture
+def workspace():
+    temp_root_dir = tempfile.mkdtemp()
+    workspace = SyftWorkspace(data_dir=temp_root_dir)
+    workspace.mkdirs()
+    yield workspace
+    shutil.rmtree(temp_root_dir)
+
+
+def test_ignore_file(workspace: SyftWorkspace):
     # without ignore file
-    ignore_path = Path(datasite_1.sync_folder) / IGNORE_FILENAME
+    ignore_path = workspace.datasites / IGNORE_FILENAME
     ignore_path.unlink(missing_ok=True)
 
     paths, results = zip(*paths_with_result)
     paths = [Path(p) for p in paths]
-    filtered_paths = filter_ignored_paths(datasite_1, paths)
+    filtered_paths = filter_ignored_paths(workspace.datasites, paths)
     assert filtered_paths == paths
 
     # with ignore file
     ignore_path.write_text(ignore_file)
 
     expected_result = [p for p, r in zip(paths, results) if r is False]
-    filtered_paths = filter_ignored_paths(datasite_1, paths)
+    filtered_paths = filter_ignored_paths(workspace.datasites, paths)
     assert filtered_paths == expected_result
 
 

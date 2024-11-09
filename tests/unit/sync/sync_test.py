@@ -13,7 +13,8 @@ from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
 from syftbox.client.plugins.sync.manager import DatasiteState, SyncManager, SyncQueueItem
 from syftbox.client.utils.dir_tree import DirTree, create_dir_tree
 from syftbox.lib import Client
-from syftbox.lib.lib import ClientConfig, SyftPermission
+from syftbox.lib.client_config import SyftClientConfig as ClientConfig
+from syftbox.lib.lib import SyftPermission
 from syftbox.server.settings import ServerSettings
 from tests.unit.sync.conftest import setup_datasite
 
