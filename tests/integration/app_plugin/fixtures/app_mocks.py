@@ -25,7 +25,10 @@ class AppMockFactory:
 
         test_value = "test_value"
         config_json = {
-            "app": {"env": {"TEST_VAR": test_value}, "run": {"schedule": None, "interval": 1, "command": ["./test.sh"]}}
+            "app": {
+                "env": {"TEST_VAR": test_value},
+                "run": {"schedule": None, "interval": 1, "command": ["./test.sh"]},
+            }
         }
 
         config_file = mock_app_dir / "config.json"
