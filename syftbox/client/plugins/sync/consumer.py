@@ -9,7 +9,7 @@ from typing import Optional
 
 import py_fast_rsync
 from loguru import logger
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
@@ -378,14 +378,6 @@ class LocalState(BaseModel):
     path: Path
     states: dict[Path, FileMetadata] = {}
 
-    @model_validator(mode="after")
-    def init_dir(self):
-        with threading.Lock():
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            if not self.path.exists():
-                self.save()
-        return self
-
     def insert(self, path: Path, state: FileMetadata):
         if not self.path.is_file():
             # If the LocalState file does not exist, the sync environment is corrupted and syncing should be aborted
@@ -414,6 +406,8 @@ class LocalState(BaseModel):
                 data = self.path.read_text()
                 loaded_state = self.model_validate_json(data)
                 self.states = loaded_state.states
+            else:
+                self.save()
 
 
 class SyncConsumer:
