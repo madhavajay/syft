@@ -16,12 +16,10 @@ from typing_extensions import Any, Optional, Union
 from syftbox.client.base import SyftClientInterface
 from syftbox.lib.lib import SyftPermission, perm_file_path
 
-BOOTSTRAPPED = False
-DEFAULT_SCHEDULE = 10000
 DEFAULT_INTERVAL = 10
-DESCRIPTION = "Runs Apps"
 RUNNING_APPS = {}
 DEFAULT_APPS_PATH = Path(os.path.join(os.path.dirname(__file__), "..", "..", "..", "default_apps")).absolute().resolve()
+EVENT = threading.Event()
 
 
 def find_and_run_script(task_path, extra_args):
@@ -95,9 +93,9 @@ def load_config(path: str) -> Optional[SimpleNamespace]:
         return None
 
 
-def bootstrap(client_context: SyftClientInterface):
+def bootstrap(client: SyftClientInterface):
     # create the directory
-    apps_path = client_context.workspace.apps
+    apps_path = client.workspace.apps
 
     apps_path.mkdir(exist_ok=True)
 
@@ -109,9 +107,9 @@ def bootstrap(client_context: SyftClientInterface):
     if os.path.exists(file_path):
         perm_file = SyftPermission.load(file_path)
     else:
-        logger.info(f"> {client_context.config.email} Creating Apps Permfile")
+        logger.info(f"> {client.email} Creating Apps Permfile")
         try:
-            perm_file = SyftPermission.datasite_default(client_context.config.email)
+            perm_file = SyftPermission.datasite_default(client.email)
             perm_file.save(file_path)
         except Exception as e:
             logger.error("Failed to create perm file")
@@ -134,7 +132,7 @@ def run_apps(apps_path: Path):
                     args=(app_config, app_path),
                 )
                 thread.start()
-                RUNNING_APPS[app] = thread
+                RUNNING_APPS[os.path.basename(app)] = thread
 
 
 def get_file_hash(file_path, digest="md5") -> str:
@@ -172,7 +170,7 @@ def run_custom_app_config(app_config: SimpleNamespace, path: Path):
     else:
         raise Exception("There's no schedule configuration. Please add schedule or interval in your app config.json")
 
-    while True:
+    while not EVENT.is_set():
         current_time = datetime.now()
         logger.info(f"👟 Running {app_name} at scheduled time {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info(f"Running command: {app_config.app.run.command}")
@@ -227,6 +225,7 @@ class AppRunner:
         self.client = client
         self.__event = threading.Event()
         self.interval = interval
+        self.__run_thread: threading.Thread
 
     def start(self):
         def run():
@@ -239,7 +238,13 @@ class AppRunner:
                     logger.error(f"Error running apps: {e}")
                 time.sleep(self.interval)
 
-        threading.Thread(target=run, daemon=True).start()
+        self.__run_thread = threading.Thread(target=run)
+        self.__run_thread.start()
 
-    def stop(self):
+    def stop(self, blocking: bool = False):
+        if not self.__run_thread:
+            return
+
+        EVENT.set()
         self.__event.set()
+        blocking and self.__run_thread.join()
