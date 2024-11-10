@@ -231,6 +231,10 @@ class SyftClientContext(SyftClientInterface):
 
 
 def run_migration(config: SyftClientConfig):
+    # first run config migration
+    config.migrate()
+
+    # then run workspace migration
     new_ws = SyftWorkspace(config.data_dir)
 
     # check for old dir structure and migrate to new
@@ -294,24 +298,3 @@ def run_client(
     finally:
         client and client.shutdown()
     return 0
-
-
-if __name__ == "__main__":
-    import sys
-
-    # email = "test@openmined.org"
-    # data_dir = Path(f".clients/{email}").resolve()
-    # conf_path = data_dir / "config.json"
-    # if SyftClientConfig.exists(conf_path):
-    #     conf = SyftClientConfig.load(conf_path)
-    # else:
-    #     conf = SyftClientConfig(
-    #         path=conf_path,
-    #         data_dir=data_dir,
-    #         email=email,
-    #         server_url="https://syftboxstage.openmined.org",
-    #         port=8081,
-    #     ).save()
-    conf = SyftClientConfig.load(migrate=True)
-    code = run_client(conf, open_dir=True, log_level="DEBUG")
-    sys.exit(code)

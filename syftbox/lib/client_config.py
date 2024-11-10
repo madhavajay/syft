@@ -76,15 +76,23 @@ class SyftClientConfig(BaseModel):
         self.client_url = Url(f"http://127.0.0.1:{port}")
 
     @classmethod
-    def load(cls, conf_path: Optional[PathLike] = None, migrate=False) -> Self:
+    def load(cls, conf_path: Optional[PathLike] = None) -> Self:
         try:
             # args or env or default
             path = conf_path or os.getenv(CONFIG_PATH_ENV, DEFAULT_CONFIG_PATH)
             path = to_path(path)
+
             # todo migration stuff we can remove later
-            if migrate:
-                path = cls.migrate(path)
-            data = json.loads(path.read_text())
+            legacy_path = Path(path.parent, LEGACY_CONFIG_NAME)
+            # prefer to load config.json instead of client_config.json
+            # initially config.json WILL NOT exist, so we fallback to client_config.json
+            if path.exists():
+                data = json.loads(path.read_text())
+            elif legacy_path.exists():
+                data = json.loads(legacy_path.read_text())
+                path = legacy_path
+            # todo end
+
             return cls(path=path, **data)
         except Exception as e:
             raise ClientConfigException(f"Failed to load config from '{conf_path}' - {e}")
@@ -93,23 +101,16 @@ class SyftClientConfig(BaseModel):
     def exists(cls, path: PathLike) -> bool:
         return to_path(path).exists()
 
-    @classmethod
-    def migrate(cls, path: PathLike) -> Path:
-        migrated_path = path
+    def migrate(self) -> Self:
+        """Explicit call to migrate the config file"""
 
-        # check if there's a legacy config file around the requested path
-        # if yes, then rename it to the new path
-        legacy_path = Path(path.parent, LEGACY_CONFIG_NAME)
-        if legacy_path.exists():
-            new_path = Path(path.parent, DEFAULT_CONFIG_PATH.name)
-            migrated_path = legacy_path.rename(new_path)
+        # if we loaded the legacy config, we need to move it to new config
+        if self.path.name == LEGACY_CONFIG_NAME:
+            new_path = Path(self.path.parent, DEFAULT_CONFIG_PATH.name)
+            self.path = self.path.rename(new_path)
+            self.save()
 
-        # we tried to load /path/to/client_config.json that doesn't exist
-        # so we change the path to /path/to/config.json (above makes sure we have this file)
-        if path.name == LEGACY_CONFIG_NAME:
-            migrated_path = Path(path.parent, DEFAULT_CONFIG_PATH.name)
-
-        return migrated_path
+        return self
 
     def as_dict(self, exclude=None):
         return self.model_dump(exclude=exclude, exclude_none=True, warnings="none")
@@ -121,9 +122,3 @@ class SyftClientConfig(BaseModel):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(self.as_json())
         return self
-
-
-if __name__ == "__main__":
-    conf = SyftClientConfig.load(".clients/client_config.json", migrate=True)
-    conf.save()
-    print(conf)
