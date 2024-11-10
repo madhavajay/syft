@@ -1,15 +1,10 @@
-import shutil
-import tempfile
 from pathlib import Path
 
-import pytest
-
+from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.sync import DatasiteState
 from syftbox.client.utils.dir_tree import create_dir_tree
 from syftbox.client.utils.display import display_file_tree
-from syftbox.lib import Client
 from syftbox.lib.ignore import IGNORE_FILENAME, filter_ignored_paths
-from syftbox.lib.workspace import SyftWorkspace
 
 ignore_file = """
 # Exlude alice datasite
@@ -45,34 +40,25 @@ paths_with_result = [
 ]
 
 
-@pytest.fixture
-def workspace():
-    temp_root_dir = tempfile.mkdtemp()
-    workspace = SyftWorkspace(data_dir=temp_root_dir)
-    workspace.mkdirs()
-    yield workspace
-    shutil.rmtree(temp_root_dir)
-
-
-def test_ignore_file(workspace: SyftWorkspace):
+def test_ignore_file(tmp_path):
     # without ignore file
-    ignore_path = workspace.datasites / IGNORE_FILENAME
+    ignore_path = tmp_path / IGNORE_FILENAME
     ignore_path.unlink(missing_ok=True)
 
     paths, results = zip(*paths_with_result)
     paths = [Path(p) for p in paths]
-    filtered_paths = filter_ignored_paths(workspace.datasites, paths)
+    filtered_paths = filter_ignored_paths(tmp_path, paths)
     assert filtered_paths == paths
 
     # with ignore file
     ignore_path.write_text(ignore_file)
 
     expected_result = [p for p, r in zip(paths, results) if r is False]
-    filtered_paths = filter_ignored_paths(workspace.datasites, paths)
+    filtered_paths = filter_ignored_paths(tmp_path, paths)
     assert filtered_paths == expected_result
 
 
-def test_ignore_datasite(datasite_1: Client, datasite_2: Client) -> None:
+def test_ignore_datasite(datasite_1: SyftClientInterface, datasite_2: SyftClientInterface) -> None:
     datasite_2_files = {
         datasite_2.email: {
             "visible_file.txt": "content",
@@ -81,8 +67,8 @@ def test_ignore_datasite(datasite_1: Client, datasite_2: Client) -> None:
     }
     num_files = 2
     num_visible_files = 1
-    create_dir_tree(Path(datasite_1.sync_folder), datasite_2_files)
-    display_file_tree(Path(datasite_1.sync_folder))
+    create_dir_tree(Path(datasite_1.workspace.datasites), datasite_2_files)
+    display_file_tree(Path(datasite_1.workspace.datasites))
 
     # ds1 gets their local state of ds2
     datasite_state = DatasiteState(client=datasite_1, email=datasite_2.email)
@@ -92,7 +78,7 @@ def test_ignore_datasite(datasite_1: Client, datasite_2: Client) -> None:
     assert local_changes[0].path == Path(datasite_2.email) / "visible_file.txt"
 
     # ds1 ignores ds2
-    ignore_path = Path(datasite_1.sync_folder) / IGNORE_FILENAME
+    ignore_path = Path(datasite_1.workspace.datasites) / IGNORE_FILENAME
     with ignore_path.open("a") as f:
         # /datasite_2/
         f.write(f"\n/{datasite_2.email}\n")

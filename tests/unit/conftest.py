@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, Generator
 
 import pytest
 
@@ -6,7 +7,7 @@ from syftbox.lib.client_shim import SyftClientConfig
 
 
 @pytest.fixture
-def mocked_config(monkeypatch, tmp_path):
+def mock_config(monkeypatch, tmp_path) -> Generator[SyftClientConfig, Any, None]:
     config_path = Path(tmp_path, "config.json")
     data_dir = Path(tmp_path)
     conf = SyftClientConfig(
