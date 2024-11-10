@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from typing_extensions import Optional
 
 from syftbox.__version__ import __version__
+from syftbox.client.env import syftbox_env
 from syftbox.lib.client_config import SyftClientConfig
 
 
@@ -17,6 +18,7 @@ class ErrorReport(BaseModel):
     python_version: str = sys.version
     platform: str = platform()
     timestamp: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
+    env: dict = Field(default=syftbox_env.model_dump())
 
     @classmethod
     def from_client_config(cls, client_config: SyftClientConfig):

@@ -1,5 +1,4 @@
 # routers/datasite_router.py
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -21,9 +20,7 @@ async def list_datasites(ctx: APIContext):
     """List all available datasites"""
 
     try:
-        datasites_path: Path = ctx.workspace.datasites
-        datasites = [p.name for p in datasites_path.glob("*") if ("@" in p and p.is_dir())]
-        return {"datasites": datasites}
+        return {"datasites": ctx.all_datasites}
     except Exception as e:
         logger.error(f"Error listing datasites: {e}")
         raise HTTPException(status_code=500, detail="Failed to list datasites")

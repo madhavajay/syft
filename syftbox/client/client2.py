@@ -1,5 +1,4 @@
 import asyncio
-import os
 import platform
 import shutil
 from functools import lru_cache
@@ -8,19 +7,19 @@ from pathlib import Path
 import httpx
 import uvicorn
 from loguru import logger
-from pid import PidFile, PidFileAlreadyLockedError
+from pid import PidFile, PidFileAlreadyLockedError, PidFileAlreadyRunningError
 
 from syftbox.client.api import create_api
 from syftbox.client.base import SyftClientInterface
-from syftbox.client.exceptions import SyftBoxAlreadyRunning
+from syftbox.client.env import syftbox_env
+from syftbox.client.exceptions import SyftBoxAlreadyRunning, SyftInitializationError
 from syftbox.client.plugins.apps import AppRunner
 from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils import error_reporting, file_manager, macos
 from syftbox.lib.client_config import SyftClientConfig
-from syftbox.lib.constants import PERM_FILE
+from syftbox.lib.datasite import create_datasite
 from syftbox.lib.exceptions import SyftBoxException
-from syftbox.lib.ignore import IGNORE_FILENAME, create_default_ignore_file
-from syftbox.lib.lib import SyftPermission
+from syftbox.lib.ignore import IGNORE_FILENAME
 from syftbox.lib.logger import setup_logger
 from syftbox.lib.workspace import SyftWorkspace
 
@@ -45,20 +44,39 @@ class SyftClient:
         Exception: If the client fails to start due to any reason
     """
 
-    def __init__(self, config: SyftClientConfig, log_level: str = "INFO"):
+    def __init__(self, config: SyftClientConfig, log_level: str = "INFO", **kwargs):
         self.config = config
         self.log_level = log_level
 
         self.workspace = SyftWorkspace(self.config.data_dir)
         self.pid = PidFile(pidname="syftbox.pid", piddir=self.workspace.data_dir)
         self.server_client = httpx.Client(base_url=str(self.config.server_url), follow_redirects=True)
-        self.__sync_manager: SyncManager = SyncManager(self.as_context())
+
+        # kwargs for making customization/unit testing easier
+        # this will be replaced with a sophisticated plugin system
+        self.__sync_manager: SyncManager = kwargs.get("sync_manager", None)
+        self.__app_runner: AppRunner = kwargs.get("app_runner", None)
         self.__local_server: uvicorn.Server = None
-        self.__app_runner: AppRunner = AppRunner(self.as_context())
 
     @property
-    def config_path(self) -> Path:
-        return self.config.path
+    def sync_manager(self):
+        """the sync manager. lazily initialized"""
+        if self.__sync_manager is None:
+            try:
+                self.__sync_manager = SyncManager(self.as_context())
+            except Exception as e:
+                raise SyftInitializationError(f"Failed to initialize sync manager - {e}") from e
+        return self.__sync_manager
+
+    @property
+    def app_runner(self):
+        """the app runner. lazily initialized"""
+        if self.__app_runner is None:
+            try:
+                self.__app_runner = AppRunner(self.as_context())
+            except Exception as e:
+                raise SyftInitializationError(f"Failed to initialize app runner - {e}") from e
+        return self.__app_runner
 
     @property
     def is_registered(self) -> bool:
@@ -75,10 +93,6 @@ class SyftClient:
         """The public directory in the datasite of the current user"""
         return self.datasite / "public"
 
-    @property
-    def all_datasites(self) -> list:
-        return [d.name for d in self.workspace.datasites.iterdir() if d.is_dir() and "@" in d.name]
-
     def start(self):
         try:
             self.pid.create()
@@ -87,76 +101,41 @@ class SyftClient:
 
         logger.info("Started SyftBox client")
 
-        # commit the config to disk
-        self.config.save()
-        # create the workspace directories
-        self.workspace.mkdirs()
-        # register the email with the server
-        self.register_self()
-        # init the datasite on local machine
-        self.init_datasite()
-        # start the sync manager
-        self.start_sync()
+        self.config.save()  # commit config changes (like migration) to disk after PID is created
+        self.workspace.mkdirs()  # create the workspace directories
+        self.register_self()  # register the email with the server
+        self.init_datasite()  # init the datasite on local machine
 
-        # run the apps
-        self.run_apps()
-
-        # start the local server - blocks main thread
+        # start plugins/components
+        self.sync_manager.start()
+        self.app_runner.start()
         return self.__run_local_server()
-
-    def start_sync(self):
-        """Start file syncing"""
-        if self.__sync_manager.is_alive():
-            return
-        self.__sync_manager.start()
-
-    def stop_sync(self):
-        """Stop file syncing"""
-        if not self.__sync_manager.is_alive():
-            return
-        logger.info("Stopping file sync")
-        self.__sync_manager.stop()
 
     def shutdown(self):
         if self.__local_server:
             _result = asyncio.run(self.__local_server.shutdown())
-        self.stop_sync()
+
+        if self.__sync_manager:
+            self.__sync_manager.stop()
+
+        if self.__app_runner:
+            self.__app_runner.stop()
+
         self.pid.close()
         logger.info("SyftBox client shutdown complete")
 
-    def open_sync_folder(self):
-        file_manager.open_dir(self.workspace.datasites)
+    def check_pidfile(self) -> str:
+        """Check if another instance of SyftBox is running"""
 
-    def copy_icons(self):
-        self.workspace.mkdirs()
-        if platform.system() == "Darwin":
-            macos.copy_icon_file(ICON_FOLDER, self.workspace.data_dir)
+        try:
+            return self.pid.check()
+        except PidFileAlreadyRunningError:
+            raise SyftBoxAlreadyRunning(f"Another instance of SyftBox is running on {self.config.data_dir}")
 
     def init_datasite(self):
         if self.datasite.exists():
             return
-
-        # Create workspace/datasites/.syftignore
-        create_default_ignore_file(self.workspace.datasites)
-
-        # Create perm file for the datasite
-        if not self.datasite.is_dir():
-            try:
-                logger.info(f"creating datasite at {self.datasite}")
-                self.__create_datasite()
-            except Exception as e:
-                # this is a problematic scenario - probably because you can't setup the basic
-                # datasite structure. So, we should probably just exit here.
-                raise SyftBoxException(f"Failed to initialize datasite - {e}") from e
-
-        if not self.public_dir.is_dir():
-            try:
-                logger.info(f"creating public dir in datasite at {self.public_dir}")
-                self.__create_public_folder()
-            except Exception as e:
-                # not a big deal if we can't create the public folder
-                # more likely that the above step fails than this
-                logger.exception("Failed to create folder with public perms", e)
+        create_datasite(self.workspace.datasites, self.config.email)
 
     def register_self(self):
         """Register the user's email with the SyftBox cache server"""
@@ -175,14 +154,8 @@ class SyftClient:
 
     @lru_cache(1)
     def as_context(self) -> "SyftClientContext":
-        """Return a lightweight context object of self to inject into subsystems"""
+        """Return a implementation of SyftClientInterface to be injected into sub-systems"""
         return SyftClientContext(self.config, self.workspace, self.server_client)
-
-    def run_apps(self):
-        self.__app_runner.start()
-
-    def stop_apps(self):
-        self.__app_runner.stop()
 
     def __run_local_server(self):
         logger.info(f"Starting local server on {self.config.client_url}")
@@ -197,18 +170,6 @@ class SyftClient:
         )
         return self.__local_server.run()
 
-    def __create_datasite(self):
-        # create the datasite directory and the root perm file
-        self.datasite.mkdir(parents=True, exist_ok=True)
-        perms = SyftPermission.datasite_default(self.config.email)
-        perms.save(str(self.datasite / PERM_FILE))
-
-    def __create_public_folder(self):
-        # create a public folder & public perm file
-        self.public_dir.mkdir(parents=True, exist_ok=True)
-        perms = SyftPermission.mine_with_public_read(self.config.email)
-        perms.save(str(self.public_dir / PERM_FILE))
-
     def __register_email(self) -> str:
         # TODO - this should probably be wrapped in a SyftCacheServer API?
         response = self.server_client.post("/register", json={"email": self.config.email})
@@ -221,13 +182,22 @@ class SyftClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.shutdown()
 
+    # utils
+    def open_datasites_dir(self):
+        file_manager.open_dir(self.workspace.datasites)
+
+    def copy_icons(self):
+        self.workspace.mkdirs()
+        if platform.system() == "Darwin":
+            macos.copy_icon_file(ICON_FOLDER, self.workspace.data_dir)
+
 
 class SyftClientContext(SyftClientInterface):
     """
     Concrete implementation of SyftClientInterface that provides a lightweight
-    client context for subsystems.
+    client context for components.
 
-    This class encapsulates the minimal set of attributes needed by subsystems
+    This class encapsulates the minimal set of attributes needed by components
     without exposing the full SyftClient implementation.
 
     It will be instantiated by SyftClient, but sub-systems can freely pass it around.
@@ -244,20 +214,29 @@ class SyftClientContext(SyftClientInterface):
         self.server_client = server_client
 
     @property
+    def email(self) -> str:
+        return self.config.email
+
+    @property
     def datasite(self) -> Path:
         return self.workspace.datasites / self.config.email
+
+    @property
+    def all_datasites(self) -> list[str]:
+        """List all datasites in the workspace"""
+        return [d.name for d in self.workspace.datasites.iterdir() if (d.is_dir() and "@" in d.name)]
 
     def __repr__(self) -> str:
         return f"SyftClientContext<{self.config.email}, {self.config.data_dir}>"
 
 
-def run_migration(client_config: SyftClientConfig):
-    new_ws = SyftWorkspace(client_config.data_dir)
+def run_migration(config: SyftClientConfig):
+    new_ws = SyftWorkspace(config.data_dir)
 
     # check for old dir structure and migrate to new
     # data_dir == sync_folder
     old_sync_folder = new_ws.data_dir
-    old_datasite_path = Path(old_sync_folder, client_config.email)
+    old_datasite_path = Path(old_sync_folder, config.email)
     if old_datasite_path.exists():
         logger.info("Migrating to new datasite structure")
         new_ws.mkdirs()
@@ -275,6 +254,7 @@ def run_migration(client_config: SyftClientConfig):
         old_sync_state = old_sync_folder / ".syft" / "local_syncstate.json"
         if old_sync_state.exists():
             old_sync_state.rename(new_ws.plugins / "local_syncstate.json")
+        if old_sync_state.parent.exists():
             shutil.rmtree(str(old_sync_state.parent))
 
 
@@ -284,6 +264,8 @@ def run_client(
     log_level: str = "INFO",
 ) -> int:
     """Run the SyftBox client"""
+    client = None
+
     setup_logger(log_level, log_dir=client_config.data_dir / "logs")
 
     error_config = error_reporting.make_error_report(client_config)
@@ -291,17 +273,15 @@ def run_client(
 
     # a flag to disable icons
     # GitHub CI needs to zip sync dir in tests and fails when it encounters Icon\r files
-    disable_icons = str(os.getenv("SYFTBOX_DISABLE_ICONS")).lower() in ("true", "1")
-    if disable_icons:
+    if syftbox_env.DISABLE_ICONS:
         logger.debug("Directory icons are disabled")
-    copy_icons = not disable_icons
-    client = None
 
     try:
-        run_migration(client_config)
         client = SyftClient(client_config, log_level=log_level)
-        copy_icons and client.copy_icons()
-        open_dir and client.open_sync_folder()
+        # we don't want to run migration if another instance of client is already running
+        bool(client.check_pidfile()) and run_migration(client_config)
+        (not syftbox_env.DISABLE_ICONS) and client.copy_icons()
+        open_dir and client.open_datasites_dir()
         client.start()
     except SyftBoxAlreadyRunning as e:
         logger.error(e)

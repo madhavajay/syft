@@ -51,14 +51,14 @@ class SyncManager:
 
     def get_datasite_states(self) -> list[DatasiteState]:
         try:
-            remote_datasite_states = get_datasite_states(self.client.server_client, email=self.client.config.email)
+            remote_datasite_states = get_datasite_states(self.client.server_client, email=self.client.email)
         except Exception as e:
             logger.error(f"Failed to retrieve datasites from server, only syncing own datasite. Reason: {e}")
             remote_datasite_states = {}
 
         # Ensure we are always syncing own datasite
-        if self.client.config.email not in remote_datasite_states:
-            remote_datasite_states[self.client.config.email] = []
+        if self.client.email not in remote_datasite_states:
+            remote_datasite_states[self.client.email] = []
 
         datasite_states = [
             DatasiteState(self.client, email, remote_state=remote_state)

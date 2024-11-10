@@ -11,6 +11,4 @@ UserLike: TypeAlias = Union[str, Iterable[str]]
 
 
 def to_path(path: PathLike) -> Path:
-    if isinstance(path, Path):
-        return path.resolve()
     return Path(path).expanduser().resolve()
