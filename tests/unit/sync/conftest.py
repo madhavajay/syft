@@ -34,23 +34,6 @@ class MockClient(SyftClientInterface):
         return [d.name for d in self.workspace.datasites.iterdir() if (d.is_dir() and "@" in d.name)]
 
 
-# def wait_for_datasite_setup(client_config: ClientConfig, timeout=5):
-#     print("waiting for datasite setup...")
-
-#     perm_file = perm_file_path(str(client_config.datasite_path))
-
-#     t0 = time.time()
-#     while time.time() - t0 < timeout:
-#         perm_file_exists = Path(perm_file).exists()
-#         is_registered = client_config.is_registered
-#         if perm_file_exists and is_registered:
-#             print("Datasite setup complete")
-#             return
-#         time.sleep(1)
-
-#     raise TimeoutError("Datasite setup took too long")
-
-
 def setup_datasite(tmp_path: Path, server_client: TestClient, email: str) -> SyftClientInterface:
     syft_path = tmp_path / email
     config = SyftClientConfig(

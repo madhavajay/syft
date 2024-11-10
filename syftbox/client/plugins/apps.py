@@ -14,7 +14,6 @@ from loguru import logger
 from typing_extensions import Any, Optional, Union
 
 from syftbox.client.base import SyftClientInterface
-from syftbox.lib.lib import SyftPermission, perm_file_path
 
 DEFAULT_INTERVAL = 10
 RUNNING_APPS = {}
@@ -101,19 +100,6 @@ def bootstrap(client: SyftClientInterface):
 
     # Copy default apps if they don't exist
     copy_default_apps(apps_path)
-
-    # add the first perm file
-    file_path = perm_file_path(apps_path)
-    if os.path.exists(file_path):
-        perm_file = SyftPermission.load(file_path)
-    else:
-        logger.info(f"> {client.email} Creating Apps Permfile")
-        try:
-            perm_file = SyftPermission.datasite_default(client.email)
-            perm_file.save(file_path)
-        except Exception as e:
-            logger.error("Failed to create perm file")
-            logger.exception(e)
 
 
 def run_apps(apps_path: Path):
