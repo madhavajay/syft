@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 from rich import print as rprint
-from typer import Argument, Option, Typer
+from typer import Argument, Exit, Option, Typer
 from typing_extensions import Annotated
 
 from syftbox.app.manager import install_app, list_app, uninstall_app
@@ -51,7 +51,7 @@ def install(
     result = install_app(workspace, repository, branch)
     if result.error:
         rprint(f"[bold red]Error:[/bold red] {result.error}")
-        sys.exit(1)
+        raise Exit(1)
 
     rprint(f"Installed app [bold]'{result.app_name}'[/bold]\nLocation: '{result.app_path}'")
 
@@ -66,7 +66,7 @@ def uninstall(
     result = uninstall_app(app_name, workspace)
     if not result:
         rprint(f"[bold red]Error:[/bold red] '{app_name}' app not found")
-        sys.exit(1)
+        raise Exit(1)
 
     rprint(f"Uninstalled app [bold]'{app_name}'[/bold] from '{result}'")
 
@@ -93,7 +93,7 @@ def get_workspace(config_path: Path) -> SyftWorkspace:
             f"  - For custom configs, provide the proper path using [cyan]--config[/cyan] flag"
         )
         rprint(msg)
-        sys.exit(1)
+        raise Exit(1)
     except Exception as e:
         rprint(f"[bold red]Error:[/bold red] {e}")
-        sys.exit(1)
+        raise Exit(1)

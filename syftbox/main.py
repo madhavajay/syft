@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 from rich import print as rprint
-from typer import Option, Typer
+from typer import Exit, Option, Typer
 
 from syftbox import __version__
 from syftbox.app.cli import app as app_cli
@@ -36,6 +36,7 @@ def debug(config_path: Annotated[Optional[Path], CONFIG_OPTS] = None):
         rprint(debug_report_yaml(config_path))
     except Exception as e:
         rprint(f"[red]Error[/red]: {e}")
+        raise Exit(1)
 
 
 app.add_typer(client_cli, name="client")

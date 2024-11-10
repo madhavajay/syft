@@ -19,8 +19,9 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
     """Setup the client configuration interactively. Called from CLI"""
 
     config_path = config_path.expanduser().resolve()
-    data_dir = data_dir.expanduser().resolve()
     conf: SyftClientConfig = None
+    if data_dir:
+        data_dir = data_dir.expanduser().resolve()
 
     # try to load the existing config
     try:
@@ -30,7 +31,7 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
 
     if not conf:
         # first time setup
-        if data_dir == DEFAULT_DATA_DIR:
+        if not data_dir or data_dir == DEFAULT_DATA_DIR:
             data_dir = prompt_data_dir()
 
         if not email:
@@ -38,7 +39,7 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
 
         # create a new config with the input params
         conf = SyftClientConfig(
-            config_path=config_path,
+            path=config_path,
             sync_folder=data_dir,
             email=email,
             server_url=server,

@@ -1,8 +1,7 @@
-import sys
 from pathlib import Path
 
 from rich import print as rprint
-from typer import Context, Option, Typer
+from typer import Context, Exit, Option, Typer
 from typing_extensions import Annotated
 
 from syftbox.client.cli_setup import setup_config_interactive
@@ -95,12 +94,12 @@ def client(
         # new_port = get_free_port()
         # port = new_port
         rprint(f"[bold red]Error:[/bold red] Client cannot start because port {port} is already in use!")
-        sys.exit(1)
+        raise Exit(1)
 
     client_config = setup_config_interactive(config_path, email, data_dir, server, port)
     log_level = "DEBUG" if verbose else "INFO"
     code = run_client(client_config=client_config, open_dir=open_dir, log_level=log_level)
-    sys.exit(code)
+    raise Exit(code)
 
 
 @app.command()
@@ -114,6 +113,7 @@ def report(path: Path = REPORT_PATH_OPTS):
     output_path = Path(path, name).resolve()
     output_path_with_extension = zip_logs(output_path)
     rprint(f"Logs saved at: {output_path_with_extension}.")
+    raise Exit(0)
 
 
 def main():
