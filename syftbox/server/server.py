@@ -22,7 +22,7 @@ from loguru import logger
 from typing_extensions import Any, Optional, Union
 
 from syftbox.__version__ import __version__
-from syftbox.lib import (
+from syftbox.lib.lib import (
     Jsonable,
     get_datasites,
 )

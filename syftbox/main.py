@@ -1,5 +1,8 @@
+from pathlib import Path
+from typing import Annotated, Optional
+
 from rich import print as rprint
-from typer import Typer
+from typer import Exit, Option, Typer
 
 from syftbox import __version__
 from syftbox.app.cli import app as app_cli
@@ -14,6 +17,8 @@ app = Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 
+CONFIG_OPTS = Option("-c", "--config", "--config_path", help="Path to the SyftBox config")
+
 
 @app.command(rich_help_panel="General Options")
 def version():
@@ -23,14 +28,15 @@ def version():
 
 
 @app.command(rich_help_panel="General Options")
-def debug():
+def debug(config_path: Annotated[Optional[Path], CONFIG_OPTS] = None):
     """Print SyftBox debug data"""
     from syftbox.lib.debug import debug_report_yaml
 
     try:
-        rprint(debug_report_yaml())
+        rprint(debug_report_yaml(config_path))
     except Exception as e:
         rprint(f"[red]Error[/red]: {e}")
+        raise Exit(1)
 
 
 app.add_typer(client_cli, name="client")

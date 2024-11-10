@@ -9,9 +9,9 @@ runner = CliRunner()
 
 
 @pytest.fixture
-def mock_apps_dir(mocked_config):
-    apps_dir = mocked_config.sync_folder / "apps"
-    apps_dir.mkdir()
+def mock_apps_dir(mock_config):
+    apps_dir = mock_config.data_dir / "apps"
+    apps_dir.mkdir(exist_ok=True)
     yield apps_dir
 
 
@@ -19,7 +19,7 @@ def mock_apps_dir(mocked_config):
 def mock_app_list(mock_apps_dir):
     apps = [mock_apps_dir / "app1", mock_apps_dir / "app2"]
     for app in apps:
-        app.mkdir()
+        app.mkdir(exist_ok=True)
     yield (mock_apps_dir, apps)
 
 
@@ -39,9 +39,9 @@ def mocked_app_install(monkeypatch, mock_apps_dir):
 
 
 @pytest.fixture
-def mocked_app_uninstall(monkeypatch, mocked_config):
+def mocked_app_uninstall(monkeypatch, mock_config):
     def mock_uninstall(*args, **kwargs):
-        return mocked_config.sync_folder / "apps"
+        return mock_config.data_dir / "apps"
 
     monkeypatch.setattr("syftbox.app.cli.uninstall_app", mock_uninstall)
     yield

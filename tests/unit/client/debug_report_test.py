@@ -1,7 +1,7 @@
 from syftbox.lib.debug import debug_report, debug_report_yaml
 
 
-def test_debug_report(mocked_config):
+def test_debug_report(mock_config):
     result = debug_report()
     assert isinstance(result, dict)
     assert "system" in result
@@ -17,7 +17,7 @@ def test_debug_report(mocked_config):
     assert "apps" in result["syftbox"]
 
 
-def test_debug_report_readable(mocked_config):
+def test_debug_report_readable(mock_config):
     result = debug_report_yaml()
     assert isinstance(result, str)
     assert "system" in result
