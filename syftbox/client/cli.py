@@ -1,13 +1,13 @@
 from pathlib import Path
 
 from rich import print as rprint
-from typer import Context, Option, Typer
+from typer import Context, Exit, Option, Typer
 from typing_extensions import Annotated
 
-from syftbox.client.client import run_client
-from syftbox.client.config import setup_config_interactive
+from syftbox.client.cli_setup import setup_config_interactive
+from syftbox.client.client2 import run_client
 from syftbox.client.utils.net import get_free_port, is_port_in_use
-from syftbox.lib.lib import DEFAULT_CONFIG_PATH, DEFAULT_SERVER_URL, DEFAULT_SYNC_FOLDER
+from syftbox.lib.constants import DEFAULT_CONFIG_PATH, DEFAULT_DATA_DIR, DEFAULT_PORT, DEFAULT_SERVER_URL
 
 app = Typer(
     name="SyftBox Client",
@@ -74,11 +74,11 @@ REPORT_PATH_OPTS = Option(
 @app.callback(invoke_without_command=True)
 def client(
     ctx: Context,
-    data_dir: Annotated[Path, DATA_DIR_OPTS] = DEFAULT_SYNC_FOLDER,
+    data_dir: Annotated[Path, DATA_DIR_OPTS] = DEFAULT_DATA_DIR,
     email: Annotated[str, EMAIL_OPTS] = None,
     server: Annotated[str, SERVER_OPTS] = DEFAULT_SERVER_URL,
     config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
-    port: Annotated[int, PORT_OPTS] = 8080,
+    port: Annotated[int, PORT_OPTS] = DEFAULT_PORT,
     open_dir: Annotated[bool, OPEN_OPTS] = True,
     verbose: Annotated[bool, VERBOSE_OPTS] = False,
 ):
@@ -90,14 +90,16 @@ def client(
 
     if port == 0:
         port = get_free_port()
-        rprint(f"[yellow]Allocated port {port}[yellow]")
     elif is_port_in_use(port):
-        new_port = get_free_port()
-        rprint(f"[yellow]Port {port} is already in use! Switching to port {new_port}[/yellow]")
-        port = new_port
+        # new_port = get_free_port()
+        # port = new_port
+        rprint(f"[bold red]Error:[/bold red] Client cannot start because port {port} is already in use!")
+        raise Exit(1)
 
     client_config = setup_config_interactive(config_path, email, data_dir, server, port)
-    run_client(client_config=client_config, open_dir=open_dir, verbose=verbose)
+    log_level = "DEBUG" if verbose else "INFO"
+    code = run_client(client_config=client_config, open_dir=open_dir, log_level=log_level)
+    raise Exit(code)
 
 
 @app.command()
@@ -111,6 +113,7 @@ def report(path: Path = REPORT_PATH_OPTS):
     output_path = Path(path, name).resolve()
     output_path_with_extension = zip_logs(output_path)
     rprint(f"Logs saved at: {output_path_with_extension}.")
+    raise Exit(0)
 
 
 def main():
