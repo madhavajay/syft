@@ -36,6 +36,7 @@ bg_start_client() {
         --email=$email \
         --port=$port \
         --no-open-dir \
+        --verbose \
         --server=http://localhost:5001 &> $LOGS_DIR/client.$1.log
 }
 
