@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -6,6 +7,7 @@ from typer import Argument, Exit, Option, Typer
 from typing_extensions import Annotated
 
 from syftbox.app.manager import install_app, list_app, uninstall_app
+from syftbox.client.plugins.apps import find_and_run_script
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.constants import DEFAULT_CONFIG_PATH
 from syftbox.lib.exceptions import ClientConfigException
@@ -69,6 +71,34 @@ def uninstall(
         raise Exit(1)
 
     rprint(f"Uninstalled app [bold]'{app_name}'[/bold] from '{result}'")
+
+
+@app.command()
+def run(
+    app_path: Path,
+    config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
+):
+    """Uninstall a Syftbox app"""
+    os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = str(config_path)
+    abs_path = os.path.abspath(app_path)
+    print("abs_path", abs_path)
+    app_name = os.path.basename(abs_path)
+    print("app name", app_name)
+
+    extra_args = []
+    try:
+        rprint(f"[bold cyan]Running {app_name} app[/bold cyan]")
+        result = find_and_run_script(abs_path, extra_args)
+        if hasattr(result, "returncode"):
+            exit_code = result.returncode
+            if exit_code != 0:
+                rprint(f"[bold red]Error:[/bold red] '{app_name}' {result.stdout} {result.stderr}")
+                raise Exit(1)
+            else:
+                rprint(f"[bold cyan]stdout:[/bold cyan] '{app_name}'\n\n{result.stdout}")
+    except Exception as e:
+        rprint(f"[bold red]Error:[/bold red] {e}")
+        raise Exit(1)
 
 
 # @app.command()
