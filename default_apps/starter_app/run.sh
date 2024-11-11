@@ -2,7 +2,9 @@
 
 set -e
 
-uv venv
+if [ ! -d .venv ]; then
+    uv venv
+fi
 . .venv/bin/activate
 python main.py
 deactivate
