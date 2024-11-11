@@ -75,27 +75,27 @@ def uninstall(
 
 @app.command()
 def run(
-    app_path: Path,
+    app_name: str,
     config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
 ):
     """Uninstall a Syftbox app"""
-    os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = str(config_path)
-    abs_path = os.path.abspath(app_path)
-    print("abs_path", abs_path)
-    app_name = os.path.basename(abs_path)
-    print("app name", app_name)
+
+    workspace = get_workspace(config_path)
 
     extra_args = []
     try:
         rprint(f"[bold cyan]Running {app_name} app[/bold cyan]")
-        result = find_and_run_script(abs_path, extra_args)
+        os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = str(config_path)
+        result = find_and_run_script(str(workspace.apps / app_name), extra_args)
         if hasattr(result, "returncode"):
             exit_code = result.returncode
             if exit_code != 0:
                 rprint(f"[bold red]Error:[/bold red] '{app_name}' {result.stdout} {result.stderr}")
                 raise Exit(1)
             else:
-                rprint(f"[bold cyan]stdout:[/bold cyan] '{app_name}'\n\n{result.stdout}")
+                rprint(f"[bold green]Success:[/bold green] '{app_name}'\n")
+                rprint(f"[bold yellow]stdout:[/bold yellow]\n{result.stdout}")
+                rprint(f"[bold yellow]stderr:[/bold yellow]\n{result.stderr}")
     except Exception as e:
         rprint(f"[bold red]Error:[/bold red] {e}")
         raise Exit(1)
