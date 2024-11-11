@@ -19,10 +19,11 @@ def setup_logger(
     logger.add(level=level, sink=sys.stderr, diagnose=False, backtrace=False)
 
     # new file per run - no rotation needed
+    # always log debug level
     log_file = Path(log_dir, f"syftbox_{int(datetime.now().timestamp())}.log")
     logger.add(
         log_file,
-        level=level,
+        level="DEBUG",
         rotation=None,
         compression=None,
     )
