@@ -26,8 +26,9 @@ from syftbox.lib import (
     Jsonable,
     get_datasites,
 )
+from syftbox.server.analytics import log_analytics_event
 from syftbox.server.logger import setup_logger
-from syftbox.server.middleware import LoguruMiddleware
+from syftbox.server.middleware import AnalyticsMiddleware, LoguruMiddleware
 from syftbox.server.settings import ServerSettings, get_server_settings
 
 from .sync import db, hash
@@ -135,9 +136,12 @@ def init_db(settings: ServerSettings) -> None:
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
     # Startup
-    logger.info(f"> Starting SyftBox Server {__version__}. Python {platform.python_version()}")
     if settings is None:
         settings = ServerSettings()
+
+    setup_logger(logs_folder=settings.logs_folder)
+
+    logger.info(f"> Starting SyftBox Server {__version__}. Python {platform.python_version()}")
     logger.info(settings)
 
     logger.info("> Creating Folders")
@@ -158,11 +162,12 @@ async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
     logger.info("> Shutting down server")
 
 
-setup_logger()
 app = FastAPI(lifespan=lifespan)
 app.include_router(sync_router)
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.add_middleware(LoguruMiddleware)
+app.add_middleware(AnalyticsMiddleware)
+
 # Define the ASCII art
 ascii_art = rf"""
  ____         __ _   ____
@@ -315,6 +320,7 @@ async def register(
     os.makedirs(datasite_folder, exist_ok=True)
 
     logger.info(f"> {email} registering: {token}, snapshot folder: {datasite_folder}")
+    log_analytics_event("/register", email)
 
     return JSONResponse({"status": "success", "token": token}, status_code=200)
 

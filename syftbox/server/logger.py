@@ -7,21 +7,23 @@ from loguru import logger
 
 custom_format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level}</level> | <cyan>{message}</cyan>"
 
-USER_EVENT = "user_event"
+ANALYTICS_EVENT = "analytics_event"
 
 
-def default_log_filter(record: dict):
-    return record["extra"].get("event_type") != USER_EVENT
+def _default_logger_filter(record: dict):
+    return record["extra"].get("event_type") != ANALYTICS_EVENT
 
 
-def user_event_filter(record: dict):
-    return record["extra"].get("event_type") == USER_EVENT
+def _analytics_logger_filter(record: dict):
+    return record["extra"].get("event_type") == ANALYTICS_EVENT
 
 
-user_event_logger = logger.bind(event_type=USER_EVENT)
+analytics_logger = logger.bind(event_type=ANALYTICS_EVENT)
 
 
-def setup_logger(logs_dir: Path, level: Union[str, int] = "DEBUG"):
+def setup_logger(logs_folder: Path, level: Union[str, int] = "DEBUG"):
+    logs_folder.mkdir(parents=True, exist_ok=True)
+
     logger.remove()
 
     # Standard server logs
@@ -31,27 +33,28 @@ def setup_logger(logs_dir: Path, level: Union[str, int] = "DEBUG"):
         diagnose=False,
         backtrace=False,
         format=custom_format,
-        filter=default_log_filter,
+        filter=_default_logger_filter,
     )
 
     logger.add(
-        logs_dir / "server.log",
+        logs_folder / "server.log",
         rotation="100 MB",  # Rotate after the log file reaches 100 MB
         retention=2,  # Keep only the last 1 log files
         compression="zip",  # Usually, 10x reduction in file size
-        filter=default_log_filter,
+        filter=_default_logger_filter,
     )
 
-    # Dedicated logger for user events
+    # Dedicated logger for analytics events
     # example usage: user_event_logger.info("User logged in")
     logger.add(
-        logs_dir / "user_events.json",
-        rotation="100 MB",
-        retention=2,
+        logs_folder / "analytics.json",
+        rotation="10 KB",
         compression="zip",
         serialize=True,
-        filter=user_event_filter,
+        filter=_analytics_logger_filter,
     )
 
     uvicorn_access = logging.getLogger("uvicorn.access")
     uvicorn_access.disabled = True
+
+    logger.info(f"Logger set up. Saving logs to {logs_folder}")

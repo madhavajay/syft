@@ -23,15 +23,6 @@ def handle_json_response(endpoint: str, response: httpx.Response) -> Any:
     raise SyftServerError(f"[{endpoint}] call failed: {response.text}")
 
 
-def list_datasites(client: httpx.Client) -> list[str]:
-    response = client.post(
-        "/sync/datasites",
-    )
-
-    data = handle_json_response("/sync/datasites", response)
-    return data
-
-
 def get_datasite_states(client: httpx.Client, email: str) -> dict[str, list[FileMetadata]]:
     response = client.post(
         "/sync/datasite_states",

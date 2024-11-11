@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from loguru import logger
 
 from syftbox.lib.lib import PermissionTree, SyftPermission, filter_metadata
+from syftbox.server.analytics import log_analytics_event
 from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.sync.db import (
     get_all_datasites,
@@ -144,8 +145,11 @@ def apply_diffs(
 @router.post("/delete", response_class=JSONResponse)
 def delete_file(
     req: FileRequest,
+    email: str = Header(default="unknown"),
     file_store: FileStore = Depends(get_file_store),
 ) -> JSONResponse:
+    log_analytics_event("/sync/delete", email=email, path=req.path)
+
     file_store.delete(req.path)
     return JSONResponse(content={"status": "success"})
 
@@ -153,9 +157,9 @@ def delete_file(
 @router.post("/create", response_class=JSONResponse)
 def create_file(
     file: UploadFile,
+    email: str = Header(default="unknown"),
     file_store: FileStore = Depends(get_file_store),
 ) -> JSONResponse:
-    #
     relative_path = RelativePath(file.filename)
     if "%" in file.filename:
         raise HTTPException(status_code=400, detail="filename cannot contain '%'")
