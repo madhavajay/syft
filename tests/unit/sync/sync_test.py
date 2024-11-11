@@ -428,8 +428,14 @@ def test_skip_symlink(server_client: TestClient, datasite_1: SyftClientInterface
     assert len(states) == 1
     assert states[0].is_in_sync()
 
+    # Check if symlinks are not synced
+    sync_service.run_single_thread()
+    snapshot_folder = server_client.app_state["server_settings"].snapshot_folder
+    assert not (snapshot_folder / datasite_1.email / "symlinked_folder").exists()
+    assert not (snapshot_folder / datasite_1.email / "symlinked_file.txt").exists()
 
-def test_skip_hidden_paths(datasite_1: SyftClientInterface):
+
+def test_skip_hidden_paths(server_client: TestClient, datasite_1: SyftClientInterface):
     sync_service = SyncManager(datasite_1)
     sync_service.run_single_thread()
 
@@ -444,6 +450,11 @@ def test_skip_hidden_paths(datasite_1: SyftClientInterface):
     states = sync_service.get_datasite_states()
     assert len(states) == 1
     assert states[0].is_in_sync()
+
+    sync_service.run_single_thread()
+    snapshot_folder = server_client.app_state["server_settings"].snapshot_folder
+    assert not (snapshot_folder / datasite_1.email / ".hidden_folder").exists()
+    assert not (snapshot_folder / datasite_1.email / ".hidden_file.txt").exists()
 
 
 @pytest.mark.skip("This is for manual testing")
