@@ -30,10 +30,7 @@ def setup_logger(
     # keep last 5 logs
     logs_to_delete = sorted(log_dir.glob("syftbox_*.log"))[:-keep_logs]
     for log in logs_to_delete:
-        try:
-            log.unlink()
-        except Exception:
-            pass
+        log.unlink()
 
 
 def zip_logs(output_path, log_dir: PathLike = DEFAULT_LOGS_DIR):
