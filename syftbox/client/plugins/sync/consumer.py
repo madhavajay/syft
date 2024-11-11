@@ -79,11 +79,16 @@ def create_local(client: SyftClientInterface, remote_syncstate: FileMetadata):
     abs_path.write_bytes(content_bytes)
 
 
-def create_local_batch(client: SyftClientInterface, remote_syncstates: list[Path]):
+def create_local_batch(client: SyftClientInterface, remote_syncstates: list[Path]) -> list[str]:
     paths = [str(path) for path in remote_syncstates]
-    content_bytes = download_bulk(client.server_client, paths)
+    try:
+        content_bytes = download_bulk(client.server_client, paths)
+    except SyftServerError as e:
+        logger.error(e)
+        return []
     zip_file = zipfile.ZipFile(BytesIO(content_bytes))
     zip_file.extractall(client.workspace.datasites)
+    return zip_file.namelist()
 
 
 def create_remote(client: SyftClientInterface, local_syncstate: FileMetadata):
@@ -445,8 +450,9 @@ class SyncConsumer:
                 path = file.path
                 if not self.previous_state.states.get(path):
                     missing_files.append(path)
-        create_local_batch(self.client, missing_files)
-        for path in missing_files:
+        logger.info(f"Downloading {len(missing_files)} files in batch")
+        received_files = create_local_batch(self.client, missing_files)
+        for path in received_files:
             self.previous_state.insert(
                 path=path,
                 state=self.get_current_local_syncstate(path),
