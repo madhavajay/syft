@@ -36,7 +36,8 @@ alias b := build
 # Run a local syftbox server on port 5001
 [group('server')]
 run-server port="5001" uvicorn_args="":
-    uv run uvicorn syftbox.server.server:app --reload --reload-dir ./syftbox --port {{ port }} {{ uvicorn_args }}
+    mkdir -p .server/data
+    SYFTBOX_DATA_FOLDER=.server/data uv run uvicorn syftbox.server.server:app --reload --reload-dir ./syftbox --port {{ port }} {{ uvicorn_args }}
 
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -55,17 +56,15 @@ run-client name port="auto" server="http://localhost:5001":
     if [[ "$PORT" == "auto" ]]; then PORT="0"; fi
 
     # Working directory for client is .clients/<email>
-    CONFIG_DIR=.clients/$EMAIL/config
-    SYNC_DIR=.clients/$EMAIL/sync
-    mkdir -p $CONFIG_DIR $SYNC_DIR
+    DATA_DIR=.clients/$EMAIL
+    mkdir -p $DATA_DIR
 
     echo -e "Email      : {{ _green }}$EMAIL{{ _nc }}"
     echo -e "Client     : {{ _cyan }}http://localhost:$PORT{{ _nc }}"
     echo -e "Server     : {{ _cyan }}{{ server }}{{ _nc }}"
-    echo -e "Config Dir : $CONFIG_DIR"
-    echo -e "Sync Dir   : $SYNC_DIR"
+    echo -e "Data Dir   : $DATA_DIR"
 
-    uv run syftbox/client/cli.py --config=$CONFIG_DIR/config.json --data-dir=$SYNC_DIR --email=$EMAIL --port=$PORT --server={{ server }}
+    uv run syftbox/client/cli.py --config=$DATA_DIR/config.json --data-dir=$DATA_DIR --email=$EMAIL --port=$PORT --server={{ server }} --no-open-dir
 
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -142,6 +141,7 @@ bump-version level="patch":
 
 [group('test')]
 test-e2e test_name:
+    @echo "Using SyftBox from {{ _green }}'$(which syftbox)'{{ _nc }}"
     chmod +x ./tests/e2e/{{ test_name }}/run.bash
     bash ./tests/e2e/{{ test_name }}/run.bash
 
@@ -204,7 +204,7 @@ ssh keyfile remote="user@0.0.0.0":
 # remove all local files & directories
 [group('utils')]
 reset:
-    rm -rf ./.clients ./data ./dist ./.e2e
+    rm -rf ./.clients ./.server ./dist ./.e2e
 
 [group('utils')]
 run-jupyter jupyter_args="":

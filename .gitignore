@@ -168,6 +168,7 @@ cython_debug/
 data/
 users/
 .clients/
+.server/
 .e2e/
 keys/
 backup/

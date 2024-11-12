@@ -1,30 +1,42 @@
 import sys
+from datetime import datetime
 from pathlib import Path
 from shutil import make_archive
 from typing import Union
 
 from loguru import logger
 
-from syftbox.lib.lib import DEFAULT_LOGS_PATH
+from syftbox.lib.constants import DEFAULT_LOGS_DIR
+from syftbox.lib.types import PathLike, to_path
 
 
-def setup_logger(level: Union[str, int] = "DEBUG", log_file: Union[Path, str] = DEFAULT_LOGS_PATH):
-    # TODO set configurable log path per client (once new folder structure is merged)
+def setup_logger(
+    level: Union[str, int] = "DEBUG",
+    log_dir: PathLike = DEFAULT_LOGS_DIR,
+    keep_logs: int = 10,
+):
     logger.remove()
     logger.add(level=level, sink=sys.stderr, diagnose=False, backtrace=False)
 
-    # Configure Loguru to write logs to a file with rotation
+    # new file per run - no rotation needed
+    # always log debug level
+    log_file = Path(log_dir, f"syftbox_{int(datetime.now().timestamp())}.log")
     logger.add(
         log_file,
-        rotation="100 MB",  # Rotate after the log file reaches 100 MB
-        retention=2,  # Keep only the last 1 log files
-        compression="zip",  # Usually, 10x reduction in file size
+        level="DEBUG",
+        rotation=None,
+        compression=None,
     )
 
+    # keep last 5 logs
+    logs_to_delete = sorted(log_dir.glob("syftbox_*.log"))[:-keep_logs]
+    for log in logs_to_delete:
+        try:
+            log.unlink()
+        except Exception:
+            pass
 
-def zip_logs(output_path):
-    logs_folder = Path(DEFAULT_LOGS_PATH).parent
+
+def zip_logs(output_path, log_dir: PathLike = DEFAULT_LOGS_DIR):
+    logs_folder = to_path(log_dir)
     return make_archive(output_path, "zip", logs_folder)
-
-
-setup_logger()

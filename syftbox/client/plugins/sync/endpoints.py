@@ -129,6 +129,7 @@ def download_bulk(client: httpx.Client, paths: list[str]) -> bytes:
     response = client.post(
         "/sync/download_bulk",
         json={"paths": paths},
+        timeout=30,
     )
     response.raise_for_status()
     return response.content
