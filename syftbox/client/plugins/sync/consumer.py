@@ -26,6 +26,7 @@ from syftbox.client.plugins.sync.endpoints import (
 from syftbox.client.plugins.sync.exceptions import FatalSyncError, SyncEnvironmentError
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import DatasiteState, SyncSide
+from syftbox.lib.ignore import filter_ignored_paths
 from syftbox.lib.lib import SyftPermission
 from syftbox.server.sync.hash import hash_file
 from syftbox.server.sync.models import FileMetadata
@@ -380,13 +381,13 @@ class SyncDecisionTuple(BaseModel):
 
 
 class LocalState(BaseModel):
-    state_path: Path
+    path: Path
     states: dict[Path, FileMetadata] = {}
 
     def insert(self, path: Path, state: FileMetadata):
         if not isinstance(path, Path):
             raise ValueError(f"path must be a Path object, got {path}")
-        if not self.state_path.is_file():
+        if not self.path.is_file():
             # If the LocalState file does not exist, the sync environment is corrupted and syncing should be aborted
 
             # NOTE: this can occur when the user deletes the sync folder, but a different plugin re-creates it.
@@ -403,14 +404,14 @@ class LocalState(BaseModel):
     def save(self):
         try:
             with threading.Lock():
-                self.state_path.write_text(self.model_dump_json())
+                self.path.write_text(self.model_dump_json())
         except Exception:
-            logger.exception(f"Failed to save {self.state_path}")
+            logger.exception(f"Failed to save {self.path}")
 
     def load(self):
         with threading.Lock():
-            if self.state_path.exists():
-                data = self.state_path.read_text()
+            if self.path.exists():
+                data = self.path.read_text()
                 loaded_state = self.model_validate_json(data)
                 self.states = loaded_state.states
             else:
@@ -421,7 +422,7 @@ class SyncConsumer:
     def __init__(self, client: SyftClientInterface, queue: SyncQueue):
         self.client = client
         self.queue = queue
-        self.previous_state = LocalState(state_path=Path(client.workspace.plugins) / "local_syncstate.json")
+        self.previous_state = LocalState(path=Path(client.workspace.plugins) / "local_syncstate.json")
         try:
             self.previous_state.load()
         except Exception as e:
@@ -430,7 +431,7 @@ class SyncConsumer:
     def validate_sync_environment(self):
         if not Path(self.client.workspace.datasites).is_dir():
             raise SyncEnvironmentError("Your sync folder has been deleted by a different process.")
-        if not self.previous_state.state_path.is_file():
+        if not self.previous_state.path.is_file():
             raise SyncEnvironmentError("Your previous sync state has been deleted by a different process.")
 
     def consume_all(self):
@@ -446,12 +447,14 @@ class SyncConsumer:
                 logger.error(f"Failed to sync file {item.data.path}, it will be retried in the next sync. Reason: {e}")
 
     def download_all_missing(self, datasite_states: list[DatasiteState]):
-        missing_files = []
+        missing_files: list[Path] = []
         for datasite_state in datasite_states:
             for file in datasite_state.remote_state:
                 path = file.path
                 if not self.previous_state.states.get(path):
                     missing_files.append(path)
+        missing_files = filter_ignored_paths(self.client.workspace.datasites, missing_files)
+
         logger.info(f"Downloading {len(missing_files)} files in batch")
         received_files = create_local_batch(self.client, missing_files)
         for path in received_files:
