@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 from pathlib import Path
@@ -19,6 +20,12 @@ def _analytics_logger_filter(record: dict):
 
 
 analytics_logger = logger.bind(event_type=ANALYTICS_EVENT)
+
+
+def analytics_formatter(record: dict):
+    serialized = json.dumps(record["extra"])
+    record["extra"]["serialized"] = serialized
+    return "{extra[serialized]}\n"
 
 
 def setup_logger(logs_folder: Path, level: Union[str, int] = "DEBUG"):
@@ -48,9 +55,9 @@ def setup_logger(logs_folder: Path, level: Union[str, int] = "DEBUG"):
     # example usage: user_event_logger.info("User logged in")
     logger.add(
         logs_folder / "analytics.json",
-        rotation="10 KB",
+        rotation="100 MB",
         compression="zip",
-        serialize=True,
+        format=analytics_formatter,
         filter=_analytics_logger_filter,
     )
 

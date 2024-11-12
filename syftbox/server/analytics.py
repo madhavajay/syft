@@ -1,10 +1,12 @@
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from loguru import logger
+from pydantic import BaseModel
 
 from syftbox.server.logger import analytics_logger
+from syftbox.server.sync.file_store import FileStore
 
 
 def to_jsonable_dict(obj: dict) -> dict:
@@ -15,6 +17,8 @@ def to_jsonable_dict(obj: dict) -> dict:
     for key, value in obj.items():
         if isinstance(value, dict):
             result[key] = to_jsonable_dict(value)
+        elif isinstance(value, BaseModel):
+            result[key] = value.model_dump(mode="json")
         elif isinstance(value, datetime):
             result[key] = value.isoformat()
         elif isinstance(value, Path):
@@ -29,13 +33,15 @@ def to_jsonable_dict(obj: dict) -> dict:
 
 def log_analytics_event(
     endpoint: str,
-    email: str,
+    email: Optional[str],
     message: str = "",
     **kwargs: Any,
-):
+) -> None:
     """
     Log an event to the analytics logger.
     """
+    email = email or "anonymous"
+
     try:
         extra = {
             "email": email,
@@ -43,6 +49,27 @@ def log_analytics_event(
             "timestamp": datetime.now(timezone.utc),
             **kwargs,
         }
+        extra = to_jsonable_dict(extra)
         analytics_logger.bind(**extra).info(message)
     except Exception as e:
         logger.error(f"Failed to log event: {e}")
+
+
+def log_file_change_event(
+    endpoint: str,
+    email: Optional[str],
+    relative_path: Path,
+    file_store: FileStore,
+) -> None:
+    """
+    Log a file change event to the analytics logger.
+    """
+    try:
+        metadata = file_store.get_metadata(relative_path)
+        log_analytics_event(
+            endpoint=endpoint,
+            email=email,
+            file_metadata=metadata,
+        )
+    except Exception as e:
+        logger.error(f"Failed to log file change event: {e}")

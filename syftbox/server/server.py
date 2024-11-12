@@ -28,7 +28,7 @@ from syftbox.lib.lib import (
 )
 from syftbox.server.analytics import log_analytics_event
 from syftbox.server.logger import setup_logger
-from syftbox.server.middleware import AnalyticsMiddleware, LoguruMiddleware
+from syftbox.server.middleware import LoguruMiddleware
 from syftbox.server.settings import ServerSettings, get_server_settings
 
 from .sync import db, hash
@@ -166,7 +166,6 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(sync_router)
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.add_middleware(LoguruMiddleware)
-app.add_middleware(AnalyticsMiddleware)
 
 # Define the ASCII art
 ascii_art = rf"""
