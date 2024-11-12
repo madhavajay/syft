@@ -65,9 +65,7 @@ class DatasiteState:
         return p.expanduser().resolve()
 
     def get_current_local_state(self) -> list[FileMetadata]:
-        return hash_dir(
-            self.path, root_dir=self.client.workspace.datasites, include_hidden=False, include_symlinks=False
-        )
+        return hash_dir(self.path, root_dir=self.client.workspace.datasites)
 
     def get_remote_state(self) -> list[FileMetadata]:
         if self.remote_state is None:
@@ -105,7 +103,12 @@ class DatasiteState:
         local_state_dict = {file.path: file for file in local_state}
         remote_state_dict = {file.path: file for file in remote_state}
         all_files = set(local_state_dict.keys()) | set(remote_state_dict.keys())
-        all_files_filtered = filter_ignored_paths(dir=self.client.workspace.datasites, paths=list(all_files))
+        all_files_filtered = filter_ignored_paths(
+            datasites_dir=self.client.workspace.datasites,
+            relative_paths=list(all_files),
+            ignore_hidden_files=True,
+            ignore_symlinks=True,
+        )
 
         all_changes = []
 
