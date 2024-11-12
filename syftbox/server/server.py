@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Header, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -322,6 +322,13 @@ async def register(
     log_analytics_event("/register", email)
 
     return JSONResponse({"status": "success", "token": token}, status_code=200)
+
+
+@app.post("/log_event")
+async def log_event(request: Request, email: Optional[str] = Header(default=None)):
+    data = await request.json()
+    log_analytics_event("/log_event", email, **data)
+    return JSONResponse({"status": "success"}, status_code=200)
 
 
 @app.get("/install.sh")
