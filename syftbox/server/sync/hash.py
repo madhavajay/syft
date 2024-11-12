@@ -50,7 +50,6 @@ def hash_files_parallel(files: list[Path], root_dir: Path) -> list[FileMetadata]
 
 
 def hash_files(files: list[Path], root_dir: Path) -> list[FileMetadata]:
-    logger.debug(f"Hashing {len(files)} files")
     result = [hash_file(file, root_dir) for file in files]
     return [r for r in result if r is not None]
 
