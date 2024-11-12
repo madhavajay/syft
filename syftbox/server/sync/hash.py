@@ -56,8 +56,6 @@ def hash_files(files: list[Path], root_dir: Path) -> list[FileMetadata]:
 def hash_dir(
     dir: Path,
     root_dir: Path,
-    include_hidden: bool = True,
-    include_symlinks: bool = True,
 ) -> list[FileMetadata]:
     """
     hash all files in dir recursively, return a list of FileMetadata.
@@ -65,15 +63,13 @@ def hash_dir(
     ignore_folders should be relative to root_dir.
     returned Paths are relative to root_dir.
     """
-    files = collect_files(dir, include_hidden=include_hidden, include_symlinks=include_symlinks)
+    files = collect_files(dir)
     return hash_files(files, root_dir)
 
 
 def collect_files(
     dir: Union[Path, str],
     pattern: Union[str, re.Pattern, None] = None,
-    include_hidden: bool = True,
-    include_symlinks: bool = True,
 ) -> list[Path]:
     """Recursively collect files in a directory with options to include hidden files and symlinks"""
 
@@ -87,16 +83,10 @@ def collect_files(
         pattern = re.compile(pattern)
 
     for entry in dir.iterdir():
-        if not include_hidden and entry.name.startswith("."):
-            continue
-
-        if entry.is_symlink() and not include_symlinks:
-            continue
-
         if entry.is_file():
             if pattern is None or pattern.match(entry.as_posix()):
                 files.append(entry)
         elif entry.is_dir():
-            files.extend(collect_files(entry, pattern, include_hidden, include_symlinks))
+            files.extend(collect_files(entry, pattern))
 
     return files
