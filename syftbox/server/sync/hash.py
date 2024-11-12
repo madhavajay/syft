@@ -10,6 +10,7 @@ from typing import Optional, Union
 from loguru import logger
 from py_fast_rsync import signature
 
+from syftbox.lib.ignore import filter_ignored_paths
 from syftbox.server.sync.models import FileMetadata
 
 
@@ -56,6 +57,7 @@ def hash_files(files: list[Path], root_dir: Path) -> list[FileMetadata]:
 def hash_dir(
     dir: Path,
     root_dir: Path,
+    filter_ignored: bool = True,
 ) -> list[FileMetadata]:
     """
     hash all files in dir recursively, return a list of FileMetadata.
@@ -64,7 +66,13 @@ def hash_dir(
     returned Paths are relative to root_dir.
     """
     files = collect_files(dir)
-    return hash_files(files, root_dir)
+
+    relative_paths = [file.relative_to(root_dir) for file in files]
+    if filter_ignored:
+        relative_paths = filter_ignored_paths(root_dir, relative_paths)
+
+    absolute_paths = [root_dir / file for file in relative_paths]
+    return hash_files(absolute_paths, root_dir)
 
 
 def collect_files(
