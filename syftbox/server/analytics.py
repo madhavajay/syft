@@ -1,3 +1,5 @@
+import json
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -73,3 +75,34 @@ def log_file_change_event(
         )
     except Exception as e:
         logger.error(f"Failed to log file change event: {e}")
+
+
+def _parse_analytics_file(file_path: Path) -> list[dict]:
+    if file_path.suffix == ".zip":
+        with zipfile.ZipFile(file_path, "r") as zipf:
+            with zipf.open(zipf.namelist()[0]) as f:
+                content = f.read().decode("utf-8")
+    else:
+        with open(file_path, "r") as f:
+            content = f.read()
+
+    events = []
+    for line in content.split("\n"):
+        if not line:
+            continue
+
+        try:
+            event = json.loads(line)
+            events.append(event)
+        except Exception as e:
+            logger.error(f"Failed to parse event: {e}")
+
+    return events
+
+
+def parse_analytics_logs(logs_dir: Path) -> list[dict]:
+    log_files = logs_dir.glob(r"analytics_*.[log|zip]")
+    events = []
+    for log_file in log_files:
+        events.extend(_parse_analytics_file(log_file))
+    return events
