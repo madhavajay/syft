@@ -12,7 +12,8 @@ from pid import PidFile, PidFileAlreadyLockedError, PidFileAlreadyRunningError
 from syftbox.client.api import create_api
 from syftbox.client.base import SyftClientInterface
 from syftbox.client.env import syftbox_env
-from syftbox.client.exceptions import SyftBoxAlreadyRunning, SyftInitializationError
+from syftbox.client.exceptions import SyftBoxAlreadyRunning, SyftInitializationError, SyftServerError
+from syftbox.client.logger import setup_logger
 from syftbox.client.plugins.apps import AppRunner
 from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils import error_reporting, file_manager, macos
@@ -20,7 +21,6 @@ from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.datasite import create_datasite
 from syftbox.lib.exceptions import SyftBoxException
 from syftbox.lib.ignore import IGNORE_FILENAME
-from syftbox.lib.logger import setup_logger
 from syftbox.lib.workspace import SyftWorkspace
 
 SCRIPT_DIR = Path(__file__).parent
@@ -228,6 +228,17 @@ class SyftClientContext(SyftClientInterface):
 
     def __repr__(self) -> str:
         return f"SyftClientContext<{self.config.email}, {self.config.data_dir}>"
+
+    def log_analytics_event(self, event_name: str, **kwargs) -> None:
+        """Log an event to the server"""
+        event_data = {
+            "event_name": event_name,
+            **kwargs,
+        }
+
+        response = self.server_client.post("/log_event", headers={"email": self.email}, json=event_data)
+        if response.status_code != 200:
+            raise SyftServerError(f"Failed to log event: {response.text}")
 
 
 def run_migration(config: SyftClientConfig):

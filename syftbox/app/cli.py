@@ -7,6 +7,8 @@ from typing_extensions import Annotated
 
 from syftbox.__version__ import __version__
 from syftbox.app.manager import install_app, list_app, uninstall_app
+from syftbox.client.base import SyftClientInterface
+from syftbox.client.client2 import SyftClient
 from syftbox.client.plugins.apps import find_and_run_script
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.constants import DEFAULT_CONFIG_PATH
@@ -55,11 +57,16 @@ def install(
     config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
 ):
     """Install a new Syftbox app"""
-    workspace = get_workspace(config_path)
-    result = install_app(workspace, repository, branch)
+    client = get_client(config_path)
+    result = install_app(client.workspace, repository, branch)
     if result.error:
         rprint(f"[bold red]Error:[/bold red] {result.error}")
         raise Exit(1)
+
+    try:
+        client.log_analytics_event("app_install", app_name=result.app_name)
+    except Exception:
+        pass
 
     rprint(f"Installed app [bold]'{result.app_name}'[/bold]\nLocation: '{result.app_path}'")
 
@@ -118,6 +125,25 @@ def env(with_syftbox: bool = False):
 # ):
 #     """Update a Syftbox app"""
 #     pass
+
+
+def get_client(config_path: Path) -> SyftClientInterface:
+    try:
+        conf = SyftClientConfig.load(config_path)
+        return SyftClient(conf).as_context()
+    except ClientConfigException:
+        msg = (
+            f"[bold red]Error:[/bold red] Couldn't load config at: [yellow]'{config_path}'[/yellow]\n"
+            "Please ensure that:\n"
+            "  - The configuration file exists at the specified path.\n"
+            "  - You've run the SyftBox atleast once.\n"
+            f"  - For custom configs, provide the proper path using [cyan]--config[/cyan] flag"
+        )
+        rprint(msg)
+        raise Exit(1)
+    except Exception as e:
+        rprint(f"[bold red]Error:[/bold red] {e}")
+        raise Exit(1)
 
 
 def get_workspace(config_path: Path) -> SyftWorkspace:
