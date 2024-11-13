@@ -145,11 +145,51 @@ install_syftbox() {
         py_detail="system $($py -V)"
     fi
 
+    # Detect old syftbox version
+    syftbox_was_installed=$(uv tool list | grep -q "syftbox" && echo 1 || echo 0)
+    if [ "$syftbox_was_installed" -eq 1 ]; then
+        old_syftbox_version=$(uv tool list | grep -m 1 "syftbox" | cut -d' ' -f2 | cut -d'v' -f2)
+    fi
+
     info "Installing SyftBox (with $py_detail)"
 
     exit=$(uv tool install $python_flag -Uq --force syftbox)
     if ! $(exit)
     then err "Failed to install SyftBox"
+    fi
+
+    # If no syftbox was installed, no need to check for version
+    if [ "$syftbox_was_installed" -eq 0 ]; then
+        return
+    fi
+
+    # Detect new syftbox version
+    new_syftbox_version=$(uv tool list | grep -m 1 "syftbox" | cut -d' ' -f2 | cut -d'v' -f2)
+    if [ "$old_syftbox_version" != "$new_syftbox_version" ]; then
+        cleanup_old_install
+    fi
+}
+
+cleanup_old_install() {
+    data_dir=$(jq -r .data_dir ~/.syftbox/config.json)
+
+    # If the data_dir does not exist, no need to cleanup
+    if [ ! -d "$data_dir" ]; then
+        return
+    fi
+
+    echo
+    echo "A new version of syftbox was downloaded from PyPi."
+    prompt=$(echo "${yellow}Press Y to delete your SyftBox folder (${data_dir}) and download it from server (recommended). Press N to keep your current SyftBox folder. [y/n]: ${reset}")
+
+    while [ "$delete_folder" != "y" ] && [ "$delete_folder" != "Y" ] && [ "$delete_folder" != "n" ] && [ "$delete_folder" != "N" ]
+    do
+        read -p "$prompt" delete_folder < /dev/tty
+    done
+
+    if [ "$delete_folder" = "y" ] || [ "$delete_folder" = "Y" ]; then
+        echo "Deleting old SyftBox folder..."
+        rm -rf ${data_dir}
     fi
 }
 
@@ -225,6 +265,7 @@ pre_install() {
 |____/ \__, |_|  \__|____/ \___/_/\_\\
        |___/
 "
+
 }
 
 run_client() {
