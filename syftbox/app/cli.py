@@ -5,7 +5,7 @@ from rich import print as rprint
 from typer import Argument, Exit, Option, Typer
 from typing_extensions import Annotated
 
-from syftbox import __version__
+from syftbox.__version__ import __version__
 from syftbox.app.manager import install_app, list_app, uninstall_app
 from syftbox.client.plugins.apps import find_and_run_script
 from syftbox.lib.client_config import SyftClientConfig
