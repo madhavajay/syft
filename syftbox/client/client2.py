@@ -275,7 +275,7 @@ def run_migration(config: SyftClientConfig, prompt_remove=True):
 
     # Option 1: if outdated, completely remove the existing syftbox folder and start fresh
     if new_ws.data_dir.exists():
-        if has_old_syftbox_version(new_ws.data_dir) and prompt_delete_old_data_dir(new_ws.data_dir) and prompt_remove:
+        if has_old_syftbox_version(new_ws.data_dir) and prompt_remove and prompt_delete_old_data_dir(new_ws.data_dir):
             logger.info("Removing old syftbox folder")
             shutil.rmtree(str(old_sync_folder))
             return
