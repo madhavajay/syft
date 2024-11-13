@@ -171,6 +171,12 @@ install_syftbox() {
 }
 
 cleanup_old_install() {
+    config_file=~/.syftbox/config.json
+    # If the config file does not exist, no need to cleanup
+    if [ ! -f "$config_file" ]; then
+        return
+    fi
+
     data_dir=$(jq -r .data_dir ~/.syftbox/config.json)
 
     # If the data_dir does not exist, no need to cleanup
