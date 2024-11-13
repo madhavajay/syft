@@ -4,11 +4,8 @@ from typing import Any
 
 import httpx
 
+from syftbox.client.exceptions import SyftServerError
 from syftbox.server.sync.models import ApplyDiffResponse, DiffResponse, FileMetadata
-
-
-class SyftServerError(Exception):
-    pass
 
 
 class SyftNotFound(SyftServerError):

@@ -79,8 +79,8 @@ def log_file_change_event(
 
 def _parse_analytics_file(file_path: Path) -> list[dict]:
     if file_path.suffix == ".zip":
-        with zipfile.ZipFile(file_path, "r") as zipf:
-            with zipf.open(zipf.namelist()[0]) as f:
+        with zipfile.ZipFile(file_path, "r") as zfile:
+            with zfile.open(zfile.namelist()[0]) as f:
                 content = f.read().decode("utf-8")
     else:
         with open(file_path, "r") as f:
@@ -93,6 +93,7 @@ def _parse_analytics_file(file_path: Path) -> list[dict]:
 
         try:
             event = json.loads(line)
+            event["timestamp"] = datetime.fromisoformat(event["timestamp"])
             events.append(event)
         except Exception as e:
             logger.error(f"Failed to parse event: {e}")
@@ -101,8 +102,10 @@ def _parse_analytics_file(file_path: Path) -> list[dict]:
 
 
 def parse_analytics_logs(logs_dir: Path) -> list[dict]:
-    log_files = logs_dir.glob(r"analytics_*.[log|zip]")
+    log_files = list(logs_dir.glob("analytics_*.log")) + list(logs_dir.glob("analytics_*.zip"))
     events = []
     for log_file in log_files:
         events.extend(_parse_analytics_file(log_file))
+
+    events = sorted(events, key=lambda x: x["timestamp"])
     return events

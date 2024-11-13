@@ -12,9 +12,9 @@ from loguru import logger
 from pydantic import BaseModel
 
 from syftbox.client.base import SyftClientInterface
+from syftbox.client.exceptions import SyftServerError
 from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
 from syftbox.client.plugins.sync.endpoints import (
-    SyftServerError,
     apply_diff,
     create,
     delete,
