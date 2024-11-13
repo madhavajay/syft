@@ -81,9 +81,7 @@ def run(
     """Uninstall a Syftbox app"""
     os.environ["SYFTBOX_CLIENT_CONFIG_PATH"] = str(config_path)
     abs_path = os.path.abspath(app_path)
-    print("abs_path", abs_path)
     app_name = os.path.basename(abs_path)
-    print("app name", app_name)
 
     extra_args = []
     try:

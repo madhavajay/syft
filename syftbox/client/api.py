@@ -31,6 +31,7 @@ def create_api(client: SyftClientInterface) -> FastAPI:
             "http://localhost",
             "http://localhost:8080",
             "http://localhost:8081",
+            "http://localhost:8083",
             "https://syftbox.openmined.org",
         ],  # Allow localhost on any port and specific domain
         allow_credentials=True,
