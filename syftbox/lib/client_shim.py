@@ -14,7 +14,7 @@ from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.types import PathLike, to_path
 from syftbox.lib.workspace import SyftWorkspace
 
-# this just makes it a bit clear what the default is for the appdata() method
+# this just makes it a bit clear what the default is for the api_data() method
 MY_DATASITE = None
 
 
@@ -67,9 +67,20 @@ class Client:
         """
         return cls(conf=SyftClientConfig.load(filepath))
 
-    def appdata(self, app_name: str, datasite: Optional[str] = MY_DATASITE) -> Path:
+    def api_data(self, app_name: str, datasite: Optional[str] = MY_DATASITE) -> Path:
+        """
+        Gets the filesystem path to an application's API data directory for a specific datasite.
+
+        Args:
+            app_name (str): The name of the application whose API data path is needed.
+            datasite (Optional[str], default=MY_DATASITE): The datasite's email.
+                If None, defaults to the current user's configured email.
+
+        Returns:
+            Path: A filesystem path pointing to '<workspace>/datasites/<datasite>/api_data/<app_name>'.
+        """
         datasite = datasite or self.config.email
-        return self.workspace.datasites / datasite / "app_pipelines" / app_name
+        return self.workspace.datasites / datasite / "api_data" / app_name
 
     def makedirs(self, *paths: PathLike) -> None:
         """Create directories"""
