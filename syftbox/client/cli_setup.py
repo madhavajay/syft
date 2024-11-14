@@ -2,17 +2,54 @@
 SyftBox CLI - Setup scripts
 """
 
+import json
+import shutil
 from pathlib import Path
 
 from rich import print as rprint
 from rich.prompt import Confirm, Prompt
 
+from syftbox.__version__ import __version__
+from syftbox.client.client2 import METADATA_FILENAME
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.constants import DEFAULT_DATA_DIR
 from syftbox.lib.exceptions import ClientConfigException
 from syftbox.lib.validators import DIR_NOT_EMPTY, is_valid_dir, is_valid_email
 
 __all__ = ["setup_config_interactive"]
+
+
+def has_old_syftbox_version(data_dir: Path) -> bool:
+    """True if the data_dir was created with an older version of SyftBox"""
+    metadata_file = data_dir / METADATA_FILENAME
+    if not metadata_file.exists():
+        return True
+    metadata = json.loads(metadata_file.read_text())
+    current_version = __version__
+    old_version = metadata.get("version", None)
+    return old_version != current_version
+
+
+def prompt_delete_old_data_dir(data_dir: Path) -> bool:
+    msg = f"[yellow]Found old SyftBox folder at {data_dir}.[/yellow]\n"
+    msg += "[yellow]Press Y to remove the old folder and download it from the server [bold](recommended)[/bold]. Press N to keep the old folder and migrate it.[/yellow]"
+    return Confirm.ask(msg)
+
+
+def get_migration_decision(data_dir: Path):
+    migrate_datasite = False
+    if data_dir.exists():
+        if has_old_syftbox_version(data_dir):
+            # we need this extra if because we do 2 things:
+            # 1. determine if we want to remove
+            # 2. determine if we want to migrate
+            if prompt_delete_old_data_dir(data_dir):
+                rprint.info("Removing old syftbox folder")
+                shutil.rmtree(str(data_dir))
+                migrate_datasite = False
+            else:
+                migrate_datasite = True
+    return migrate_datasite
 
 
 def setup_config_interactive(config_path: Path, email: str, data_dir: Path, server: str, port: int) -> SyftClientConfig:
