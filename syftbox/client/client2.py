@@ -284,7 +284,7 @@ def run_apps_to_api_migration(new_ws: SyftWorkspace):
         shutil.move(str(old_apps_dir), str(new_apps_dir))
 
 
-def run_migration(config: SyftClientConfig, prompt_remove=True):
+def run_migration(config: SyftClientConfig, prompt_remove=False):
     # first run config migration
     config.migrate()
 
