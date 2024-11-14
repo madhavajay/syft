@@ -5,8 +5,8 @@ from syftbox.lib import Client
 
 client = Client.load()
 
-input_folder = client.api_data("adder/inputs")
-output_folder = client.api_data("adder/done")
+input_folder = client.api_data("adder") / "input"
+output_folder = client.api_data("adder") / "output"
 os.makedirs(input_folder, exist_ok=True)
 os.makedirs(output_folder, exist_ok=True)
 
