@@ -272,12 +272,27 @@ def prompt_delete_old_data_dir(data_dir: Path) -> bool:
     return Confirm.ask(msg)
 
 
-def run_migration(config: SyftClientConfig, prompt_remove=True):
+def run_apps_to_api_migration(new_ws: SyftWorkspace):
+    old_sync_folder = new_ws.data_dir
+    old_apps_dir = old_sync_folder / "apps"
+    new_apps_dir = new_ws.apps
+
+    if old_apps_dir.exists():
+        logger.info(f"Migrating directory apps —> {new_apps_dir.relative_to(new_ws.data_dir)}...")
+        if new_apps_dir.exists():
+            shutil.rmtree(new_apps_dir)
+        shutil.move(str(old_apps_dir), str(new_apps_dir))
+
+
+def run_migration(config: SyftClientConfig, prompt_remove=False):
     # first run config migration
     config.migrate()
 
     # then run workspace migration
     new_ws = SyftWorkspace(config.data_dir)
+
+    # migrate workspace/apps to workspace/apis
+    run_apps_to_api_migration(new_ws)
 
     # check for old dir structure and migrate to new
     # data_dir == sync_folder
