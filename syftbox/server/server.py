@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Header, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -26,6 +26,9 @@ from syftbox.lib.lib import (
     Jsonable,
     get_datasites,
 )
+from syftbox.server.analytics import log_analytics_event
+from syftbox.server.logger import setup_logger
+from syftbox.server.middleware import LoguruMiddleware
 from syftbox.server.settings import ServerSettings, get_server_settings
 
 from .sync import db, hash
@@ -133,9 +136,12 @@ def init_db(settings: ServerSettings) -> None:
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
     # Startup
-    logger.info(f"> Starting SyftBox Server {__version__}. Python {platform.python_version()}")
     if settings is None:
         settings = ServerSettings()
+
+    setup_logger(logs_folder=settings.logs_folder)
+
+    logger.info(f"> Starting SyftBox Server {__version__}. Python {platform.python_version()}")
     logger.info(settings)
 
     logger.info("> Creating Folders")
@@ -159,6 +165,7 @@ async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
 app = FastAPI(lifespan=lifespan)
 app.include_router(sync_router)
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
+app.add_middleware(LoguruMiddleware)
 
 # Define the ASCII art
 ascii_art = rf"""
@@ -322,8 +329,16 @@ async def register(
     os.makedirs(datasite_folder, exist_ok=True)
 
     logger.info(f"> {email} registering: {token}, snapshot folder: {datasite_folder}")
+    log_analytics_event("/register", email)
 
     return JSONResponse({"status": "success", "token": token}, status_code=200)
+
+
+@app.post("/log_event")
+async def log_event(request: Request, email: Optional[str] = Header(default=None)):
+    data = await request.json()
+    log_analytics_event("/log_event", email, **data)
+    return JSONResponse({"status": "success"}, status_code=200)
 
 
 @app.get("/install.sh")
