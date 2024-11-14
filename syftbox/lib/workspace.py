@@ -30,7 +30,7 @@ class SyftWorkspace:
         """Path to the directory containing plugins."""
         self.plugins = self.data_dir / "plugins"
 
-        # apps dir
+        # apps/apis dir
         self.apps = self.data_dir / "apis"
         """Path to the directory containing apps."""
 

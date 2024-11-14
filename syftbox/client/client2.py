@@ -272,9 +272,7 @@ def prompt_delete_old_data_dir(data_dir: Path) -> bool:
     return Confirm.ask(msg)
 
 
-def run_apps_to_api_migration(config: SyftClientConfig):
-    # Migrate <data_dir>/apps/ to <data_dir>/apis/
-    new_ws = SyftWorkspace(config.data_dir)
+def run_apps_to_api_migration(new_ws: SyftWorkspace):
     old_sync_folder = new_ws.data_dir
     old_apps_dir = old_sync_folder / "apps"
     new_apps_dir = new_ws.apps
@@ -282,9 +280,8 @@ def run_apps_to_api_migration(config: SyftClientConfig):
     if old_apps_dir.exists():
         logger.info(f"Migrating directory apps —> {new_apps_dir.relative_to(new_ws.data_dir)}...")
         if new_apps_dir.exists():
-            logger.warning(f"An api directory already exists at {new_apps_dir}. Skipping migration...")
-        else:
-            shutil.move(str(old_apps_dir), str(new_apps_dir))
+            shutil.rmtree(new_apps_dir)
+        shutil.move(str(old_apps_dir), str(new_apps_dir))
 
 
 def run_migration(config: SyftClientConfig, prompt_remove=True):
@@ -294,13 +291,13 @@ def run_migration(config: SyftClientConfig, prompt_remove=True):
     # then run workspace migration
     new_ws = SyftWorkspace(config.data_dir)
 
+    # migrate workspace/apps to workspace/apis
+    run_apps_to_api_migration(new_ws)
+
     # check for old dir structure and migrate to new
     # data_dir == sync_folder
     old_sync_folder = new_ws.data_dir
     old_datasite_path = Path(old_sync_folder, config.email)
-
-    # migrate workspace/apps to workspace/apis
-    run_apps_to_api_migration(config)
 
     # Option 1: if outdated, completely remove the existing syftbox folder and start fresh
     if new_ws.data_dir.exists():
