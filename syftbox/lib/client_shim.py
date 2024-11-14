@@ -14,7 +14,7 @@ from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.types import PathLike, to_path
 from syftbox.lib.workspace import SyftWorkspace
 
-# this just makes it a bit clear what the default is for the appdata() method
+# this just makes it a bit clear what the default is for the api_data() method
 MY_DATASITE = None
 
 
