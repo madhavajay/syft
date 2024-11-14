@@ -69,7 +69,7 @@ class Client:
 
     def appdata(self, app_name: str, datasite: Optional[str] = MY_DATASITE) -> Path:
         datasite = datasite or self.config.email
-        return self.workspace.datasites / datasite / "api_pipelines" / app_name
+        return self.workspace.datasites / datasite / "api_data" / app_name
 
     def makedirs(self, *paths: PathLike) -> None:
         """Create directories"""

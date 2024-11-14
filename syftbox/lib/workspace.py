@@ -12,9 +12,9 @@ class SyftWorkspace:
         ├── plugins/                    <-- plugins data
         └── datasites/                  <-- synced datasites
             ├── user1@openmined.org/
-            │   └── api_pipelines/
+            │   └── api_data/
             └── user2@openmined.org/
-                └── api_pipelines/
+                └── api_data/
     ```
     """
 

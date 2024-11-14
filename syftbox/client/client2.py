@@ -287,19 +287,6 @@ def run_apps_to_api_migration(config: SyftClientConfig):
             shutil.move(str(old_apps_dir), str(new_apps_dir))
 
 
-def run_app_pipelines_to_api_pipelines_migration(config: SyftClientConfig):
-    # Note: Individual apps currently manage their own pipelines path, so data migrations must be done
-    # by the apps themselves. This migration only finds out if the old pipelines directory is empty
-    # and removes it. Assuming that if the old pipelines directory is empty, all the older app have
-    # already migrated their pipelines data to the new location.
-    workspace = SyftWorkspace(config.data_dir)
-    my_datasite = workspace.datasites / config.email
-    my_app_pipelines_dir = my_datasite / "app_pipelines"
-    if my_app_pipelines_dir.is_dir() and not any(my_app_pipelines_dir.iterdir()):
-        logger.info(f"Removing empty app_pipelines directory at {my_app_pipelines_dir}")
-        shutil.rmtree(str(my_app_pipelines_dir))
-
-
 def run_migration(config: SyftClientConfig, prompt_remove=True):
     # first run config migration
     config.migrate()
@@ -314,9 +301,6 @@ def run_migration(config: SyftClientConfig, prompt_remove=True):
 
     # migrate workspace/apps to workspace/apis
     run_apps_to_api_migration(config)
-
-    # migrate workspace/datasites/*/app_pipelines to workspace/datasites/*/api_pipelines
-    run_app_pipelines_to_api_pipelines_migration(config)
 
     # Option 1: if outdated, completely remove the existing syftbox folder and start fresh
     if new_ws.data_dir.exists():
