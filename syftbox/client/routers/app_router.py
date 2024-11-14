@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -137,9 +138,15 @@ async def app_command(ctx: APIContext, app_name: str, request: dict):
             command = f"uv run {app.path}/command.py {json_arg}"  # Complete command as a single string
             print("command", command)
 
+            # Define the environment variable
+            env = {
+                **os.environ,
+                "SYFTBOX_CLIENT_CONFIG_PATH": ctx.config.path,
+            }
+
             try:
-                # Execute the command with shell=True
-                result = subprocess.run(command, check=True, capture_output=True, text=True, shell=True)
+                # Execute the command with the specified environment
+                result = subprocess.run(command, check=True, capture_output=True, text=True, shell=True, env=env)
 
                 # Trim the output and attempt to parse it as JSON
                 trimmed_output = result.stdout.strip()
@@ -150,6 +157,7 @@ async def app_command(ctx: APIContext, app_name: str, request: dict):
                     # Return trimmed output as plain text if not valid JSON
                     return JSONResponse(content={"output": trimmed_output})
             except subprocess.CalledProcessError as e:
+                print("error", e)
                 return JSONResponse(status_code=500, content={"error": e.stderr.strip()})
 
     raise HTTPException(status_code=404, detail="App not found")

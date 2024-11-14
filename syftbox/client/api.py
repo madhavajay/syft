@@ -29,6 +29,7 @@ def create_api(client: SyftClientInterface) -> FastAPI:
         CORSMiddleware,
         allow_origins=[
             "http://localhost",
+            "http://localhost:5001",
             "http://localhost:8080",
             "http://localhost:8081",
             "http://localhost:8083",
