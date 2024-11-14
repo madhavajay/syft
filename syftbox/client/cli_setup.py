@@ -39,11 +39,16 @@ def prompt_delete_old_data_dir(data_dir: Path) -> bool:
 def get_migration_decision(data_dir: Path):
     migrate_datasite = False
     if data_dir.exists():
-        if has_old_syftbox_version(data_dir) and prompt_delete_old_data_dir(data_dir):
-            rprint.info("Removing old syftbox folder")
-            shutil.rmtree(str(data_dir))
-        else:
-            migrate_datasite = True
+        if has_old_syftbox_version(data_dir):
+            # we need this extra if because we do 2 things:
+            # 1. determine if we want to remove
+            # 2. determine if we want to migrate
+            if prompt_delete_old_data_dir(data_dir):
+                rprint.info("Removing old syftbox folder")
+                shutil.rmtree(str(data_dir))
+                migrate_datasite = False
+            else:
+                migrate_datasite = True
     return migrate_datasite
 
 
