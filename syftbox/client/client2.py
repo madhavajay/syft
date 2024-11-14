@@ -9,7 +9,6 @@ import httpx
 import uvicorn
 from loguru import logger
 from pid import PidFile, PidFileAlreadyLockedError, PidFileAlreadyRunningError
-from rich.prompt import Confirm
 
 from syftbox.__version__ import __version__
 from syftbox.client.api import create_api
@@ -255,24 +254,7 @@ class SyftClientContext(SyftClientInterface):
             raise SyftServerError(f"Failed to log event: {response.text}")
 
 
-def has_old_syftbox_version(data_dir: Path) -> bool:
-    """True if the data_dir was created with an older version of SyftBox"""
-    metadata_file = data_dir / METADATA_FILENAME
-    if not metadata_file.exists():
-        return True
-    metadata = json.loads(metadata_file.read_text())
-    current_version = __version__
-    old_version = metadata.get("version", None)
-    return old_version != current_version
-
-
-def prompt_delete_old_data_dir(data_dir: Path) -> bool:
-    msg = f"[yellow]Found old SyftBox folder at {data_dir}.[/yellow]\n"
-    msg += "[yellow]Press Y to remove the old folder and download it from the server [bold](recommended)[/bold]. Press N to keep the old folder and migrate it.[/yellow]"
-    return Confirm.ask(msg)
-
-
-def run_migration(config: SyftClientConfig, prompt_remove=True):
+def run_migration(config: SyftClientConfig, migrate_datasite=True):
     # first run config migration
     config.migrate()
 
@@ -284,12 +266,8 @@ def run_migration(config: SyftClientConfig, prompt_remove=True):
     old_sync_folder = new_ws.data_dir
     old_datasite_path = Path(old_sync_folder, config.email)
 
-    # Option 1: if outdated, completely remove the existing syftbox folder and start fresh
-    if new_ws.data_dir.exists():
-        if has_old_syftbox_version(new_ws.data_dir) and prompt_remove and prompt_delete_old_data_dir(new_ws.data_dir):
-            logger.info("Removing old syftbox folder")
-            shutil.rmtree(str(old_sync_folder))
-            return
+    if not migrate_datasite:
+        return
 
     # Option 2: if syftbox folder has old structure, migrate to new
     if old_datasite_path.exists():
@@ -314,9 +292,7 @@ def run_migration(config: SyftClientConfig, prompt_remove=True):
 
 
 def run_client(
-    client_config: SyftClientConfig,
-    open_dir: bool = False,
-    log_level: str = "INFO",
+    client_config: SyftClientConfig, open_dir: bool = False, log_level: str = "INFO", migrate_datasite=True
 ) -> int:
     """Run the SyftBox client"""
     client = None
@@ -334,7 +310,7 @@ def run_client(
     try:
         client = SyftClient(client_config, log_level=log_level)
         # we don't want to run migration if another instance of client is already running
-        bool(client.check_pidfile()) and run_migration(client_config)
+        bool(client.check_pidfile()) and run_migration(client_config, migrate_datasite=migrate_datasite)
         (not syftbox_env.DISABLE_ICONS) and client.copy_icons()
         open_dir and client.open_datasites_dir()
         client.start()
