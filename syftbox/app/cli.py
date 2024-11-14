@@ -91,8 +91,7 @@ def run(
     app_name: str,
     config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
 ):
-    """Uninstall a Syftbox app"""
-
+    """Run a Syftbox app"""
     workspace = get_workspace(config_path)
 
     extra_args = []

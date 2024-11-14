@@ -269,11 +269,19 @@ async def browse_datasite(
                 with open(slug_path, "r") as file:
                     content = file.read()
                 return PlainTextResponse(content)
+            elif slug_path.endswith(".json") or slug_path.endswith(".jsonl"):
+                return FileResponse(slug_path, media_type="application/json")
+            elif slug_path.endswith(".yaml") or slug_path.endswith(".yml"):
+                return FileResponse(slug_path, media_type="application/x-yaml")
+            elif slug_path.endswith(".log") or slug_path.endswith(".txt"):
+                return FileResponse(slug_path, media_type="text/plain")
+            elif slug_path.endswith(".py"):
+                return FileResponse(slug_path, media_type="text/plain")
             else:
                 return FileResponse(slug_path, media_type="application/octet-stream")
 
         # show directory
-        if not path.endswith("/"):
+        if not path.endswith("/") and os.path.exists(path + "/") and os.path.isdir(path + "/"):
             return RedirectResponse(url=f"{path}/")
 
         index_file = os.path.abspath(slug_path + "/" + "index.html")
@@ -299,7 +307,9 @@ async def browse_datasite(
             )
             return html_content
         else:
-            return f"Bad Slug {slug}"
+            # return 404
+            message_404 = f"No file or directory found at /datasites/{datasite_part}{slug}"
+            return HTMLResponse(content=message_404, status_code=404)
 
     return f"No Datasite {datasite_part} exists"
 
