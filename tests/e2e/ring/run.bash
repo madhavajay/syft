@@ -73,7 +73,7 @@ path_ring_app() {
 path_ring_pipeline() {
     # get path to client's ring app pipeline
     local user=$1
-    echo "$(path_user_datasite $user)/app_pipelines/ring"
+    echo "$(path_user_datasite $user)/api_pipelines/ring"
 }
 
 wait_for_ring_app() {
