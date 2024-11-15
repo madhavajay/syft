@@ -75,6 +75,7 @@ class Client:
         Use this property instead of hardcoding your API request's directory name,
         as SyftBox may dynamically change it to prevent conflicts.
         """
+        # The below works coz we set the cwd to the app's path before executing run.sh (see find_and_run_script method)
         api_path = Path.cwd()
         api_name = api_path.name
         return api_name
