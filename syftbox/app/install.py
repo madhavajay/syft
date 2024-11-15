@@ -738,7 +738,7 @@ def install(apps_dir: Path, repository: str, branch: str) -> InstallResult:
             # Creates a Symbolic Link ( ~/Desktop/Syftbox/app/<rep> -> ~/.syftbox/apps/<rep>)
             # Handles: If ~/.syftbox/apps/<repository_name> already exists (replaces it)
             step = "creating Symbolic Link"
-            output_path = f"{apps_dir}/apps/{tmp_clone_path.split('/')[-1]}"
+            output_path = f"{apps_dir}/apis/{tmp_clone_path.split('/')[-1]}"
             app_config_path = create_symbolic_link(
                 apps_dir=apps_dir,
                 app_path=output_path,
