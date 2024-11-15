@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 DEFAULT_APPS = [
+    "https://github.com/OpenMined/ring",
     "https://github.com/OpenMined/logged_in",
 ]
 
