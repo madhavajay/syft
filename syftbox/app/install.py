@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import mkdtemp
 from types import SimpleNamespace
+from syftbox.lib import Client
 
 from typing_extensions import Any, Optional
 
@@ -735,10 +736,11 @@ def install(apps_dir: Path, repository: str, branch: str) -> InstallResult:
                 sanitized_path=sanitized_path,
             )
         else:
+            client = Client.load()
             # Creates a Symbolic Link ( ~/Desktop/Syftbox/app/<rep> -> ~/.syftbox/apps/<rep>)
             # Handles: If ~/.syftbox/apps/<repository_name> already exists (replaces it)
             step = "creating Symbolic Link"
-            output_path = f"{apps_dir}/apis/{tmp_clone_path.split('/')[-1]}"
+            output_path = f"{client.workspace.apps}/{tmp_clone_path.split('/')[-1]}"
             app_config_path = create_symbolic_link(
                 apps_dir=apps_dir,
                 app_path=output_path,
