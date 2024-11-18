@@ -22,6 +22,9 @@ class ServerSettings(BaseSettings):
     data_folder: Path = Field(default=Path("data").resolve())
     """Absolute path to the server data folder"""
 
+    email_service_api_key: str = Field(default="")
+    """API key for the email service"""
+
     @field_validator("data_folder", mode="after")
     def data_folder_abs(cls, v):
         return Path(v).expanduser().resolve()
