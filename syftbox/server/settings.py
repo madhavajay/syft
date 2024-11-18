@@ -1,7 +1,8 @@
+from datetime import timedelta
 from pathlib import Path
 
 from fastapi import Request
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing_extensions import Self, Union
 
@@ -25,12 +26,23 @@ class ServerSettings(BaseSettings):
     email_service_api_key: str = Field(default="")
     """API key for the email service"""
 
+    jwt_secret: SecretStr = ""
+    jwt_expiration: timedelta | None = None
+    jwt_algorithm: str = "HS256"
     no_auth: bool = Field(default=True)
-    """Disable authentication"""
 
     @field_validator("data_folder", mode="after")
     def data_folder_abs(cls, v):
         return Path(v).expanduser().resolve()
+
+    @model_validator(mode="after")
+    def auth_secret_not_empty(self):
+        if not self.no_auth and not self.jwt_secret:
+            raise ValueError("auth is enabled, but no jwt_secret is defined")
+
+        # NOTE to ensure we're never accidentally disabling auth
+        if self.no_auth and self.jwt_secret:
+            raise ValueError("jwt_secret is defined, but no_auth is enabled")
 
     @property
     def folders(self) -> list[Path]:
