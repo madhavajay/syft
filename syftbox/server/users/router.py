@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr
 
+from syftbox.lib.email import send_token_email
 from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.users.auth import generate_token, get_current_user
 
@@ -18,7 +19,9 @@ def get_token(req: TokenRequest, server_settings: ServerSettings = Depends(get_s
 
     # for testing purposes, we will just return the token
     if server_settings.no_auth:
-        return generate_token(server_settings, email)
+        token = generate_token(server_settings, email)
+        send_token_email(email, token)
+        return "Token Email sent succesfully! Check your email."
     else:
         return {"success": True}
 

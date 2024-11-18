@@ -15,6 +15,7 @@ from syftbox.__version__ import __version__
 from syftbox.client.client2 import METADATA_FILENAME
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.constants import DEFAULT_DATA_DIR
+from syftbox.lib.email import send_token_email
 from syftbox.lib.exceptions import ClientConfigException
 from syftbox.lib.validators import DIR_NOT_EMPTY, is_valid_dir, is_valid_email
 
@@ -96,7 +97,7 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
         }
         response = httpx.post(f"{conf.server_url}auth/token", json=payload)
         response.raise_for_status()
-        rprint(f"Token: {response.text}")
+        rprint(f"{response.text}")
         conf.access_token = Prompt.ask("Please enter the token sent to your email")
 
     while True:
