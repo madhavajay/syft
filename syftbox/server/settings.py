@@ -25,6 +25,9 @@ class ServerSettings(BaseSettings):
     email_service_api_key: str = Field(default="")
     """API key for the email service"""
 
+    no_auth: bool = Field(default=True)
+    """Disable authentication"""
+
     @field_validator("data_folder", mode="after")
     def data_folder_abs(cls, v):
         return Path(v).expanduser().resolve()

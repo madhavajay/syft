@@ -6,8 +6,10 @@ import json
 import shutil
 from pathlib import Path
 
+import httpx
 from rich import print as rprint
 from rich.prompt import Confirm, Prompt
+from typer import Exit
 
 from syftbox.__version__ import __version__
 from syftbox.client.client2 import METADATA_FILENAME
@@ -87,6 +89,31 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
             conf.set_server_url(server)
         if port != conf.client_url.port:
             conf.set_port(port)
+
+    if conf.access_token is None:
+        payload = {
+            "email": email,
+        }
+        response = httpx.post(f"{conf.server_url}auth/token", json=payload)
+        response.raise_for_status()
+        rprint(f"Token: {response.text}")
+        conf.access_token = Prompt.ask("Please enter the token sent to your email")
+
+    while True:
+        response = httpx.post(
+            f"{conf.server_url}auth/validate",
+            headers={"Authorization": f"Bearer {conf.access_token}"},
+        )
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            rprint(f"[bold red]Error[/bold red]: {e}")
+            conf.access_token = Prompt.ask("Please enter the token sent to your email")
+            continue
+        if response.json().get("email") != email:
+            rprint("[bold red]Error[/bold red]: Invalid token")
+            raise Exit(1)
+        break
 
     # DO NOT SAVE THE CONFIG HERE.
     # We don't know if the client will accept the config yet
