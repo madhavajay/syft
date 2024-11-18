@@ -1,10 +1,12 @@
+from typing import Union
+
 from pydantic import BaseModel, EmailStr, Field, NameEmail
 
 from .constants import FROM_EMAIl
 
 
 class SendEmailRequest(BaseModel):
-    to: EmailStr | NameEmail
+    to: Union[EmailStr, NameEmail]
     subject: str
     html: str
 
