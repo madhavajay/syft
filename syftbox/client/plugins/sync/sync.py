@@ -100,9 +100,7 @@ class DatasiteState:
 
     def get_remote_state(self) -> list[FileMetadata]:
         if self.remote_state is None:
-            self.remote_state = get_remote_state(
-                self.client.server_client, email=self.client.email, path=Path(self.email)
-            )
+            self.remote_state = get_remote_state(self.client.server_client, path=Path(self.email))
         return self.remote_state
 
     def is_in_sync(self) -> bool:
