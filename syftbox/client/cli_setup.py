@@ -53,7 +53,9 @@ def get_migration_decision(data_dir: Path):
     return migrate_datasite
 
 
-def setup_config_interactive(config_path: Path, email: str, data_dir: Path, server: str, port: int) -> SyftClientConfig:
+def setup_config_interactive(
+    config_path: Path, email: str, data_dir: Path, server: str, port: int, skip_auth: bool = False
+) -> SyftClientConfig:
     """Setup the client configuration interactively. Called from CLI"""
 
     config_path = config_path.expanduser().resolve()
@@ -89,7 +91,7 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
         if port != conf.client_url.port:
             conf.set_port(port)
 
-    if conf.access_token is None:
+    if conf.access_token is None and not skip_auth:
         response = httpx.post(f"{conf.server_url}auth/request_email_token", json={"email": email})
         response.raise_for_status()
         # if email_token is there, auth is disabled
