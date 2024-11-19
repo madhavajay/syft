@@ -166,7 +166,7 @@ def send_email(
     }
 
     headers = {
-        "Authorization": f"Bearer {server_settings.email_service_api_key}",
+        "Authorization": f"Bearer {server_settings.sendgrid_secret.get_secret_value()}",
         "Content-Type": "application/json"
     }
 
@@ -178,6 +178,7 @@ def send_email(
             timeout=10.0
         )
         response.raise_for_status()
+        logger.info(f"Email sent to {receiver_email}")
         return {"success": True, "status_code": response.status_code}
     except httpx.HTTPError as e:
-        return {"success": False, "error": str(e)}  
+        logger.error(str(e))
