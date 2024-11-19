@@ -329,7 +329,7 @@ def load_config(path: str) -> SimpleNamespace:
     return dict_to_namespace(data)
 
 
-def create_symbolic_link(apps_dir: Path, app_path: str, sanitized_path: str):
+def create_symbolic_link(apps_dir: Path, sanitized_path: str):
     """
     Creates a symbolic link from the application directory in the Syftbox directory to the user's sync folder.
 
@@ -350,8 +350,7 @@ def create_symbolic_link(apps_dir: Path, app_path: str, sanitized_path: str):
         Suppose you want to create a symbolic link for an application located at `/home/user/.syftbox/apps/PySyft`:
         ```python
         create_symbolic_link(
-            client_config=client_config,
-            app_path="/home/user/.syftbox/apps/PySyft",
+            apps_dir=SyftWorkspace.apps, # ex "/home/user/SyftBox/apis",
             sanitized_path="OpenMined/PySyft"
         )
         ```
@@ -736,14 +735,11 @@ def install(apps_dir: Path, repository: str, branch: str) -> InstallResult:
                 sanitized_path=sanitized_path,
             )
         else:
-            client = Client.load()
             # Creates a Symbolic Link ( ~/Desktop/Syftbox/app/<rep> -> ~/.syftbox/apps/<rep>)
             # Handles: If ~/.syftbox/apps/<repository_name> already exists (replaces it)
             step = "creating Symbolic Link"
-            output_path = f"{client.workspace.apps}/{tmp_clone_path.split('/')[-1]}"
             app_config_path = create_symbolic_link(
                 apps_dir=apps_dir,
-                app_path=output_path,
                 sanitized_path=tmp_clone_path,
             )
 
