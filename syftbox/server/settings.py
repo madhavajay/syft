@@ -1,5 +1,6 @@
 from datetime import timedelta
 from pathlib import Path
+from typing import Optional
 
 from fastapi import Request
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -19,7 +20,7 @@ class ServerSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(env_prefix="SYFTBOX_", env_file="server.env")
-    sendgrid_secret: SecretStr | None = None
+    sendgrid_secret: Optional[SecretStr] = None
 
     data_folder: Path = Field(default=Path("data").resolve())
     """Absolute path to the server data folder"""
@@ -29,7 +30,7 @@ class ServerSettings(BaseSettings):
 
     jwt_secret: SecretStr = ""
     jwt_email_token_exp: timedelta = timedelta(hours=1)
-    jwt_access_token_exp: timedelta | None = None
+    jwt_access_token_exp: Optional[timedelta] = None
     jwt_algorithm: str = "HS256"
     auth_enabled: bool = False
 
