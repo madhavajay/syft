@@ -19,8 +19,6 @@ class ServerSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(env_prefix="SYFTBOX_", env_file="server.env")
-    sendgrid_secret: str | None = None
-
     sendgrid_secret: SecretStr | None = None
 
     data_folder: Path = Field(default=Path("data").resolve())
