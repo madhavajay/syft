@@ -18,7 +18,8 @@ class ServerSettings(BaseSettings):
     see: https://docs.pydantic.dev/latest/concepts/pydantic_settings/#parsing-environment-variable-values
     """
 
-    model_config = SettingsConfigDict(env_prefix="SYFTBOX_")
+    model_config = SettingsConfigDict(env_prefix="SYFTBOX_", env_file=".env")
+    sendgrid_secret: str | None = None
 
     sendgrid_secret: SecretStr | None = None
 
@@ -45,6 +46,11 @@ class ServerSettings(BaseSettings):
         # NOTE to ensure we're never accidentally disabling auth
         if not self.auth_enabled and self.jwt_secret:
             raise ValueError("jwt_secret is defined, but no_auth is enabled")
+
+    @model_validator(mode="after")
+    def sendgrid_secret_not_empty(self):
+        if self.auth_enabled and self.sendgrid_secret is None:
+            raise ValueError("auth is enabled, but no sendgrid_secret is defined")
 
     @property
     def folders(self) -> list[Path]:
