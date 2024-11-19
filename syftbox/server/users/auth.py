@@ -31,8 +31,7 @@ def _validate_jwt(server_settings: ServerSettings, token: str) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-def _generate_jwt(server_settings: ServerSettings, email: str) -> str:
-    data = {"email": email}
+def _generate_jwt(server_settings: ServerSettings, data: dict) -> str:
     if server_settings.jwt_expiration is not None:
         data["exp"] = datetime.now(tz=timezone.utc) + server_settings.jwt_expiration
 
@@ -49,13 +48,24 @@ def validate_token(server_settings:ServerSettings, token: str) -> dict:
     else:
         return _validate_jwt(server_settings, token)
 
-def generate_token(server_settings:ServerSettings, email: str) -> str:
-    # base64 encoding for testing purposes
+def generate_access_token(server_settings:ServerSettings, email: str) -> str:
+    data = {"email": email}
+    return generate_token(data)
+    
+def generate_password_reset_token(server_settings:ServerSettings, email: str) -> str:
+    data = {
+        "email": email,
+        "reset_password": True
+    }
+    return generate_token(data)
 
+def generate_token(server_settings:ServerSettings, data:json) -> str:
+    # base64 encoding for testing purposes
     if server_settings.no_auth:
-        return base64.b64encode(json.dumps({"email": email}).encode()).decode()
+        return base64.b64encode(json.dumps(data).encode()).decode()
     else:
-        return _generate_jwt(server_settings, email)
+        return _generate_jwt(server_settings, data)
+
 
 def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Security(bearer_scheme)],
