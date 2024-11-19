@@ -1,16 +1,10 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import os
-from rich import print as rprint
-from jinja2 import Template
-from loguru import logger
 import httpx
+from jinja2 import Template
 
 from syftbox.server.settings import ServerSettings
 
 SENDER_EMAIL = "noreply@openmined.org"
-SENDGRID_SERVER = 'https://api.sendgrid.com/v3/mail/send'
+SENDGRID_SERVER = "https://api.sendgrid.com/v3/mail/send"
 SMTP_PORT = 465
 
 token_email_template = """
@@ -134,59 +128,40 @@ reset_password_token_email_template = """
 """
 
 
-def send_token_email(user_email: str, token: str):
+def send_token_email(server_settings, user_email: str, token: str):
     template = Template(token_email_template)
     body = template.render(email=user_email, token=token)
     send_email(
+        server_settings=server_settings,
         receiver_email=user_email,
         subject="SyftBox Token",
-        body=body,
-        mimetype="html"
-    )
-
-def send_token_reset_password(user_email: str, token: str):
-    template = Template(reset_password_token_email_template)
-    body = template.render(email=user_email, token=token)
-    send_email(
-        receiver_email=user_email,
-        subject="SyftBox Reset Password Token",
         body=body,
         mimetype="html",
     )
 
+
 def send_email(
+    server_settings: ServerSettings,
     receiver_email: str,
     subject: str,
     body: str,
-    server_settings: ServerSettings,
     mimetype: str = "plain",
 ):
-
     payload = {
-        "personalizations": [{
-            "to": [{"email": receiver_email}]
-        }],
+        "personalizations": [{"to": [{"email": receiver_email}]}],
         "from": {"email": SENDER_EMAIL},
         "subject": subject,
-        "content": [{
-            "type": mimetype,
-            "value": body
-        }]
+        "content": [{"type": mimetype, "value": body}],
     }
 
     headers = {
-        "Authorization": f"Bearer {server_settings.email_service_api_key}",
-        "Content-Type": "application/json"
+        "Authorization": f"Bearer {server_settings.sendgrid_secret.get_secret_value()}",
+        "Content-Type": "application/json",
     }
 
     try:
-        response = httpx.post(
-            SENDGRID_SERVER,
-            json=payload,
-            headers=headers,
-            timeout=10.0
-        )
+        response = httpx.post(SENDGRID_SERVER, json=payload, headers=headers, timeout=10.0)
         response.raise_for_status()
         return {"success": True, "status_code": response.status_code}
     except httpx.HTTPError as e:
-        return {"success": False, "error": str(e)}  
+        return {"success": False, "error": str(e)}
