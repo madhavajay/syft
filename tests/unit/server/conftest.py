@@ -21,6 +21,13 @@ PERMFILE_DICT = {
 }
 
 
+def get_access_token(client: TestClient, email: str) -> str:
+    response = client.post("/auth/request_email_token", json={"email": email})
+    email_token = response.json()["email_token"]
+    response = client.post("/auth/validate_email_token", headers={"Authorization": f"Bearer {email_token}"})
+    return response.json()["access_token"]
+
+
 @pytest.fixture(scope="function")
 def client(monkeypatch, tmp_path):
     """Every client gets their own snapshot folder at `tmp_path`"""
@@ -49,6 +56,8 @@ def client(monkeypatch, tmp_path):
     permfile.write_text(json.dumps(PERMFILE_DICT))
 
     with TestClient(app) as client:
+        access_token = get_access_token(client, TEST_DATASITE_NAME)
+        client.headers["Authorization"] = f"Bearer {access_token}"
         yield client
 
 
@@ -73,6 +82,8 @@ def client_without_perms(monkeypatch, tmp_path):
     permfile.write_text("")
 
     with TestClient(app) as client:
+        access_token = get_access_token(client, TEST_DATASITE_NAME)
+        client.headers["Authorization"] = f"Bearer {access_token}"
         yield client
 
 

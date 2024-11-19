@@ -12,6 +12,7 @@ from syftbox.lib.workspace import SyftWorkspace
 from syftbox.server.server import app as server_app
 from syftbox.server.server import lifespan as server_lifespan
 from syftbox.server.settings import ServerSettings
+from tests.unit.server.conftest import get_access_token
 
 
 class MockClient(SyftClientInterface):
@@ -19,6 +20,9 @@ class MockClient(SyftClientInterface):
         self.config = config
         self.workspace = workspace
         self.server_client = server_client
+
+        access_token = get_access_token(self.server_client, self.email)
+        self.server_client.headers["Authorization"] = f"Bearer {access_token}"
 
     @property
     def email(self):

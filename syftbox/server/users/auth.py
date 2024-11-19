@@ -57,7 +57,7 @@ def generate_token(server_settings: ServerSettings, data: json) -> str:
     Returns:
         str: _description_
     """
-    if server_settings.auth_enabled:
+    if not server_settings.auth_enabled:
         return base64.b64encode(json.dumps(data).encode()).decode()
     else:
         return _generate_jwt(server_settings, data)
@@ -78,7 +78,7 @@ def validate_token(server_settings: ServerSettings, token: str) -> dict:
     Returns:
         dict: decoded payload
     """
-    if server_settings.auth_enabled:
+    if not server_settings.auth_enabled:
         return json.loads(base64.b64decode(token).decode())
     else:
         return _validate_jwt(server_settings, token)
