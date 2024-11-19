@@ -31,7 +31,7 @@ class ServerSettings(BaseSettings):
     jwt_secret: SecretStr = ""
     jwt_expiration: timedelta | None = None
     jwt_algorithm: str = "HS256"
-    no_auth: bool = Field(default=True)
+    auth_enabled: bool = False
 
     @field_validator("data_folder", mode="after")
     def data_folder_abs(cls, v):
@@ -39,11 +39,11 @@ class ServerSettings(BaseSettings):
 
     @model_validator(mode="after")
     def auth_secret_not_empty(self):
-        if not self.no_auth and not self.jwt_secret:
+        if self.auth_enabled and not self.jwt_secret:
             raise ValueError("auth is enabled, but no jwt_secret is defined")
 
         # NOTE to ensure we're never accidentally disabling auth
-        if self.no_auth and self.jwt_secret:
+        if not self.auth_enabled and self.jwt_secret:
             raise ValueError("jwt_secret is defined, but no_auth is enabled")
 
     @property
