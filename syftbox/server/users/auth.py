@@ -42,30 +42,60 @@ def _generate_jwt(server_settings: ServerSettings, data: dict) -> str:
     )
 
 
-def validate_token(server_settings:ServerSettings, token: str) -> dict:
-    if server_settings.no_auth:
-        return json.loads(base64.b64decode(token).decode())
-    else:
-        return _validate_jwt(server_settings, token)
+def generate_token(server_settings: ServerSettings, data: json) -> str:
+    """
+    payload looks like:
+    {email: x, iat: date, type: access_token, exp: date}
 
-def generate_access_token(server_settings:ServerSettings, email: str) -> str:
-    data = {"email": email}
-    return generate_token(data)
-    
-def generate_password_reset_token(server_settings:ServerSettings, email: str) -> str:
-    data = {
-        "email": email,
-        "reset_password": True
-    }
-    return generate_token(data)
+    If no auth, the token is a base64 encoded json string.
+    If auth, the token is a jwt token.
 
-def generate_token(server_settings:ServerSettings, data:json) -> str:
-    # base64 encoding for testing purposes
-    if server_settings.no_auth:
+    Args:
+        server_settings (ServerSettings): server settings
+        data (json): data to encode
+
+    Returns:
+        str: _description_
+    """
+    if server_settings.auth_enabled:
         return base64.b64encode(json.dumps(data).encode()).decode()
     else:
         return _generate_jwt(server_settings, data)
 
+
+def validate_token(server_settings: ServerSettings, token: str) -> dict:
+    """
+    payload looks like:
+    {email: x, iat: date, type: access_token, exp: date}
+
+    If no auth, the token is a base64 encoded json string.
+    If auth, the token is a jwt token.
+
+    Args:
+        server_settings (ServerSettings): server settings
+        token (str): token to decode
+
+    Returns:
+        dict: decoded payload
+    """
+    if server_settings.auth_enabled:
+        return json.loads(base64.b64decode(token).decode())
+    else:
+        return _validate_jwt(server_settings, token)
+
+
+def generate_access_token(server_settings: ServerSettings, email: str) -> str:
+    data = {"email": email, "type": "access_token"}
+    return generate_token(data)
+
+
+def generate_email_token(server_settings: ServerSettings, email: str) -> str:
+    data = {"email": email, "type": "email_token"}
+    return generate_token(data)
+
+
+def get_user_from_email_token(server_settings: ServerSettings, token: str) -> str:
+    pass
 
 def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Security(bearer_scheme)],
