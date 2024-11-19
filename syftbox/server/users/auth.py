@@ -86,16 +86,28 @@ def validate_token(server_settings: ServerSettings, token: str) -> dict:
 
 def generate_access_token(server_settings: ServerSettings, email: str) -> str:
     data = {"email": email, "type": "access_token"}
-    return generate_token(data)
+    return generate_token(server_settings, data)
 
 
 def generate_email_token(server_settings: ServerSettings, email: str) -> str:
     data = {"email": email, "type": "email_token"}
-    return generate_token(data)
+    return generate_token(server_settings, data)
 
 
-def get_user_from_email_token(server_settings: ServerSettings, token: str) -> str:
-    pass
+def get_user_from_email_token(
+    credentials: Annotated[HTTPAuthorizationCredentials, Security(bearer_scheme)],
+    server_settings: Annotated[ServerSettings, Depends(get_server_settings)],
+) -> str:
+    try:
+        data = validate_token(server_settings, credentials.credentials)
+        return data['email']
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=e.response.reason_phrase,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
 
 def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Security(bearer_scheme)],
