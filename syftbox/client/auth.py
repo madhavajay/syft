@@ -20,7 +20,7 @@ def has_valid_access_token(conf: SyftClientConfig, auth_client: httpx.Client) ->
         rprint(f"[red]An unexpected error occurred: {response.text}, re-authenticating.[/red]")
         return False
 
-    authed_email = response.text
+    authed_email = response.json().get("email", None)
     is_valid = authed_email == conf.email
     if not is_valid:
         rprint(
