@@ -124,7 +124,7 @@ def validate_email_token(auth_client: httpx.Client) -> str:
 
 
 def authenicate_user(conf: SyftClientConfig) -> str:
-    auth_client = httpx.Client(base_url=conf.server_url)
+    auth_client = httpx.Client(base_url=str(conf.server_url))
     response = auth_client.post(
         "/auth/request_email_token",
         json={"email": conf.email},
@@ -138,8 +138,6 @@ def authenicate_user(conf: SyftClientConfig) -> str:
     else:
         access_token = validate_email_token(auth_client)
 
-    response.raise_for_status()
-    access_token = response.json()["access_token"]
     return access_token
 
 

@@ -27,7 +27,7 @@ def _validate_jwt(server_settings: ServerSettings, token: str) -> dict:
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except jwt.InvalidSignatureError:
+    except Exception as e:
         raise HTTPException(
             status_code=401,
             detail="Invalid token",
