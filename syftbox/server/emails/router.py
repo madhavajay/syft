@@ -19,6 +19,7 @@ async def send_email(
 ) -> bool:
     if not server_settings.email_service_api_key:
         raise httpx.HTTPStatusError("Email service API key is not set", request=None, response=None)
+
     async with httpx.AsyncClient() as client:
         response = await client.post(
             EMAIL_SERVICE_API_URL,
@@ -49,6 +50,7 @@ async def send_batch_email(
     """
     if not server_settings.email_service_api_key:
         raise httpx.HTTPStatusError("Email service API key is not set", request=None, response=None)
+
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{EMAIL_SERVICE_API_URL}/batch",
