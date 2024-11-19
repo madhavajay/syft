@@ -48,10 +48,14 @@ class ServerSettings(BaseSettings):
         if not self.auth_enabled and self.jwt_secret:
             raise ValueError("jwt_secret is defined, but no_auth is enabled")
 
+        return self
+
     @model_validator(mode="after")
     def sendgrid_secret_not_empty(self):
         if self.auth_enabled and self.sendgrid_secret is None:
             raise ValueError("auth is enabled, but no sendgrid_secret is defined")
+
+        return self
 
     @property
     def folders(self) -> list[Path]:

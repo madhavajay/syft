@@ -42,7 +42,7 @@ def _generate_jwt(server_settings: ServerSettings, data: dict) -> str:
     )
 
 
-def _generate_base64(data: dict) -> str:
+def _generate_base64(server_settings: ServerSettings, data: dict) -> str:
     try:
         payload = {}
         for k, v in data.items():
@@ -59,7 +59,7 @@ def _generate_base64(data: dict) -> str:
         )
 
 
-def _validate_base64(token: str) -> dict:
+def _validate_base64(server_settings: ServerSettings, token: str) -> dict:
     try:
         payload = json.loads(base64.b64decode(token).decode())
     except Exception as e:
@@ -95,7 +95,7 @@ def generate_token(server_settings: ServerSettings, data: json) -> str:
         str: encoded token
     """
     if not server_settings.auth_enabled:
-        return base64.b64encode(json.dumps(data).encode()).decode()
+        return _generate_base64(server_settings, data)
     else:
         return _generate_jwt(server_settings, data)
 
@@ -115,7 +115,7 @@ def validate_token(server_settings: ServerSettings, token: str) -> dict:
         dict: decoded payload
     """
     if not server_settings.auth_enabled:
-        return json.loads(base64.b64decode(token).decode())
+        return _validate_base64(server_settings, token)
     else:
         return _validate_jwt(server_settings, token)
 
@@ -128,7 +128,7 @@ def generate_access_token(server_settings: ServerSettings, email: str) -> str:
     }
     if server_settings.jwt_access_token_exp:
         data["exp"] = data["iat"] + server_settings.jwt_access_token_exp
-    return generate_token(data)
+    return generate_token(server_settings, data)
 
 
 def generate_email_token(server_settings: ServerSettings, email: str) -> str:
@@ -139,7 +139,7 @@ def generate_email_token(server_settings: ServerSettings, email: str) -> str:
     }
     if server_settings.jwt_email_token_exp:
         data["exp"] = data["iat"] + server_settings.jwt_email_token_exp
-    return generate_token(data)
+    return generate_token(server_settings, data)
 
 
 def validate_access_token(server_settings: ServerSettings, token: str) -> dict:
@@ -150,7 +150,7 @@ def validate_access_token(server_settings: ServerSettings, token: str) -> dict:
             detail="Invalid token type",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return data["email"]
+    return data
 
 
 def validate_email_token(server_settings: ServerSettings, token: str) -> dict:
@@ -161,7 +161,7 @@ def validate_email_token(server_settings: ServerSettings, token: str) -> dict:
             detail="Invalid token type",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return data["email"]
+    return data
 
 
 def get_user_from_email_token(
