@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 import httpx
+import typer
 from rich import print as rprint
 from rich.prompt import Confirm, Prompt
 
@@ -92,27 +93,54 @@ def setup_config_interactive(
             conf.set_port(port)
 
     if conf.access_token is None and not skip_auth:
-        response = httpx.post(f"{conf.server_url}auth/request_email_token", json={"email": email})
-        response.raise_for_status()
-        # if email_token is there, auth is disabled
-        email_token = response.json().get("email_token", None)
-        if email_token:
-            rprint("You are in [bold]development mode[/bold]. No email validation required.")
-        else:
-            # auth is enabled
-            # TODO what if
-            email_token = Prompt.ask("Please enter the token sent to your email")
-
-        response = httpx.post(
-            f"{conf.server_url}auth/validate_email_token", headers={"Authorization": f"Bearer {email_token}"}
-        )
-        # TODO what if request fails, email_token is invalid
-        response.raise_for_status()
-        conf.access_token = response.json()["access_token"]
+        conf.access_token = authenicate_user(conf)
 
     # DO NOT SAVE THE CONFIG HERE.
     # We don't know if the client will accept the config yet
     return conf
+
+
+def validate_email_token(auth_client: httpx.Client) -> str:
+    is_valid = False
+    while not is_valid:
+        email_token = Prompt.ask(
+            "[yellow]Please enter the token sent to your email. Also check your spam folder[/yellow]"
+        )
+
+        response = auth_client.post(
+            "/auth/validate_email_token",
+            headers={"Authorization": f"Bearer {email_token}"},
+        )
+
+        if response.status_code == 200:
+            is_valid = True
+            access_token = response.json()["access_token"]
+        elif response.status_code == 401:
+            rprint("[red]Invalid token, please copy the full token from your email[/red]")
+        else:
+            rprint(f"[red]An unexpected error occurred: {response.text}[/red]")
+            typer.Exit(1)
+    return access_token
+
+
+def authenicate_user(conf: SyftClientConfig) -> str:
+    auth_client = httpx.Client(base_url=conf.server_url)
+    response = auth_client.post(
+        "/auth/request_email_token",
+        json={"email": conf.email},
+    )
+    response.raise_for_status()
+
+    # if email_token is there, auth is disabled and we get the email_token directly
+    email_token = response.json().get("email_token", None)
+    if email_token:
+        rprint("[yellow]You are in [bold]development mode[/bold]. No email validation required.[/yellow]")
+    else:
+        access_token = validate_email_token(auth_client)
+
+    response.raise_for_status()
+    access_token = response.json()["access_token"]
+    return access_token
 
 
 def prompt_data_dir(default_dir: Path = DEFAULT_DATA_DIR) -> Path:
