@@ -150,3 +150,14 @@ def prompt_email() -> str:
             rprint(f"[bold red]Invalid email[/bold red]: '{email}'")
             continue
         return email
+
+
+def prompt_password() -> str:
+    while True:
+        password = Prompt.ask("[bold]Password[/bold]")
+        verify_password = Prompt.ask("[bold]Verify Password[/bold]")
+        if password != verify_password:
+            rprint(f"[bold red]Passwords do not match![/bold red]")
+            continue
+        return password
+

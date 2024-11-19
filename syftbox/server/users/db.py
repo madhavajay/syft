@@ -27,6 +27,7 @@ def init_user_table():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(create_table_query)
+    add_user("changethis", "info@openmined.org")
     conn.commit()
     conn.close()
 
