@@ -20,6 +20,14 @@ def handle_json_response(endpoint: str, response: httpx.Response) -> Any:
     raise SyftServerError(f"[{endpoint}] call failed: {response.text}")
 
 
+def get_access_token(client: httpx.Client, email: str) -> str:
+    """Only for development purposes, should not be used in production"""
+    response = client.post("/auth/request_email_token", json={"email": email})
+    email_token = response.json()["email_token"]
+    response = client.post("/auth/validate_email_token", headers={"Authorization": f"Bearer {email_token}"})
+    return response.json()["access_token"]
+
+
 def get_datasite_states(client: httpx.Client, email: str) -> dict[str, list[FileMetadata]]:
     response = client.post(
         "/sync/datasite_states",
