@@ -141,7 +141,7 @@ def send_token_email(user_email: str, token: str):
         receiver_email=user_email,
         subject="SyftBox Token",
         body=body,
-        mimetype="html"
+        mimetype="text/html"
     )
 
 def send_token_reset_password(user_email: str, token: str):
@@ -151,7 +151,7 @@ def send_token_reset_password(user_email: str, token: str):
         receiver_email=user_email,
         subject="SyftBox Reset Password Token",
         body=body,
-        mimetype="html",
+        mimetype="text/html",
     )
 
 def send_email(
@@ -159,7 +159,7 @@ def send_email(
     subject: str,
     body: str,
     server_settings: ServerSettings,
-    mimetype: str = "plain",
+    mimetype: str = "text/html",
 ):
 
     payload = {
