@@ -27,7 +27,8 @@ class ServerSettings(BaseSettings):
     """API key for the email service"""
 
     jwt_secret: SecretStr = ""
-    jwt_expiration: timedelta | None = None
+    jwt_email_token_exp: timedelta = timedelta(hours=1)
+    jwt_access_token_exp: timedelta | None = None
     jwt_algorithm: str = "HS256"
     auth_enabled: bool = False
 

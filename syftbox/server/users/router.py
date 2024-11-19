@@ -20,6 +20,7 @@ class EmailTokenResponse(BaseModel):
 class AccessTokenResponse(BaseModel):
     access_token: str
 
+
 @router.post("/request_email_token")
 def get_token(req: EmailTokenRequest, server_settings: ServerSettings = Depends(get_server_settings)):
     email = req.email
