@@ -9,13 +9,11 @@ from pathlib import Path
 import httpx
 from rich import print as rprint
 from rich.prompt import Confirm, Prompt
-from typer import Exit
 
 from syftbox.__version__ import __version__
 from syftbox.client.client2 import METADATA_FILENAME
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.constants import DEFAULT_DATA_DIR
-from syftbox.lib.email import send_token_email
 from syftbox.lib.exceptions import ClientConfigException
 from syftbox.lib.validators import DIR_NOT_EMPTY, is_valid_dir, is_valid_email
 
@@ -92,29 +90,23 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
             conf.set_port(port)
 
     if conf.access_token is None:
-        payload = {
-            "email": email,
-        }
-        response = httpx.post(f"{conf.server_url}auth/token", json=payload)
+        response = httpx.post(f"{conf.server_url}auth/request_email_token", json={"email": email})
         response.raise_for_status()
-        rprint(f"{response.text}")
-        conf.access_token = Prompt.ask("Please enter the token sent to your email")
+        # if email_token is there, auth is disabled
+        email_token = response.json().get("email_token", None)
+        if email_token:
+            rprint("You are in [bold]development mode[/bold]. No email validation required.")
+        else:
+            # auth is enabled
+            # TODO what if
+            email_token = Prompt.ask("Please enter the token sent to your email")
 
-    while True:
         response = httpx.post(
-            f"{conf.server_url}auth/validate",
-            headers={"Authorization": f"Bearer {conf.access_token}"},
+            f"{conf.server_url}auth/validate_email_token", headers={"Authorization": f"Bearer {email_token}"}
         )
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            rprint(f"[bold red]Error[/bold red]: {e}")
-            conf.access_token = Prompt.ask("Please enter the token sent to your email")
-            continue
-        if response.json().get("email") != email:
-            rprint("[bold red]Error[/bold red]: Invalid token")
-            raise Exit(1)
-        break
+        # TODO what if request fails, email_token is invalid
+        response.raise_for_status()
+        conf.access_token = response.json()["access_token"]
 
     # DO NOT SAVE THE CONFIG HERE.
     # We don't know if the client will accept the config yet
@@ -157,7 +149,6 @@ def prompt_password() -> str:
         password = Prompt.ask("[bold]Password[/bold]")
         verify_password = Prompt.ask("[bold]Verify Password[/bold]")
         if password != verify_password:
-            rprint(f"[bold red]Passwords do not match![/bold red]")
+            rprint("[bold red]Passwords do not match![/bold red]")
             continue
         return password
-
