@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 import shutil
 
-from syftbox.lib.email import send_token_email
+from syftbox.lib.email import send_token_email, send_token_reset_password
 from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.users.auth import generate_access_token, generate_password_reset_token, get_current_user, validate_token
 from syftbox.server.users.db import add_user, get_user_by_email, update_password, verify_password
@@ -70,9 +70,8 @@ def request_password_reset(req: ResetPasswordRequest, server_settings: ServerSet
     # generate token for password reset
     token = generate_password_reset_token(server_settings=server_settings, email=email)
     # send reset password email with the token
-
-    return token
-    # return f"Token sent to {email}"
+    send_token_reset_password(email, token)
+    return f"Token sent to {email}"
 
 class ChangePasswordRequest(BaseModel):
     email: EmailStr
