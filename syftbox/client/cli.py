@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import httpx
 from rich import print as rprint
 from typer import Context, Exit, Option, Typer
 from typing_extensions import Annotated
@@ -58,6 +59,13 @@ VERBOSE_OPTS = Option(
     "-v", "--verbose",
     is_flag=True,
     help="Enable verbose mode",
+)
+
+
+
+TOKEN_OPTS = Option(
+    "--token",
+    help="Token for password reset",
 )
 
 # report command opts
@@ -130,6 +138,56 @@ def report(
     except Exception as e:
         rprint(f"[red]Error[/red]: {e}")
         raise Exit(1)
+
+@app.command()
+def forgot_password(
+    email: Annotated[str, EMAIL_OPTS],
+    server: Annotated[str, SERVER_OPTS] = DEFAULT_SERVER_URL,
+    config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
+):
+    from syftbox.lib.client_config import SyftClientConfig
+    from syftbox.client.cli_setup import prompt_email
+    config: SyftClientConfig = None
+
+    try:
+        config = SyftClientConfig.load(config_path)
+    except:
+        pass
+
+    server_url = config.server_url if config else server
+    
+    response = httpx.post(
+        f"{server_url}users/reset_password",
+        data={"email": email},
+    )
+    response.raise_for_status()
+    rprint("Forgot password request sent succesfully! Check your email!")
+
+@app.command()
+def reset_password(
+    token: Annotated[str, TOKEN_OPTS],
+    email: Annotated[str, EMAIL_OPTS],
+    server: Annotated[str, SERVER_OPTS] = DEFAULT_SERVER_URL,
+    config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
+):
+    from syftbox.lib.client_config import SyftClientConfig
+    from syftbox.client.cli_setup import prompt_password
+    config: SyftClientConfig = None
+
+    try:
+        config = SyftClientConfig.load(config_path)
+    except:
+        pass
+
+    server_url = config.server_url if config else server
+    new_password = prompt_password()
+    
+    response = httpx.post(
+        f"{server_url}users/change_password",
+        data={"email": email, "token": token, "new_password": new_password},
+    )
+    response.raise_for_status()
+    rprint("Password updated succesfully!")
 
 
 def main():
