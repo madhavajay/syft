@@ -1,7 +1,6 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr
-import shutil
 
 from syftbox.lib.email import send_token_email
 from syftbox.server.settings import ServerSettings, get_server_settings

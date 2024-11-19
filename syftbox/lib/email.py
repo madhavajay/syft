@@ -1,5 +1,6 @@
 import httpx
 from jinja2 import Template
+from loguru import logger
 
 from syftbox.server.settings import ServerSettings
 
@@ -137,6 +138,7 @@ def send_token_email(server_settings, user_email: str, token: str):
         subject="SyftBox Token",
         body=body,
         mimetype="text/html",
+        server_settings=server_settings
     )
 
 
@@ -162,6 +164,7 @@ def send_email(
     try:
         response = httpx.post(SENDGRID_SERVER, json=payload, headers=headers, timeout=10.0)
         response.raise_for_status()
+        logger.info(f"Email sent to {receiver_email}")
         return {"success": True, "status_code": response.status_code}
     except httpx.HTTPError as e:
-        return {"success": False, "error": str(e)}
+        logger.error(str(e))
