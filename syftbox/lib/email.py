@@ -134,24 +134,15 @@ reset_password_token_email_template = """
 """
 
 
-def send_token_email(user_email: str, token: str):
+def send_token_email(user_email: str, token: str, server_settings: ServerSettings):
     template = Template(token_email_template)
     body = template.render(email=user_email, token=token)
     send_email(
         receiver_email=user_email,
         subject="SyftBox Token",
         body=body,
-        mimetype="text/html"
-    )
-
-def send_token_reset_password(user_email: str, token: str):
-    template = Template(reset_password_token_email_template)
-    body = template.render(email=user_email, token=token)
-    send_email(
-        receiver_email=user_email,
-        subject="SyftBox Reset Password Token",
-        body=body,
         mimetype="text/html",
+        server_settings=server_settings
     )
 
 def send_email(

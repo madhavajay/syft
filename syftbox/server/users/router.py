@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 import shutil
 
-from syftbox.lib.email import send_token_email, send_token_reset_password
+from syftbox.lib.email import send_token_email
 from syftbox.server.settings import ServerSettings, get_server_settings
 from syftbox.server.users.auth import generate_access_token, generate_email_token,  get_current_user, validate_token, get_user_from_email_token
 
@@ -27,7 +27,7 @@ def get_token(req: EmailTokenRequest, server_settings: ServerSettings = Depends(
 
     response = EmailTokenResponse()
     if server_settings.auth_enabled:
-        send_token_email(email, token)
+        send_token_email(email, token, server_settings=server_settings)
     else:
         # Only return token if auth is disabled, it will be a base64 encoded json string
         response.email_token = token
