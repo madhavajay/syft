@@ -136,7 +136,7 @@ def send_token_email(server_settings, user_email: str, token: str):
         receiver_email=user_email,
         subject="SyftBox Token",
         body=body,
-        mimetype="html",
+        mimetype="text/html",
     )
 
 
@@ -145,7 +145,7 @@ def send_email(
     receiver_email: str,
     subject: str,
     body: str,
-    mimetype: str = "plain",
+    mimetype: str = "text/html",
 ):
     payload = {
         "personalizations": [{"to": [{"email": receiver_email}]}],
