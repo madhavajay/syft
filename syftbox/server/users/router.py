@@ -57,11 +57,13 @@ def validate_email_token(
     access_token = generate_access_token(server_settings, email)
     return AccessTokenResponse(access_token=access_token)
 
+class WhoAmIResponse(BaseModel):
+    email: str
 
 @router.post("/whoami")
 def whoami(
     email: str = Depends(get_current_user),
-) -> str:
+) -> WhoAmIResponse:
     """
     Get the current users email.
     If the token is not valid or outdated, get_current_user will raise 401 Unauthorized.
@@ -73,4 +75,4 @@ def whoami(
     Returns:
         str: email
     """
-    return email
+    return WhoAmIResponse(email=email)

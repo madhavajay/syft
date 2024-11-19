@@ -102,7 +102,7 @@ def _parse_analytics_file(file_path: Path) -> list[dict]:
 
 
 def parse_analytics_logs(logs_dir: Path) -> list[dict]:
-    log_files = list(logs_dir.glob("analytics_*.log")) + list(logs_dir.glob("analytics_*.zip"))
+    log_files = list(logs_dir.glob("analytics.log")) + list(logs_dir.glob("analytics_*.zip"))
     events = []
     for log_file in log_files:
         events.extend(_parse_analytics_file(log_file))
