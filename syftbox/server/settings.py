@@ -18,7 +18,7 @@ class ServerSettings(BaseSettings):
     see: https://docs.pydantic.dev/latest/concepts/pydantic_settings/#parsing-environment-variable-values
     """
 
-    model_config = SettingsConfigDict(env_prefix="SYFTBOX_", env_file=".env")
+    model_config = SettingsConfigDict(env_prefix="SYFTBOX_", env_file="server.env")
     sendgrid_secret: str | None = None
 
     sendgrid_secret: SecretStr | None = None
