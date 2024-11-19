@@ -4,16 +4,16 @@ from typing import Optional
 
 from loguru import logger
 
+from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.consumer import SyncConsumer
 from syftbox.client.plugins.sync.endpoints import get_datasite_states
 from syftbox.client.plugins.sync.exceptions import FatalSyncError
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import DatasiteState, FileChangeInfo
-from syftbox.lib import Client
 
 
 class SyncManager:
-    def __init__(self, client: Client):
+    def __init__(self, client: SyftClientInterface):
         self.client = client
         self.queue = SyncQueue()
         self.consumer = SyncConsumer(client=self.client, queue=self.queue)
@@ -46,9 +46,6 @@ class SyncManager:
         logger.info(f"Sync started, syncing every {self.sync_interval} seconds")
         self.thread = t
 
-    def setup(self):
-        self.change_log_folder.mkdir(exist_ok=True)
-
     def enqueue(self, change: FileChangeInfo) -> None:
         self.queue.put(SyncQueueItem(priority=change.get_priority(), data=change))
 
@@ -73,6 +70,7 @@ class SyncManager:
         try:
             permission_changes, file_changes = datasite.get_out_of_sync_files()
             total = len(permission_changes) + len(file_changes)
+
             if total != 0:
                 logger.debug(
                     f"Enqueuing {len(permission_changes)} permissions and {len(file_changes)} files for {datasite.email}"

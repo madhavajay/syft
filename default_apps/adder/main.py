@@ -3,15 +3,15 @@ import os
 
 from syftbox.lib import Client
 
-client_config = Client.load()
+client = Client.load()
 
-input_folder = f"{client_config.sync_folder}/{client_config.email}/app_pipelines/adder/inputs/"
-output_folder = f"{client_config.sync_folder}/{client_config.email}/app_pipelines/adder/done/"
+input_folder = client.api_data() / "input"
+output_folder = client.api_data() / "output"
 os.makedirs(input_folder, exist_ok=True)
 os.makedirs(output_folder, exist_ok=True)
 
-input_file_path = f"{input_folder}data.json"
-output_file_path = f"{output_folder}data.json"
+input_file_path = input_folder / "data.json"
+output_file_path = output_folder / "data.json"
 
 if os.path.exists(input_file_path):
     with open(input_file_path, "r") as f:

@@ -2,6 +2,7 @@ import base64
 import hashlib
 import re
 from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from typing import Optional, Union
@@ -9,6 +10,7 @@ from typing import Optional, Union
 from loguru import logger
 from py_fast_rsync import signature
 
+from syftbox.lib.ignore import filter_ignored_paths
 from syftbox.server.sync.models import FileMetadata
 
 
@@ -34,7 +36,7 @@ def hash_file(file_path: Path, root_dir: Optional[Path] = None) -> Optional[File
             hash=hashlib.sha256(data).hexdigest(),
             signature=base64.b85encode(signature.calculate(data)),
             file_size=len(data),
-            last_modified=file_path.stat().st_mtime,
+            last_modified=datetime.fromtimestamp(file_path.stat().st_mtime, timezone.utc),
         )
     except Exception:
         logger.error(f"Failed to hash file {file_path}")
@@ -52,7 +54,11 @@ def hash_files(files: list[Path], root_dir: Path) -> list[FileMetadata]:
     return [r for r in result if r is not None]
 
 
-def hash_dir(dir: Path, root_dir: Path) -> list[FileMetadata]:
+def hash_dir(
+    dir: Path,
+    root_dir: Path,
+    filter_ignored: bool = True,
+) -> list[FileMetadata]:
     """
     hash all files in dir recursively, return a list of FileMetadata.
 
@@ -60,21 +66,21 @@ def hash_dir(dir: Path, root_dir: Path) -> list[FileMetadata]:
     returned Paths are relative to root_dir.
     """
     files = collect_files(dir)
-    return hash_files(files, root_dir)
+
+    relative_paths = [file.relative_to(root_dir) for file in files]
+    if filter_ignored:
+        relative_paths = filter_ignored_paths(root_dir, relative_paths)
+
+    absolute_paths = [root_dir / file for file in relative_paths]
+    return hash_files(absolute_paths, root_dir)
 
 
-def collect_files(dir: Union[Path, str], pattern: Union[str, re.Pattern, None] = None) -> list[Path]:
-    """Recursively collect files in a directory
+def collect_files(
+    dir: Union[Path, str],
+    pattern: Union[str, re.Pattern, None] = None,
+) -> list[Path]:
+    """Recursively collect files in a directory with options to include hidden files and symlinks"""
 
-    Examples:
-        >>> # list all .syftperm files
-        >>> collect_files(snapshot_dir, r".*/.syftperm")
-
-        >>> # list all files in a directory info
-        >>> collect_files(snapshot_dir, r".*")
-
-
-    """
     dir = Path(dir)
     if not dir.is_dir():
         return []

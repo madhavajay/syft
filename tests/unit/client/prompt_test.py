@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from syftbox.client.config import prompt_email, prompt_sync_dir
-from syftbox.lib.lib import DEFAULT_SYNC_FOLDER, is_valid_dir, is_valid_email
+from syftbox.client.cli_setup import prompt_data_dir, prompt_email
+from syftbox.lib.constants import DEFAULT_DATA_DIR
+from syftbox.lib.validators import is_valid_dir, is_valid_email
 
 
 @pytest.mark.parametrize(
@@ -69,15 +70,15 @@ def test_email_validation(email, expected):
 @pytest.mark.parametrize(
     "user_input,expected",
     [
-        ("", Path(DEFAULT_SYNC_FOLDER)),
+        ("", Path(DEFAULT_DATA_DIR)),
         ("./valid/path", Path("./valid/path")),
     ],
 )
-def test_prompt_sync_dir(user_input, expected, monkeypatch):
+def test_prompt_data_dir(user_input, expected, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda *a, **k: user_input)
-    monkeypatch.setattr("syftbox.client.config.is_valid_dir", lambda x: (True, ""))
+    monkeypatch.setattr("syftbox.client.cli_setup.is_valid_dir", lambda x: (True, ""))
 
-    dir = prompt_sync_dir()
+    dir = prompt_data_dir()
     assert dir.absolute() == expected.absolute()
 
 
@@ -86,7 +87,7 @@ def test_prompt_email(monkeypatch):
     valid_email = "test@example.com"
 
     monkeypatch.setattr("builtins.input", lambda *a, **k: valid_email)
-    monkeypatch.setattr("syftbox.client.config.is_valid_dir", lambda x: (True, ""))
+    monkeypatch.setattr("syftbox.client.cli_setup.is_valid_dir", lambda x: (True, ""))
 
     email = prompt_email()
     assert email == valid_email

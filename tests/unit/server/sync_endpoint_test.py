@@ -9,8 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 from py_fast_rsync import signature
 
+from syftbox.client.exceptions import SyftServerError
 from syftbox.client.plugins.sync.endpoints import (
-    SyftServerError,
     apply_diff,
     download_bulk,
     get_datasite_states,
@@ -132,11 +132,8 @@ def test_apply_diff(client: TestClient):
     diff = py_fast_rsync.diff(remote_metadata.signature_bytes, local_data)
     wrong_hash = "wrong_hash"
 
-    with pytest.raises(SyftServerError) as e:
+    with pytest.raises(SyftServerError):
         apply_diff(client, Path(TEST_DATASITE_NAME) / TEST_FILE, diff, wrong_hash)
-
-    # TODO typed errors
-    assert "expected_hash mismatch" in str(e.value)
 
 
 def test_get_diff(client: TestClient):

@@ -1,7 +1,9 @@
+import threading
 import time
 from pathlib import Path
+from secrets import token_hex
 
-from syftbox.client.plugins.apps import run as app_runner
+from syftbox.client.plugins.apps import run_apps
 from tests.integration.app_plugin.fixtures.app_mocks import AppMockFactory
 
 
@@ -21,10 +23,11 @@ def verify_running_apps(running_apps: dict, expected_app_name: str = None):
         assert len(running_apps) == 0
 
 
-def test_app_plugin_without_config(shared_state, test_client_config, monkeypatch):
+def test_app_plugin_without_config(tmp_path, monkeypatch):
     """Test app plugin execution without configuration."""
-    apps_dir = test_client_config.sync_folder / "apps"
-    mock_app_dir, expected_output = AppMockFactory.create_app_without_config(apps_dir=apps_dir, app_name="test_app")
+    app_dir = tmp_path / token_hex(8)
+    app_name = "test_app_without_config"
+    mock_app_dir, expected_output = AppMockFactory.create_app_without_config(apps_dir=app_dir, app_name=app_name)
 
     assert mock_app_dir.exists()
 
@@ -34,33 +37,41 @@ def test_app_plugin_without_config(shared_state, test_client_config, monkeypatch
     monkeypatch.setattr("syftbox.client.plugins.apps.RUNNING_APPS", PATCHED_RUNNING)
 
     # Run app
-    app_runner(shared_state=shared_state)
+    no_config = ""  # dummy app doesn't need SYFTBOX_CLIENT_CONFIG_PATH
+    run_apps(app_dir, no_config)
 
     # Verify results
     verify_running_apps(PATCHED_RUNNING)
     verify_app_execution(mock_app_dir, expected_output)
 
 
-def test_app_plugin_with_config(shared_state, test_client_config, monkeypatch):
+def test_app_plugin_with_config(tmp_path, monkeypatch):
     """Test app plugin execution with configuration."""
-    apps_dir = test_client_config.sync_folder / "apps"
-    mock_app_dir, expected_output = AppMockFactory.create_app_with_config(apps_dir=apps_dir, app_name="test_app")
+    app_dir = tmp_path / token_hex(8)
+    app_name = "test_app_with_config"
+    mock_app_dir, expected_output = AppMockFactory.create_app_with_config(apps_dir=app_dir, app_name=app_name)
 
     assert mock_app_dir.exists()
 
     # Patch necessary attributes
     PATCHED_RUNNING = {}
+    EVT = threading.Event()
     monkeypatch.setattr("syftbox.client.plugins.apps.DEFAULT_APPS_PATH", "")
     monkeypatch.setattr("syftbox.client.plugins.apps.RUNNING_APPS", PATCHED_RUNNING)
+    monkeypatch.setattr("syftbox.client.plugins.apps.EVENT", EVT)
 
     # Run app
-    app_runner(shared_state=shared_state)
+    no_config = ""  # dummy app doesn't need SYFTBOX_CLIENT_CONFIG_PATH
+    run_apps(app_dir, no_config)
     time.sleep(2)
 
     # Verify results
-    verify_running_apps(PATCHED_RUNNING, "test_app")
+    verify_running_apps(PATCHED_RUNNING, app_name)
     verify_app_execution(mock_app_dir, expected_output)
 
     # This doesn't kill the process gracefully,
     # later need to implement a graceful shutdown mechanism for apps
-    PATCHED_RUNNING["test_app"].join(timeout=1)
+    if app_name in PATCHED_RUNNING:
+        EVT.set()
+        app_thread: threading.Thread = PATCHED_RUNNING[app_name]
+        app_thread.join(timeout=1)

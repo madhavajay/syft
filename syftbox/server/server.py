@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Header, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -22,12 +22,16 @@ from loguru import logger
 from typing_extensions import Any, Optional, Union
 
 from syftbox.__version__ import __version__
-from syftbox.lib import (
+from syftbox.lib.lib import (
     Jsonable,
     get_datasites,
 )
+from syftbox.server.analytics import log_analytics_event
+from syftbox.server.logger import setup_logger
+from syftbox.server.middleware import LoguruMiddleware
 from syftbox.server.settings import ServerSettings, get_server_settings
 
+from .emails.router import router as emails_router
 from .sync import db, hash
 from .sync.router import router as sync_router
 
@@ -113,22 +117,7 @@ def create_folders(folders: list[str]) -> None:
             os.makedirs(folder, exist_ok=True)
 
 
-@contextlib.asynccontextmanager
-async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
-    # Startup
-    logger.info(f"> Starting SyftBox Server {__version__}. Python {platform.python_version()}")
-    if settings is None:
-        settings = ServerSettings()
-    logger.info(settings)
-
-    logger.info("> Creating Folders")
-
-    create_folders(settings.folders)
-
-    users = Users(path=settings.user_file_path)
-    logger.info("> Loading Users")
-    logger.info(users)
-
+def init_db(settings: ServerSettings) -> None:
     # might take very long as snapshot folder grows
     logger.info(f"> Collecting Files from {settings.snapshot_folder.absolute()}")
     files = hash.collect_files(settings.snapshot_folder.absolute())
@@ -144,6 +133,28 @@ async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
     con.commit()
     con.close()
 
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
+    # Startup
+    if settings is None:
+        settings = ServerSettings()
+
+    setup_logger(logs_folder=settings.logs_folder)
+
+    logger.info(f"> Starting SyftBox Server {__version__}. Python {platform.python_version()}")
+    logger.info(settings)
+
+    logger.info("> Creating Folders")
+
+    create_folders(settings.folders)
+
+    users = Users(path=settings.user_file_path)
+    logger.info("> Loading Users")
+    logger.info(users)
+
+    init_db(settings)
+
     yield {
         "server_settings": settings,
         "users": users,
@@ -153,8 +164,10 @@ async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(emails_router)
 app.include_router(sync_router)
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
+app.add_middleware(LoguruMiddleware)
 
 # Define the ASCII art
 ascii_art = rf"""
@@ -258,11 +271,19 @@ async def browse_datasite(
                 with open(slug_path, "r") as file:
                     content = file.read()
                 return PlainTextResponse(content)
+            elif slug_path.endswith(".json") or slug_path.endswith(".jsonl"):
+                return FileResponse(slug_path, media_type="application/json")
+            elif slug_path.endswith(".yaml") or slug_path.endswith(".yml"):
+                return FileResponse(slug_path, media_type="application/x-yaml")
+            elif slug_path.endswith(".log") or slug_path.endswith(".txt"):
+                return FileResponse(slug_path, media_type="text/plain")
+            elif slug_path.endswith(".py"):
+                return FileResponse(slug_path, media_type="text/plain")
             else:
                 return FileResponse(slug_path, media_type="application/octet-stream")
 
         # show directory
-        if not path.endswith("/"):
+        if not path.endswith("/") and os.path.exists(path + "/") and os.path.isdir(path + "/"):
             return RedirectResponse(url=f"{path}/")
 
         index_file = os.path.abspath(slug_path + "/" + "index.html")
@@ -288,7 +309,9 @@ async def browse_datasite(
             )
             return html_content
         else:
-            return f"Bad Slug {slug}"
+            # return 404
+            message_404 = f"No file or directory found at /datasites/{datasite_part}{slug}"
+            return HTMLResponse(content=message_404, status_code=404)
 
     return f"No Datasite {datasite_part} exists"
 
@@ -308,8 +331,16 @@ async def register(
     os.makedirs(datasite_folder, exist_ok=True)
 
     logger.info(f"> {email} registering: {token}, snapshot folder: {datasite_folder}")
+    log_analytics_event("/register", email)
 
     return JSONResponse({"status": "success", "token": token}, status_code=200)
+
+
+@app.post("/log_event")
+async def log_event(request: Request, email: Optional[str] = Header(default=None)):
+    data = await request.json()
+    log_analytics_event("/log_event", email, **data)
+    return JSONResponse({"status": "success"}, status_code=200)
 
 
 @app.get("/install.sh")
