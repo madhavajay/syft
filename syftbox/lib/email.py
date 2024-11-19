@@ -5,11 +5,12 @@ import os
 from rich import print as rprint
 from jinja2 import Template
 from loguru import logger
+import httpx
 
-sender_email = "noreply@openmined.org"
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD","")
-SMTP_USER = os.environ.get("SMTP_USER","")
-SMTP_SERVER = "smtp.sendgrid.com"
+from syftbox.server.settings import ServerSettings
+
+SENDER_EMAIL = "noreply@openmined.org"
+SENDGRID_SERVER = 'https://api.sendgrid.com/v3/mail/send'
 SMTP_PORT = 465
 
 token_email_template = """
@@ -140,8 +141,7 @@ def send_token_email(user_email: str, token: str):
         receiver_email=user_email,
         subject="SyftBox Token",
         body=body,
-        mimetype="html",
-        log_message="Token Email sent succesfully! Check your email."
+        mimetype="html"
     )
 
 def send_token_reset_password(user_email: str, token: str):
@@ -152,30 +152,41 @@ def send_token_reset_password(user_email: str, token: str):
         subject="SyftBox Reset Password Token",
         body=body,
         mimetype="html",
-        log_message="Reset Password Token Email sent succesfully! Check your email."
     )
 
 def send_email(
     receiver_email: str,
     subject: str,
     body: str,
+    server_settings: ServerSettings,
     mimetype: str = "plain",
-    log_message: str = "Email sent successfully!"
 ):
-    msg = MIMEMultipart()
-    msg["From"] = sender_email
-    msg["To"] = receiver_email
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, mimetype))
+
+    payload = {
+        "personalizations": [{
+            "to": [{"email": receiver_email}]
+        }],
+        "from": {"email": SENDER_EMAIL},
+        "subject": subject,
+        "content": [{
+            "type": mimetype,
+            "value": body
+        }]
+    }
+
+    headers = {
+        "Authorization": f"Bearer {server_settings.email_service_api_key}",
+        "Content-Type": "application/json"
+    }
+
     try:
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-            logger.debug(f"Logging in ...")
-            logger.debug(f"{SMTP_USER=}")
-            logger.debug(f"{SMTP_PASSWORD=}")            
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            logger.debug(f"Logged in!")
-            server.sendmail(sender_email, receiver_email, msg.as_string())
-        logger.debug(f"{log_message}")
-    except Exception as e:
-        logger.debug(f"Error: {e}")
-        
+        response = httpx.post(
+            SENDGRID_SERVER,
+            json=payload,
+            headers=headers,
+            timeout=10.0
+        )
+        response.raise_for_status()
+        return {"success": True, "status_code": response.status_code}
+    except httpx.HTTPError as e:
+        return {"success": False, "error": str(e)}  
