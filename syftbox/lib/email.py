@@ -138,7 +138,6 @@ def send_token_email(server_settings, user_email: str, token: str):
         subject="SyftBox Token",
         body=body,
         mimetype="text/html",
-        server_settings=server_settings
     )
 
 
