@@ -91,14 +91,9 @@ def test_syft_client_push_flow(client: TestClient):
 
 
 def test_get_remote_state(client: TestClient):
-    metadata = get_remote_state(client, TEST_DATASITE_NAME, Path(TEST_DATASITE_NAME))
+    metadata = get_remote_state(client, Path(TEST_DATASITE_NAME))
 
     assert len(metadata) == 3
-
-
-def test_get_remote_state_perms(client: TestClient):
-    metadata = get_remote_state(client, "random@user.com", Path(TEST_DATASITE_NAME))
-    assert not metadata
 
 
 def test_get_metadata(client: TestClient):
@@ -245,7 +240,7 @@ def test_get_all_datasite_states(client: TestClient):
 
 
 def test_download_snapshot(client: TestClient):
-    metadata = get_remote_state(client, TEST_DATASITE_NAME, Path(TEST_DATASITE_NAME))
+    metadata = get_remote_state(client, Path(TEST_DATASITE_NAME))
     paths = [m.path.as_posix() for m in metadata]
     data = download_bulk(client, paths)
     zip_file = zipfile.ZipFile(BytesIO(data))
