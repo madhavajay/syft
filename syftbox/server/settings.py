@@ -20,6 +20,8 @@ class ServerSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="SYFTBOX_")
 
+    sendgrid_secret: SecretStr | None = None
+
     data_folder: Path = Field(default=Path("data").resolve())
     """Absolute path to the server data folder"""
 
