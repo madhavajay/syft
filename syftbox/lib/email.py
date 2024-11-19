@@ -1,16 +1,11 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import os
-from rich import print as rprint
+import httpx
 from jinja2 import Template
 from loguru import logger
-import httpx
 
 from syftbox.server.settings import ServerSettings
 
 SENDER_EMAIL = "noreply@openmined.org"
-SENDGRID_SERVER = 'https://api.sendgrid.com/v3/mail/send'
+SENDGRID_SERVER = "https://api.sendgrid.com/v3/mail/send"
 SMTP_PORT = 465
 
 token_email_template = """
@@ -134,10 +129,11 @@ reset_password_token_email_template = """
 """
 
 
-def send_token_email(user_email: str, token: str, server_settings: ServerSettings):
+def send_token_email(server_settings, user_email: str, token: str):
     template = Template(token_email_template)
     body = template.render(email=user_email, token=token)
     send_email(
+        server_settings=server_settings,
         receiver_email=user_email,
         subject="SyftBox Token",
         body=body,
@@ -145,38 +141,28 @@ def send_token_email(user_email: str, token: str, server_settings: ServerSetting
         server_settings=server_settings
     )
 
+
 def send_email(
+    server_settings: ServerSettings,
     receiver_email: str,
     subject: str,
     body: str,
-    server_settings: ServerSettings,
     mimetype: str = "text/html",
 ):
-
     payload = {
-        "personalizations": [{
-            "to": [{"email": receiver_email}]
-        }],
+        "personalizations": [{"to": [{"email": receiver_email}]}],
         "from": {"email": SENDER_EMAIL},
         "subject": subject,
-        "content": [{
-            "type": mimetype,
-            "value": body
-        }]
+        "content": [{"type": mimetype, "value": body}],
     }
 
     headers = {
         "Authorization": f"Bearer {server_settings.sendgrid_secret.get_secret_value()}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     try:
-        response = httpx.post(
-            SENDGRID_SERVER,
-            json=payload,
-            headers=headers,
-            timeout=10.0
-        )
+        response = httpx.post(SENDGRID_SERVER, json=payload, headers=headers, timeout=10.0)
         response.raise_for_status()
         logger.info(f"Email sent to {receiver_email}")
         return {"success": True, "status_code": response.status_code}

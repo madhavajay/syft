@@ -1,14 +1,9 @@
 import json
-from functools import partial
-from pathlib import Path
-from typing import Generator
 
 import pytest
 from fastapi.testclient import TestClient
 
 from syftbox.server.server import app
-from syftbox.server.server import app as server_app
-from syftbox.server.server import lifespan as server_lifespan
 from syftbox.server.settings import ServerSettings
 
 TEST_DATASITE_NAME = "test_datasite@openmined.org"
@@ -84,18 +79,4 @@ def client_without_perms(monkeypatch, tmp_path):
     with TestClient(app) as client:
         access_token = get_access_token(client, TEST_DATASITE_NAME)
         client.headers["Authorization"] = f"Bearer {access_token}"
-        yield client
-
-
-@pytest.fixture(scope="function")
-def server_client(tmp_path: Path) -> Generator[TestClient, None, None]:
-    print("Using test dir", tmp_path)
-    path = tmp_path / "server"
-    path.mkdir()
-
-    settings = ServerSettings.from_data_folder(path)
-    lifespan_with_settings = partial(server_lifespan, settings=settings)
-    server_app.router.lifespan_context = lifespan_with_settings
-
-    with TestClient(server_app) as client:
         yield client
