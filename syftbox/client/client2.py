@@ -9,7 +9,6 @@ import httpx
 import uvicorn
 from loguru import logger
 from pid import PidFile, PidFileAlreadyLockedError, PidFileAlreadyRunningError
-from pydantic import AnyHttpUrl
 
 from syftbox.__version__ import __version__
 from syftbox.client.api import create_api
@@ -320,14 +319,6 @@ def run_client(
     setup_logger(log_level, log_dir=client_config.data_dir / "logs")
 
     error_config = error_reporting.make_error_report(client_config)
-
-    # temporary work around since the client config is a dict with AnyHttpUrl
-    error_client_config = error_config.client_config
-    for key, value in error_client_config.items():
-        if isinstance(value, AnyHttpUrl):
-            error_client_config[key] = str(value)
-
-    error_config.client_config = error_client_config
     logger.info(f"Client metadata\n{error_config.model_dump_json(indent=2)}")
 
     # a flag to disable icons
