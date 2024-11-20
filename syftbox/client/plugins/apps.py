@@ -152,8 +152,6 @@ def run_with_logging(command: str, app_path: Path, clean_env: dict, log_path: Pa
 
     try:
         # Log run metadata
-        app_logger.info(f"\n=== App Run: {app_name} ===")
-        app_logger.info(f"Started at: {datetime.now().isoformat()}")
         app_logger.info(f"Working directory: {app_path}")
         app_logger.info(f"Command: {command}")
 
@@ -167,18 +165,25 @@ def run_with_logging(command: str, app_path: Path, clean_env: dict, log_path: Pa
             env=clean_env,
         )
 
-        # Write stdout and stderr to log file
-        app_logger.info("=== STDOUT ===\n" + process.stdout)
-        app_logger.info("=== STDERR ===\n" + process.stderr)
-        app_logger.info(f"Process completed successfully with exit code: {process.returncode}")
-
-        app_logger.info(f"Subprocess completed successfully. Log file: {log_file}")
+        # log this in app log
+        app_logger.info(
+            (
+                f"exit code: {process.returncode}\n"
+                f"===stdout===\n{process.stdout}"
+                f"===stderr===\n{process.stderr or '-'}"
+            )
+        )
+        # log this in console
+        logger.info(f"Process completed with exit code: {process.returncode}. Log file: {log_file}")
         return process, log_file
 
     except subprocess.CalledProcessError as e:
-        app_logger.error(f"Process failed with exit code: {e.returncode}")
-        app_logger.error("=== STDOUT ===\n" + e.stdout)
-        app_logger.error("=== STDERR ===\n" + e.stderr)
+        # log this in app log
+        app_logger.error(
+            ("process output\n" f"> exit code: {e.returncode}\n" f"> stdout:\n{e.stdout}" f"> stderr:\n{e.stderr}")
+        )
+        # log this in console
+        logger.error(f"Process failed with exit code: {e.returncode}")
         raise e
 
     except Exception as e:
@@ -186,8 +191,6 @@ def run_with_logging(command: str, app_path: Path, clean_env: dict, log_path: Pa
         raise e
 
     finally:
-        app_logger.info(f"=== End Run: {app_name} ===\n")
-        # Clean up handler
         app_logger.removeHandler(file_handler)
         file_handler.close()
 

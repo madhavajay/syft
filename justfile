@@ -138,10 +138,15 @@ bump-version level="patch":
 # ---------------------------------------------------------------------------------------------------------------------
 
 [group('test')]
-test-e2e test_name:
+test-e2e-old test_name:
     @echo "Using SyftBox from {{ _green }}'$(which syftbox)'{{ _nc }}"
     chmod +x ./tests/e2e/{{ test_name }}/run.bash
-    bash ./tests/e2e/{{ test_name }}/run.bash
+    bash ./tests/e2e.old/{{ test_name }}/run.bash
+
+[group('test')]
+test-e2e test_name:
+    @echo "Using SyftBox from {{ _green }}'$(which syftbox)'{{ _nc }}"
+    pytest -sv ./tests/e2e/test_{{ test_name }}.py
 
 # ---------------------------------------------------------------------------------------------------------------------
 
