@@ -53,7 +53,11 @@ class SyftClient:
 
         self.workspace = SyftWorkspace(self.config.data_dir)
         self.pid = PidFile(pidname="syftbox.pid", piddir=self.workspace.data_dir)
-        self.server_client = httpx.Client(base_url=str(self.config.server_url), follow_redirects=True)
+        self.server_client = httpx.Client(
+            base_url=str(self.config.server_url),
+            follow_redirects=True,
+            headers={"email": self.config.email, "Authorization": f"Bearer {self.config.access_token}"},
+        )
 
         # kwargs for making customization/unit testing easier
         # this will be replaced with a sophisticated plugin system

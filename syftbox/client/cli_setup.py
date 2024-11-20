@@ -10,6 +10,7 @@ from rich import print as rprint
 from rich.prompt import Confirm, Prompt
 
 from syftbox.__version__ import __version__
+from syftbox.client.auth import authenticate_user
 from syftbox.client.client2 import METADATA_FILENAME
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.constants import DEFAULT_DATA_DIR
@@ -17,6 +18,11 @@ from syftbox.lib.exceptions import ClientConfigException
 from syftbox.lib.validators import DIR_NOT_EMPTY, is_valid_dir, is_valid_email
 
 __all__ = ["setup_config_interactive"]
+
+
+def is_empty(data_dir: Path) -> bool:
+    """True if the data_dir is empty"""
+    return not any(data_dir.iterdir())
 
 
 def has_old_syftbox_version(data_dir: Path) -> bool:
@@ -39,7 +45,9 @@ def prompt_delete_old_data_dir(data_dir: Path) -> bool:
 def get_migration_decision(data_dir: Path):
     migrate_datasite = False
     if data_dir.exists():
-        if has_old_syftbox_version(data_dir):
+        if is_empty(data_dir):
+            migrate_datasite = False
+        elif has_old_syftbox_version(data_dir):
             # we need this extra if because we do 2 things:
             # 1. determine if we want to remove
             # 2. determine if we want to migrate
@@ -52,7 +60,9 @@ def get_migration_decision(data_dir: Path):
     return migrate_datasite
 
 
-def setup_config_interactive(config_path: Path, email: str, data_dir: Path, server: str, port: int) -> SyftClientConfig:
+def setup_config_interactive(
+    config_path: Path, email: str, data_dir: Path, server: str, port: int, skip_auth: bool = False
+) -> SyftClientConfig:
     """Setup the client configuration interactively. Called from CLI"""
 
     config_path = config_path.expanduser().resolve()
@@ -87,6 +97,9 @@ def setup_config_interactive(config_path: Path, email: str, data_dir: Path, serv
             conf.set_server_url(server)
         if port != conf.client_url.port:
             conf.set_port(port)
+
+    if not skip_auth:
+        conf.access_token = authenticate_user(conf)
 
     # DO NOT SAVE THE CONFIG HERE.
     # We don't know if the client will accept the config yet

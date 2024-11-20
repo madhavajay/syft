@@ -60,6 +60,13 @@ VERBOSE_OPTS = Option(
     help="Enable verbose mode",
 )
 
+
+
+TOKEN_OPTS = Option(
+    "--token",
+    help="Token for password reset",
+)
+
 # report command opts
 REPORT_PATH_OPTS = Option(
     "-o", "--output-dir",
