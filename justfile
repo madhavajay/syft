@@ -149,7 +149,7 @@ test-e2e test_name:
     uv sync --frozen
     . .venv/bin/activate
     echo "Using SyftBox from {{ _green }}'$(which syftbox)'{{ _nc }}"
-    pytest -sv ./tests/e2e/test_{{ test_name }}.py
+    pytest -sq --color=yes ./tests/e2e/test_{{ test_name }}.py
 
 # ---------------------------------------------------------------------------------------------------------------------
 
