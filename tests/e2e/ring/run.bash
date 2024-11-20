@@ -181,4 +181,4 @@ do_e2e() {
     exit 0
 }
 
-# do_e2e
+do_e2e
