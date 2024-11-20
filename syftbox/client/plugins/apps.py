@@ -343,6 +343,9 @@ def run_app(app_path: Path, config_path: Path):
         logger.info(f"Running '{app_name}' app")
         find_and_run_script(app_path, extra_args, config_path, app_log_dir)
         logger.info(f"`{app_name}` App ran successfully. \nDetailed logs at: {log_file.resolve()}")
+    except FileNotFoundError as e:
+        logger.error(f"Error running '{app_name}'")
+        logger.error(f"Error: {str(e)}")
     except subprocess.CalledProcessError as _:
         logger.error(f"Error calling subprocess for api '{app_name}'")
         logger.error(f"Check {app_name}'s api logs at: {log_file.resolve()}")
@@ -361,7 +364,6 @@ class AppRunner:
     def start(self):
         def run():
             bootstrap(self.client)
-
             while not self.__event.is_set():
                 run_apps(apps_path=self.client.workspace.apps, client_config=self.client.config.path)
                 time.sleep(self.interval)
