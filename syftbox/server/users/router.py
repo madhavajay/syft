@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from syftbox.lib.email import send_token_email
@@ -41,7 +41,8 @@ def get_token(req: EmailTokenRequest, server_settings: ServerSettings = Depends(
 
 @router.post("/validate_email_token")
 def validate_email_token(
-    email: str = Depends(get_user_from_email_token),
+    email: str,
+    email_from_token: str = Depends(get_user_from_email_token),
     server_settings: ServerSettings = Depends(get_server_settings),
 ) -> AccessTokenResponse:
     """
@@ -54,6 +55,9 @@ def validate_email_token(
     Returns:
         AccessTokenResponse: access token
     """
+    if email_from_token != email:
+        raise HTTPException(status_code=401, detail="This email token is not for this email address")
+
     access_token = generate_access_token(server_settings, email)
     return AccessTokenResponse(access_token=access_token)
 
