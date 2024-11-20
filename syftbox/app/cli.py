@@ -24,7 +24,6 @@ app = Typer(
 )
 
 CONFIG_OPTS = Option("-c", "--config", "--config_path", help="Path to the SyftBox config")
-CALLED_BY_OPTS = Option("--called-by", help="The context from which the command is called", hidden=True)
 REPO_ARGS = Argument(..., show_default=False, help="SyftBox App git repo URL")
 BRANCH_OPTS = Option("-b", "--branch", help="git branch name")
 UNINSTALL_ARGS = Argument(..., show_default=False, help="Name of the SyftBox App to uninstall")
@@ -56,7 +55,6 @@ def install(
     repository: Annotated[str, REPO_ARGS],
     branch: Annotated[str, BRANCH_OPTS] = "main",
     config_path: Annotated[Path, CONFIG_OPTS] = DEFAULT_CONFIG_PATH,
-    called_by: Annotated[str, CALLED_BY_OPTS] = "user",
 ):
     """Install a new Syftbox app"""
     client = get_client(config_path)
@@ -66,7 +64,7 @@ def install(
         raise Exit(1)
 
     try:
-        client.log_analytics_event("app_install", app_name=result.app_name, called_by=called_by)
+        client.log_analytics_event("app_install", app_name=result.app_name)
     except Exception:
         pass
 
