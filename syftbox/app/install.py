@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from tempfile import mkdtemp
 from types import SimpleNamespace
-from syftbox.lib import Client
 
 from typing_extensions import Any, Optional
 
