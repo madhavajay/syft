@@ -6,14 +6,14 @@ from loguru import logger
 
 from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.consumer import SyncConsumer
-from syftbox.client.plugins.sync.endpoints import get_datasite_states
+from syftbox.client.plugins.sync.endpoints import get_datasite_states, health_check
 from syftbox.client.plugins.sync.exceptions import FatalSyncError
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import DatasiteState, FileChangeInfo
 
 
 class SyncManager:
-    def __init__(self, client: SyftClientInterface):
+    def __init__(self, client: SyftClientInterface, health_check_interval: int = 300):
         self.client = client
         self.queue = SyncQueue()
         self.consumer = SyncConsumer(client=self.client, queue=self.queue)
@@ -21,6 +21,9 @@ class SyncManager:
         self.thread: Optional[Thread] = None
         self.is_stop_requested = False
         self.sync_run_once = False
+
+        self.last_health_check = 0
+        self.health_check_interval = health_check_interval
 
     def is_alive(self) -> bool:
         return self.thread is not None and self.thread.is_alive()
@@ -34,6 +37,8 @@ class SyncManager:
         def _start(manager: SyncManager):
             while not manager.is_stop_requested:
                 try:
+                    if manager._should_perform_health_check():
+                        manager.check_server_health()
                     manager.run_single_thread()
                     time.sleep(manager.sync_interval)
                 except FatalSyncError as e:
@@ -65,6 +70,24 @@ class SyncManager:
             for email, remote_state in remote_datasite_states.items()
         ]
         return datasite_states
+
+    def _should_perform_health_check(self) -> bool:
+        return time.time() - self.last_health_check > self.health_check_interval
+
+    def check_server_health(self):
+        """
+        check if the server is still available and auth is still valid.
+        If not, raise a FatalSyncError which will stop the sync loop.
+
+        Raises:
+            FatalSyncError: If the server is not available.
+        """
+        try:
+            health_check(self.client.server_client, num_retries=5)
+            logger.debug("Health check succeeded, server is available.")
+            self.last_health_check = time.time()
+        except Exception as e:
+            raise FatalSyncError(f"Server is not available. Reason: {e}.")
 
     def enqueue_datasite_changes(self, datasite: DatasiteState):
         try:

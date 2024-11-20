@@ -1,8 +1,10 @@
 import base64
+import time
 from pathlib import Path
 from typing import Any
 
 import httpx
+from loguru import logger
 
 from syftbox.client.exceptions import SyftServerError
 from syftbox.server.sync.models import ApplyDiffResponse, DiffResponse, FileMetadata
@@ -136,3 +138,40 @@ def download_bulk(client: httpx.Client, paths: list[str]) -> bytes:
     )
     response.raise_for_status()
     return response.content
+
+
+def health_check(client: httpx.Client, num_retries: int = 5, interval: float = 0.5) -> None:
+    """
+    Performs a health check on the server by sending a POST request to the '/auth/whoami' endpoint.
+    Health check will fail if user is not authenticated, or if the server does not respond with a 200 status code.
+
+    Args:
+        client (httpx.Client): client to use for the health check
+        num_retries (int, optional): number of retries. Defaults to 5.
+        interval (float, optional): wait time between retries. Defaults to 0.5.
+
+    Raises:
+        SyftServerError: If the server does not respond with a 200 status code after the specified retries.
+
+    Returns:
+        None: If the health check is successful.
+    """
+    response_message = None
+    for attempt in range(num_retries):
+        try:
+            response = client.post("/auth/whoami")
+            if response.status_code == 200:
+                return  # Health check passed
+            response_message = response.json()
+        except Exception as e:
+            response_message = f"Unexpected error: {e}"
+
+        logger.debug(f"Health check failed. Retrying in {interval} seconds. Reason: {response_message}")
+
+        if attempt < (num_retries - 1):
+            time.sleep(interval)
+
+    err_msg = f"Server health check failed after {num_retries} retries."
+    if response_message:
+        err_msg += f" {response_message}"
+    raise SyftServerError(err_msg)
