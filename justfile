@@ -145,7 +145,10 @@ test-e2e-old test_name:
 
 [group('test')]
 test-e2e test_name:
-    @echo "Using SyftBox from {{ _green }}'$(which syftbox)'{{ _nc }}"
+    #!/bin/sh
+    uv sync --frozen
+    . .venv/bin/activate
+    echo "Using SyftBox from {{ _green }}'$(which syftbox)'{{ _nc }}"
     pytest -sv ./tests/e2e/test_{{ test_name }}.py
 
 # ---------------------------------------------------------------------------------------------------------------------

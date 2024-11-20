@@ -49,22 +49,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install SyftBox
-        run: |
-          uv tool install --upgrade .
-
       - name: Pre-test checks
         run: |
           uv --version
           jq --version
           just --version
           curl --version
-          syftbox version
 
       - name: Run E2E Test for '${{ matrix.e2e-test }}'
-        # env for all e2e tests. use env file for test specific env vars
-        env:
-          SYFTBOX_DISABLE_ICONS: "true"
         run: |
           just reset
           just test-e2e ${{ matrix.e2e-test }}
