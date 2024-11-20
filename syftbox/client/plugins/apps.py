@@ -363,8 +363,14 @@ class AppRunner:
         def run():
             bootstrap(self.client)
             while not self.__event.is_set():
-                run_apps(apps_path=self.client.workspace.apps, client_config=self.client.config.path)
-                time.sleep(self.interval)
+                try:
+                    run_apps(
+                        apps_path=self.client.workspace.apps,
+                        client_config=self.client.config.path,
+                    )
+                    time.sleep(self.interval)
+                except Exception as e:
+                    logger.error(f"Error running apps: {str(e)}")
 
         self.__run_thread = threading.Thread(target=run)
         self.__run_thread.start()
