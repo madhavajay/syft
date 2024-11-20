@@ -16,6 +16,7 @@ from typing_extensions import Any, Optional, Union
 from syftbox.client.base import SyftClientInterface
 from syftbox.lib.client_config import CONFIG_PATH_ENV
 
+APP_LOG_FILE_NAME_FORMAT = "{app_name}.log"
 DEFAULT_INTERVAL = 10
 RUNNING_APPS = {}
 DEFAULT_APPS_PATH = Path(os.path.join(os.path.dirname(__file__), "..", "..", "..", "default_apps")).absolute().resolve()
@@ -144,10 +145,7 @@ def run_with_logging(command: str, app_path: Path, clean_env: dict, log_path: Pa
 
     # Create a unique log filename with timestamp and app name
     app_name = app_path.name
-    log_file = log_path / f"{app_name}.log"
-
-    # Remove existing log file if it exists
-    log_file.unlink(missing_ok=True)
+    log_file = log_path / APP_LOG_FILE_NAME_FORMAT.format(app_name=app_name)
 
     # Create isolated logger for this run
     app_logger, file_handler = create_app_logger(log_file=log_file)
@@ -312,7 +310,7 @@ def run_custom_app_config(app_config: SimpleNamespace, app_path: Path, client_co
                 clean_env,
                 app_log_dir,
             )
-            log_file = app_log_dir / f"{app_name}.log"
+            log_file = app_log_dir / APP_LOG_FILE_NAME_FORMAT.format(app_name=app_name)
             logger.info(f"App '{app_name}' ran successfully. \nDetailed logs at: {log_file.resolve()}")
         except subprocess.CalledProcessError as _:
             logger.error(f"Error calling subprocess for api '{app_name}'")
@@ -336,7 +334,7 @@ def run_custom_app_config(app_config: SimpleNamespace, app_path: Path, client_co
 def run_app(app_path: Path, config_path: Path):
     app_name = os.path.basename(app_path)
     app_log_dir = app_path / "logs"
-    log_file = app_log_dir / f"{app_name}.log"
+    log_file = app_log_dir / APP_LOG_FILE_NAME_FORMAT.format(app_name=app_name)
 
     extra_args = []
     try:
