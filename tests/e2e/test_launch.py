@@ -1,8 +1,9 @@
 import asyncio
 
 import pytest
+from loguru import logger
 
-from tests.e2e.conftest import Client, E2EContext, Server, info
+from tests.e2e.conftest import Client, E2EContext, Server
 
 
 def deployment_config():
@@ -19,7 +20,7 @@ def deployment_config():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("e2e_context", [deployment_config()], indirect=True, ids=["deployment"])
 async def test_e2e_launch(e2e_context: E2EContext):
-    info(f"Starting E2E '{e2e_context.e2e_name}'")
+    logger.info(f"Starting E2E '{e2e_context.e2e_name}'")
     e2e_context.reset_test_dir()
     await e2e_context.start_all()
     await asyncio.sleep(15)

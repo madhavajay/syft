@@ -1,6 +1,7 @@
 import asyncio
 import os
 import shutil
+import sys
 from asyncio.subprocess import Process
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,7 +9,13 @@ from typing import Dict, List
 
 import httpx
 import pytest_asyncio
-from rich import print as rprint
+from loguru import logger
+
+logger.remove()
+logger.add(sys.stderr, format="<level>{level: <8}</level> | <level>{message}</level>", colorize=True)
+logger.level("SUCCESS", color="<b><green>")
+logger.level("INFO", color="<b><cyan>")
+logger.level("DEBUG", color="<blue>")
 
 
 class E2ETestError(Exception):
@@ -157,27 +164,27 @@ class E2EContext:
         return process
 
     async def wait_for_server(self, server: Server, timeout: int = 30):
-        debug(f"Waiting for server to be ready on port {server.port} (timeout={timeout}s)")
+        logger.debug(f"Waiting for server to be ready on port {server.port} (timeout={timeout}s)")
         await self.wait_for_url(f"http://localhost:{server.port}/info", timeout=timeout)
-        success(f"Server '{server.port}' is ready")
+        logger.success(f"Server '{server.port}' is ready")
 
     async def wait_for_clients(self, clients: List[Client], timeout: int = 30):
         # wait for all futures with a timeout
         await asyncio.gather(*[self.wait_for_client(c, timeout=timeout) for c in clients])
 
     async def wait_for_client(self, client: Client, timeout: int = 30):
-        debug(f"Waiting for client '{client.name}' to be ready on port {client.port} (timeout={timeout}s)")
+        logger.debug(f"Waiting for client '{client.name}' to be ready on port {client.port} (timeout={timeout}s)")
         await self.wait_for_url(f"http://localhost:{client.port}/info", timeout=timeout)
-        success(f"Client '{client.name}' is ready")
+        logger.success(f"Client '{client.name}' is ready")
 
     async def wait_for_api(self, app_name: str, client: Client, timeout: int = 30):
-        debug(f"Waiting for API '{app_name}' to be ready (timeout={timeout}s)")
+        logger.debug(f"Waiting for API '{app_name}' to be ready (timeout={timeout}s)")
         run_path = client.api_dir / app_name / "run.sh"
         await self.wait_for_path(run_path, timeout=timeout)
-        success(f"API '{app_name}' is ready on client '{client.name}'")
+        logger.success(f"API '{app_name}' is ready on client '{client.name}'")
 
     async def wait_for_path(self, path: Path, timeout: int = 30, interval: float = 0.5) -> None:
-        debug(f"Waiting for path '{path}' (timeout={timeout}s)")
+        logger.debug(f"Waiting for path '{path}' (timeout={timeout}s)")
         start = asyncio.get_event_loop().time()
 
         while not path.exists():
@@ -186,7 +193,7 @@ class E2EContext:
             await asyncio.sleep(interval)
 
         elapsed = asyncio.get_event_loop().time() - start
-        debug(f"Got {path} (after {elapsed:.1f}s)")
+        logger.debug(f"Got {path} (after {elapsed:.1f}s)")
 
     async def wait_for_url(self, url: str, timeout: int = 30, interval: float = 1.0) -> None:
         async with httpx.AsyncClient() as client:
@@ -201,7 +208,7 @@ class E2EContext:
                     await asyncio.sleep(interval)
 
             elapsed = asyncio.get_event_loop().time() - start
-            debug(f"Got response from {url} (after {elapsed:.1f}s)")
+            logger.debug(f"Got response from {url} (after {elapsed:.1f}s)")
 
 
 def get_random_port():
@@ -210,26 +217,6 @@ def get_random_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("localhost", 0))
         return s.getsockname()[1]
-
-
-def err(msg: str):
-    rprint(f"[red]Error:[/red] [bold white]{msg}[/bold white]")
-
-
-def info(msg: str):
-    rprint(f"[bold cyan]{msg}[/bold cyan]")
-
-
-def warn(msg: str):
-    rprint(f"[yellow]{msg}[/yellow]")
-
-
-def debug(msg: str):
-    rprint(f"[blue]{msg}[/blue]")
-
-
-def success(msg: str):
-    rprint(f"[bold green]{msg}[/bold green]")
 
 
 @pytest_asyncio.fixture
