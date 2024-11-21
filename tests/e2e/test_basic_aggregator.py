@@ -10,7 +10,7 @@ from tests.e2e.conftest import Client, E2EContext, Server
 
 def deployment_config():
     return {
-        "e2e_name": "aggregator",
+        "e2e_name": "basic_aggregator",
         "server": Server(port=5001),
         "clients": [
             Client(name="agg", port=8080, apps=["https://github.com/OpenMined/basic_aggregator"]),
@@ -22,7 +22,7 @@ def deployment_config():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("e2e_context", [deployment_config()], indirect=True, ids=["basic_aggregator"])
-async def test_e2e_aggregator(e2e_context: E2EContext):
+async def test_e2e_basic_aggregator(e2e_context: E2EContext):
     logger.info(f"Starting E2E '{e2e_context.e2e_name}'")
     e2e_context.reset_test_dir()
 
