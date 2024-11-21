@@ -70,6 +70,7 @@ def get_access_token(
     response = auth_client.post(
         "/auth/validate_email_token",
         headers={"Authorization": f"Bearer {email_token}"},
+        params={"email": conf.email},
     )
 
     if response.status_code == 200:

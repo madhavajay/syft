@@ -105,7 +105,7 @@ class InstallRequest(BaseModel):
 
 @router.post("/install")
 async def install_app(request: InstallRequest):
-    command = ["syftbox", "app", "install", request.source]
+    command = ["syftbox", "app", "install", request.source, "--called-by", "api"]
     try:
         # Run the command and capture output
         result = subprocess.run(command, capture_output=True, text=True, check=True)
