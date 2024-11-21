@@ -14,7 +14,7 @@ from syftbox.client.plugins.sync.sync import DatasiteState, FileChangeInfo
 
 
 class SyncManager:
-    def __init__(self, client: SyftClientInterface, health_check_interval: int = 10):
+    def __init__(self, client: SyftClientInterface, health_check_interval: int = 300):
         self.client = client
         self.queue = SyncQueue()
         self.consumer = SyncConsumer(client=self.client, queue=self.queue)
@@ -43,7 +43,7 @@ class SyncManager:
                     manager.run_single_thread()
                     time.sleep(manager.sync_interval)
                 except FatalSyncError as e:
-                    logger.error(f"Syncing encountered a fatal error: {e}")
+                    logger.error(f"Syncing encountered a fatal error. {e}")
                     break
 
         self.is_stop_requested = False
@@ -88,10 +88,9 @@ class SyncManager:
             logger.debug("Health check succeeded, server is available.")
             self.last_health_check = time.time()
         except SyftAuthenticationError as e:
-            # Auth errors will never recover, sync can be stopped
-            raise FatalSyncError(f"Heath check failed: {e}")
+            # Auth errors will never recover, sync should be stopped
+            raise FatalSyncError(f"Health check failed, {e}")
         except Exception as e:
-            # Connection errors or non-auth errors will be retried
             logger.error(f"Health check failed: {e}. Retrying in {self.health_check_interval} seconds.")
 
     def enqueue_datasite_changes(self, datasite: DatasiteState):
