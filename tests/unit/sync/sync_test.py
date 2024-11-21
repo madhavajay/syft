@@ -11,6 +11,7 @@ from loguru import logger
 
 from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
+from syftbox.client.plugins.sync.exceptions import FatalSyncError
 from syftbox.client.plugins.sync.manager import DatasiteState, SyncManager, SyncQueueItem
 from syftbox.client.utils.dir_tree import DirTree, create_dir_tree
 from syftbox.lib.lib import SyftPermission
@@ -504,3 +505,12 @@ def test_n_datasites(tmp_path: Path, server_client: TestClient, datasite_1: Syft
     sync_service_1.run_single_thread()
 
     print(server_client.app_state["server_settings"].snapshot_folder)
+
+
+def test_sync_health_check(datasite_1: SyftClientInterface):
+    sync_service = SyncManager(datasite_1)
+    sync_service.check_server_sync_status()
+
+    sync_service.client.server_client.headers["Authorization"] = "Bearer invalid_token"
+    with pytest.raises(FatalSyncError):
+        sync_service.check_server_sync_status()

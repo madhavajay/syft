@@ -5,15 +5,16 @@ from typing import Optional
 from loguru import logger
 
 from syftbox.client.base import SyftClientInterface
+from syftbox.client.exceptions import SyftAuthenticationError
 from syftbox.client.plugins.sync.consumer import SyncConsumer
-from syftbox.client.plugins.sync.endpoints import get_datasite_states
+from syftbox.client.plugins.sync.endpoints import get_datasite_states, whoami
 from syftbox.client.plugins.sync.exceptions import FatalSyncError
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import DatasiteState, FileChangeInfo
 
 
 class SyncManager:
-    def __init__(self, client: SyftClientInterface):
+    def __init__(self, client: SyftClientInterface, health_check_interval: int = 300):
         self.client = client
         self.queue = SyncQueue()
         self.consumer = SyncConsumer(client=self.client, queue=self.queue)
@@ -21,6 +22,9 @@ class SyncManager:
         self.thread: Optional[Thread] = None
         self.is_stop_requested = False
         self.sync_run_once = False
+
+        self.last_health_check = 0
+        self.health_check_interval = health_check_interval
 
     def is_alive(self) -> bool:
         return self.thread is not None and self.thread.is_alive()
@@ -34,10 +38,12 @@ class SyncManager:
         def _start(manager: SyncManager):
             while not manager.is_stop_requested:
                 try:
+                    if manager._should_perform_health_check():
+                        manager.check_server_sync_status()
                     manager.run_single_thread()
                     time.sleep(manager.sync_interval)
                 except FatalSyncError as e:
-                    logger.error(f"Syncing encountered a fatal error: {e}")
+                    logger.error(f"Syncing encountered a fatal error. {e}")
                     break
 
         self.is_stop_requested = False
@@ -65,6 +71,27 @@ class SyncManager:
             for email, remote_state in remote_datasite_states.items()
         ]
         return datasite_states
+
+    def _should_perform_health_check(self) -> bool:
+        return time.time() - self.last_health_check > self.health_check_interval
+
+    def check_server_sync_status(self):
+        """
+        check if the server is still available for syncing,
+        if the user cannot authenticate, the sync will stop.
+
+        Raises:
+            FatalSyncError: If the server is not available.
+        """
+        try:
+            _ = whoami(self.client.server_client)
+            logger.debug("Health check succeeded, server is available.")
+            self.last_health_check = time.time()
+        except SyftAuthenticationError as e:
+            # Auth errors will never recover, sync should be stopped
+            raise FatalSyncError(f"Health check failed, {e}")
+        except Exception as e:
+            logger.error(f"Health check failed: {e}. Retrying in {self.health_check_interval} seconds.")
 
     def enqueue_datasite_changes(self, datasite: DatasiteState):
         try:
