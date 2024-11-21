@@ -134,7 +134,7 @@ def download_bulk(client: httpx.Client, paths: list[str]) -> bytes:
     return response.content
 
 
-def whoami(client: httpx.Client) -> None:
+def whoami(client: httpx.Client) -> str:
     """
     Performs a health check on the server by sending a POST request to the '/auth/whoami' endpoint.
 
@@ -151,7 +151,8 @@ def whoami(client: httpx.Client) -> None:
     try:
         response = client.post("/auth/whoami")
         if response.status_code == 200:
-            return
+            email = response.json()["email"]
+            return email
         elif response.status_code == 401:
             raise SyftAuthenticationError()
         else:

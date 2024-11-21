@@ -84,7 +84,7 @@ class SyncManager:
             FatalSyncError: If the server is not available.
         """
         try:
-            whoami(self.client.server_client)
+            _ = whoami(self.client.server_client)
             logger.debug("Health check succeeded, server is available.")
             self.last_health_check = time.time()
         except SyftAuthenticationError as e:
