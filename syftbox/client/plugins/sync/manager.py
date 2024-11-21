@@ -5,15 +5,16 @@ from typing import Optional
 from loguru import logger
 
 from syftbox.client.base import SyftClientInterface
+from syftbox.client.exceptions import SyftAuthenticationError
 from syftbox.client.plugins.sync.consumer import SyncConsumer
-from syftbox.client.plugins.sync.endpoints import get_datasite_states, health_check
+from syftbox.client.plugins.sync.endpoints import get_datasite_states, whoami
 from syftbox.client.plugins.sync.exceptions import FatalSyncError
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
 from syftbox.client.plugins.sync.sync import DatasiteState, FileChangeInfo
 
 
 class SyncManager:
-    def __init__(self, client: SyftClientInterface, health_check_interval: int = 300):
+    def __init__(self, client: SyftClientInterface, health_check_interval: int = 10):
         self.client = client
         self.queue = SyncQueue()
         self.consumer = SyncConsumer(client=self.client, queue=self.queue)
@@ -38,7 +39,7 @@ class SyncManager:
             while not manager.is_stop_requested:
                 try:
                     if manager._should_perform_health_check():
-                        manager.check_server_health()
+                        manager.check_server_sync_status()
                     manager.run_single_thread()
                     time.sleep(manager.sync_interval)
                 except FatalSyncError as e:
@@ -74,20 +75,24 @@ class SyncManager:
     def _should_perform_health_check(self) -> bool:
         return time.time() - self.last_health_check > self.health_check_interval
 
-    def check_server_health(self):
+    def check_server_sync_status(self):
         """
-        check if the server is still available and auth is still valid.
-        If not, raise a FatalSyncError which will stop the sync loop.
+        check if the server is still available for syncing,
+        if the user cannot authenticate, the sync will stop.
 
         Raises:
             FatalSyncError: If the server is not available.
         """
         try:
-            health_check(self.client.server_client, num_retries=5)
+            whoami(self.client.server_client)
             logger.debug("Health check succeeded, server is available.")
             self.last_health_check = time.time()
+        except SyftAuthenticationError as e:
+            # Auth errors will never recover, sync can be stopped
+            raise FatalSyncError(f"Heath check failed: {e}")
         except Exception as e:
-            raise FatalSyncError(f"Server is not available. Reason: {e}.")
+            # Connection errors or non-auth errors will be retried
+            logger.error(f"Health check failed: {e}. Retrying in {self.health_check_interval} seconds.")
 
     def enqueue_datasite_changes(self, datasite: DatasiteState):
         try:
