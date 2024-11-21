@@ -1,0 +1,4 @@
+cbor2
+pydantic
+python-ulid
+watchdog
