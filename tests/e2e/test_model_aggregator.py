@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-import random
+import secrets
 import shutil
 from pathlib import Path
 
@@ -14,6 +14,7 @@ from tests.e2e.conftest import Client, E2EContext, Server
 AGGREGATOR_CONFIG = {
     "participants": ["user1@openmined.org", "user2@openmined.org", "user3@openmined.org"],
 }
+MAX_COPY_MODELS = 2
 
 
 def deployment_config():
@@ -58,11 +59,13 @@ async def copy_model_to_public(e2e_context: E2EContext, client: Client):
     await e2e_context.wait_for_api("pretrained_model_local", client)
     pretrained_models_dir = client.api_path("pretrained_model_local") / "pretrained_models"
     all_models = list(pretrained_models_dir.glob("*.pt"))
-    random.shuffle(all_models)
-    random_model = all_models[0]
-    logger.debug(f"Copying {random_model} to {client.email} public dir")
-    shutil.copy(random_model, client.public_dir)
-    assert Path(client.public_dir, random_model.name).exists()
+    for _ in range(MAX_COPY_MODELS):
+        # random.random is not concurrency safe, using secrets.randbelow
+        rand_idx = secrets.randbelow(len(all_models))
+        random_model = all_models[rand_idx]
+        logger.debug(f"Copying {random_model} to {client.email} public dir")
+        shutil.copy(random_model, client.public_dir)
+        assert Path(client.public_dir, random_model.name).exists()
 
 
 @pytest.mark.asyncio
