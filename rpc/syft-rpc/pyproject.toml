@@ -1,0 +1,19 @@
+[project]
+name = "syft-rpc"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "cbor2>=5.6.5",
+    "pydantic>=2.9.2",
+    "python-ulid>=3.0.0",
+    "syftbox",
+]
+
+[tool.setuptools]
+packages = { find = {} }    # Use the find directive as a table
+include-package-data = true # Include package data
+
+[tool.uv.sources]
+syftbox = { workspace = true }

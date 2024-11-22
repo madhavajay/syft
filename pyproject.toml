@@ -59,6 +59,9 @@ dev-dependencies = [
     "pytest>=8.3.3",
 ]
 
+[tool.uv.workspace]
+members = ["rpc/syft-event", "rpc/syft-rpc"]
+
 [tool.setuptools]
 packages = { find = {} }    # Use the find directive as a table
 include-package-data = true # Include package data

@@ -1,0 +1,24 @@
+[project]
+name = "syft-event"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pydantic>=2.9.2",
+    "syftbox",
+    "watchdog>=5.0.3",
+]
+
+[tool.setuptools]
+packages = { find = {} }    # Use the find directive as a table
+include-package-data = true # Include package data
+
+[tool.uv.sources]
+syft-rpc = { workspace = true }
+syftbox = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "syft-rpc",
+]
