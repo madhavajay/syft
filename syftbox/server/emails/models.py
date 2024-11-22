@@ -1,6 +1,6 @@
 from typing import Union
 
-from pydantic import BaseModel, EmailStr, Field, NameEmail
+from pydantic import BaseModel, EmailStr, NameEmail
 
 from .constants import FROM_EMAIl
 
@@ -17,10 +17,3 @@ class SendEmailRequest(BaseModel):
             "subject": self.subject,
             "html": self.html,
         }
-
-
-class BatchSendEmailRequest(BaseModel):
-    emails: list[SendEmailRequest] = Field(max_length=100)
-
-    def json_for_request(self):
-        return [email.json_for_request() for email in self.emails]
