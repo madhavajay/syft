@@ -1,30 +1,27 @@
-from utils import CBORModel
+from app import LoginResponse, body_to_obj
 
 from rpc import Response, Server
 from syftbox.lib import Client
 
-
-class LoginResponse(CBORModel):
-    username: str
-    token: int = 123
-
-
 client = Client.load()
-print("client", client.email)
+print("> Client", client.email)
 app = Server(app_name="test", client=client)
 
 
 @app.get("/public/rpc/test/listen")
 def login(request):
-    print("r", request)
-    r = request.dict()
-    print("d", r)
-    q = request.obj()
-    print("o", q)
+    print("Request Headers", request.headers)
+    print("Request Body", request.decode())
 
-    result = LoginResponse(username=q.name, token=q.id)
-    print("result", result)
-    return Response(content=result, status_code=200)
+    user = body_to_obj(request)
+
+    result = LoginResponse(username=user.name, token=1)
+    headers = {}
+
+    headers["content-type"] = "application/json"
+    headers["object-type"] = type(result).__name__
+
+    return Response(content=result, status_code=200, headers=headers)
 
 
 app.run()

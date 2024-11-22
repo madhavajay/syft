@@ -1,50 +1,66 @@
 import asyncio
+import base64
+import json
 import os
 import re
 import time
 from collections import defaultdict
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Thread
-from typing import Any, Mapping, Tuple
+from typing import Any, Mapping
 from urllib.parse import unquote
 
 import cbor2
-from app import TypeRegistry
-from pydantic import field_validator
+from pydantic import BaseModel, field_validator
 from typing_extensions import Any, Self
 from ulid import ULID
-from utils import CBORModel, serializers
+from utils import JSONModel, serializers
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from syftbox.lib import SyftPermission
+from syftbox.lib import Client, SyftPermission
 
 dispatch = {}
 
 NOT_FOUND = 404
-SERVICE_UNAVAILABLE = 503
 
 
-def process_file(file_path, client):
+def base64_to_bytes(data: str) -> bytes:
+    """
+    Convert a Base64-encoded string to bytes.
+
+    Args:
+        data (str): The Base64-encoded string.
+
+    Returns:
+        bytes: The decoded bytes.
+    """
+    return base64.b64decode(data)
+
+
+def process_request(file_path, client):
     """Process the file that is detected."""
     print(f"Processing file: {file_path}")
     try:
         with open(file_path, "rb") as file:
-            msg = Message.load(file.read())
-            print("msg.path", msg.path, msg.path in dispatch)
-            if msg.path in dispatch:
-                route = dispatch[msg.path]
+            msg = RequestMessage.load(file.read())
+            print("msg.path", msg.url_path, msg.url_path in dispatch)
+            if msg.url_path in dispatch:
+                route = dispatch[msg.url_path]
                 response = route(msg)
                 print("got response from function", response, type(response))
-                payload = response.content
+                body = response.content
+                headers = response.headers
                 status_code = response.status_code
             else:
-                payload = None
+                body = b""
+                headers = {}
                 status_code = NOT_FOUND
 
-            response_msg = msg.reply(payload, status_code=status_code, from_sender=client.email)
-            response_msg.write(client=client, request=False)
+            response_msg = msg.reply(from_sender=client.email, body=body, headers=headers, status_code=status_code)
+            response_msg.send(client=client)
     except Exception as e:
         import traceback
 
@@ -64,7 +80,7 @@ class FileWatcherHandler(FileSystemEventHandler):
             return
         print(f"New file detected: {event.src_path}")
         if event.src_path.endswith(".request"):
-            process_file(event.src_path, self.client)
+            process_request(event.src_path, self.client)
 
 
 class RPCRegistry:
@@ -122,32 +138,24 @@ class SyftBoxURL:
         return f"{self.protocol}{self.host}{self.path}"
 
 
-# split to request / response
-# add headers
-# # path on the way out, status code on the way back
-class Message(CBORModel):
+serializers[SyftBoxURL] = str
+
+
+def mk_timestamp() -> float:
+    return datetime.now(timezone.utc).timestamp()
+
+
+class Message(JSONModel):
     ulid: ULID
-    status_code: int = 0
-    url: SyftBoxURL
     sender: str
-    path: str
-    timestamp: int = 1
-    type: str
-    payload: bytes | None
+    headers: dict[str, str]
+    timestamp: float = mk_timestamp()
+    body: bytes | None
+    url: SyftBoxURL
 
-    def body(self) -> Any:
-        return self.payload
-
-    def dict(self) -> dict:
-        return cbor2.loads(self.payload)
-
-    def obj(self) -> Any:
-        try:
-            obj = TypeRegistry[self.type].parse_obj(self.dict())
-            return obj
-        except Exception as e:
-            print("failed to parse object", e)
-            raise e
+    @property
+    def url_path(self):
+        return self.url.path
 
     @field_validator("url", mode="before")
     @classmethod
@@ -164,75 +172,106 @@ class Message(CBORModel):
     def local_path(self, client):
         return self.url.to_local_path(client.workspace.datasites)
 
-    def request_path(self, client):
-        return self.local_path(client) / f"{self.ulid}.request"
+    def file_path(self, client):
+        return self.local_path(client) / f"{self.ulid}.{self.message_type}"
 
-    def response_path(self, client):
-        return self.local_path(client) / f"{self.ulid}.response"
-
-    def reply(self, payload: Any, status_code: int, from_sender: str) -> Self:
-        t_name = type(payload).__name__
-        if payload is None:
-            data = None
+    def decode(self):
+        if "content-type" in self.headers:
+            if self.headers["content-type"] == "application/json":
+                try:
+                    b = base64_to_bytes(self.body)
+                    return json.loads(b)
+                except Exception as e:
+                    raise e
+            if self.headers["content-type"] == "application/cbor":
+                try:
+                    return cbor2.loads(self.body)
+                except Exception as e:
+                    raise e
         else:
-            print("are we calling dump on the payload?", payload, type(payload))
-            data = payload.dump()
-        return Message(
+            return self.body.decode("utf-8")
+
+    def send(self, client):
+        file = self.file_path(client)
+        with open(file, "wb") as f:
+            output = self.dump()
+            if isinstance(output, str):
+                output = output.encode("utf-8")
+            f.write(output)
+
+
+class ResponseMessage(Message):
+    message_type: str = "response"
+    status_code: int = 200
+
+
+class RequestMessage(Message):
+    message_type: str = "request"
+
+    def reply(
+        self, from_sender: str, body: object | str | bytes, headers: dict[str, str] | None, status_code: int = 200
+    ) -> Self:
+        if headers is None:
+            headers = {}
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        elif hasattr(body, "dump"):
+            body = body.dump()
+        elif not isinstance(body, bytes):
+            raise Exception(f"Invalid body type: {type(body)}")
+
+        return ResponseMessage(
             ulid=self.ulid,
-            url=self.url,
             sender=from_sender,
+            headers=headers,
             status_code=status_code,
-            path=self.path,
-            timestamp=2,
-            type=t_name,
-            payload=data,
+            timestamp=mk_timestamp(),
+            body=body,
+            url=self.url,
         )
 
-    def write(self, client, request: bool = True):
-        if request:
-            file = self.request_path(client)
-        else:
-            file = self.response_path(client)
-        print(file, file)
-        with open(file, "wb") as f:
-            f.write(self.dump())
 
-
-MessageBox = Tuple[int, Message | None]
-
-
-def read_messsage(local_path: Path, ulid: ULID, request: bool = True) -> MessageBox:
-    print("READ MESSAGE", local_path)
-    path = Path(os.path.abspath(local_path))
-    print(path, path)
-
+def read_response(local_path: Path) -> ResponseMessage | None:
     try:
         if not os.path.exists(local_path):
-            return (SERVICE_UNAVAILABLE, None)
+            # not ready
+            return None
 
         with open(local_path, "rb") as file:
-            msg = Message.load(file.read())
-            print(msg)
-            return (200, msg)
+            return Message.load(file.read())
     except Exception as e:
         print("read_messsage got an error", e)
-        return (500, None)
+        raise e
 
 
-class Future(CBORModel):
+class Future(BaseModel):
     local_path: Path
-    ulid: ULID
-    path: Path
+    value: Any = None
 
-    def read(self):
-        result = read_messsage(local_path=self.local_path, ulid=self.ulid, request=False)
-        if result[0] == SERVICE_UNAVAILABLE:
-            print("not ready yet waiting")
-            return None
-        return result[1]
+    def wait(self, timeout=5):
+        start = time.time()
+        while time.time() - start < timeout:
+            self.check(silent=True)
+            if self.value is not None:
+                return self.value
+            time.sleep(0.1)
+        raise Exception("Timeout waiting for response")
+
+    @property
+    def resolve(self):
+        if self.value is None:
+            self.check()
+        return self.value
+
+    def check(self, silent=False):
+        result = read_response(local_path=self.local_path)
+        if result is None:
+            if not silent:
+                print("not ready yet waiting")
+        self.value = result
 
 
-class Response(CBORModel):
+class Response(JSONModel):
     content: Any = None
     status_code: int = 200
     headers: Mapping[str, str] | None = None
@@ -260,8 +299,47 @@ def start_listener_in_thread(listen_path, client):
     print("File watcher started in a separate thread.")
 
 
+def cleanup_old_files(listen_path: Path, message_timeout: int):
+    """
+    Cleans up files in the listen path that are older than 1 minute, except for the file `_.syftperm`.
+
+    Args:
+        listen_path (Path): The directory to clean up.
+    """
+    now = time.time()
+    for file in listen_path.glob("*"):
+        if file.name == "_.syftperm":
+            continue
+        if file.is_file():
+            file_age = now - file.stat().st_mtime
+            if file_age > message_timeout:  # Older than 1 minute
+                try:
+                    file.unlink()
+                    print(f"Deleted old file: {file}")
+                except Exception as e:
+                    print(f"Failed to delete file {file}: {e}")
+
+
+def start_cleanup_in_thread(listen_path: Path, message_timeout: int):
+    """
+    Starts a thread that runs the cleanup process every 1 minute.
+
+    Args:
+        listen_path (Path): The directory to clean up.
+    """
+
+    def cleanup_loop():
+        while True:
+            cleanup_old_files(listen_path, message_timeout)
+            time.sleep(1)  # Run cleanup every 1 minute
+
+    cleanup_thread = Thread(target=cleanup_loop, daemon=True)
+    cleanup_thread.start()
+    print("Cleanup process started in a separate thread.")
+
+
 class Server:
-    def __init__(self, app_name: str, client):
+    def __init__(self, app_name: str, client, message_timeout=60):
         self.client = client
         self.datasites_path = client.datasites
         self.datasite = client.email
@@ -273,6 +351,7 @@ class Server:
         permission = SyftPermission.mine_with_public_write(email=self.datasite)
         permission.ensure(self.public_listen_path)
         start_listener_in_thread(self.public_listen_path, self.client)
+        start_cleanup_in_thread(self.public_listen_path, message_timeout)
         print(f"Listening on: {self.public_listen_path}")
 
     def register(self, path: str, func):
@@ -312,10 +391,6 @@ class Server:
         print("Cleaning up resources...")
 
 
-serializers[SyftBoxURL] = str
-
-from syftbox.lib import Client
-
 rpc_registry = RPCRegistry()
 
 
@@ -326,22 +401,26 @@ class Request:
         else:
             self.client = client
 
-    def get(self, url: str, body: Any):
+    def get(self, url: str, body: Any, headers: dict[str, str] | None = None) -> Future:
         syftbox_url = SyftBoxURL(url)
-        return self.send_request(syftbox_url, body)
+        return self.send_request(syftbox_url, body=body, headers=headers)
 
-    def send_request(self, url, body: Any):
-        t_name = type(body).__name__
-        data = body.dump()
-        m = Message(
-            ulid=ULID(), url=url, sender=self.client.email, path=url.path, timestamp=1, type=t_name, payload=data
+    def send_request(self, url, body: Any, headers: dict[str, str] | None = None) -> Future:
+        if headers is None:
+            headers = {}
+        m = RequestMessage(
+            ulid=ULID(),
+            url=url,
+            sender=self.client.email,
+            timestamp=mk_timestamp(),
+            body=body,
+            headers=headers,
         )
-        request_path = m.request_path(self.client)
-        response_path = m.response_path(self.client)
-
+        request_path = m.file_path(self.client)
         if request_path in rpc_registry.requests:
-            raise Exception(f"Already got: {request_path} in registry")
+            raise Exception(f"Already sent request: {request_path}")
 
-        m.write(self.client)
+        response_path = Path(str(request_path).replace("request", "response"))
+        m.send(self.client)
         rpc_registry.requests[request_path] = None
-        return Future(local_path=response_path, ulid=m.ulid, path=url.path)
+        return Future(local_path=response_path)
