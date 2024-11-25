@@ -31,8 +31,10 @@ from syftbox.server.logger import setup_logger
 from syftbox.server.middleware import LoguruMiddleware
 from syftbox.server.settings import ServerSettings, get_server_settings
 
+from .emails.router import router as emails_router
 from .sync import db, hash
 from .sync.router import router as sync_router
+from .users.router import router as users_router
 
 current_dir = Path(__file__).parent
 
@@ -163,7 +165,9 @@ async def lifespan(app: FastAPI, settings: Optional[ServerSettings] = None):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(emails_router)
 app.include_router(sync_router)
+app.include_router(users_router)
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.add_middleware(LoguruMiddleware)
 
@@ -345,6 +349,12 @@ async def log_event(request: Request, email: Optional[str] = Header(default=None
 async def install():
     install_script = current_dir / "templates" / "install.sh"
     return FileResponse(install_script, media_type="text/plain")
+
+
+@app.get("/icon.png")
+async def icon():
+    icon_path = current_dir / "assets" / "icon.png"
+    return FileResponse(icon_path, media_type="image/png")
 
 
 @app.get("/info")

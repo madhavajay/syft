@@ -25,7 +25,7 @@ class SyftClientConfig(BaseModel):
     """SyftBox client configuration"""
 
     # model config
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", json_encoders={AnyHttpUrl: lambda v: str(v)})
 
     data_dir: Path = Field(
         validation_alias=AliasChoices("data_dir", "sync_folder"),
@@ -49,8 +49,13 @@ class SyftClientConfig(BaseModel):
     email: EmailStr = Field(description="Email address of the user")
     """Email address of the user"""
 
-    token: Optional[str] = Field(default=None, description="API token for the user")
-    """API token for the user"""
+    token: Optional[str] = Field(
+        default=None, description="Depracated: Use access_token instead. API token for the user", deprecated=True
+    )
+    """Depracated: Use access_token instead. API token for the user"""
+
+    access_token: Optional[str] = Field(default=None, description="Access token for the user")
+    """Access token for the user"""
 
     # WARN: we don't need `path` to be serialized, hence exclude=True
     path: Path = Field(exclude=True, description="Path to the config file")
