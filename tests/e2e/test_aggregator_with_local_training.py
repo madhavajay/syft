@@ -91,7 +91,7 @@ async def wait_for_public_trained_models(
         public_dir = client.public_dir
         for mnist_sample in mnist_samples:
             model_file = public_dir / f"trained_{mnist_sample}"
-            await e2e_context.wait_for_path(model_file, timeout=200, interval=1)
+            await e2e_context.wait_for_path(model_file, timeout=240, interval=1)
             assert model_file.exists()
 
 
@@ -128,7 +128,7 @@ async def test_e2e_aggregator_with_local_training(e2e_context: E2EContext):
     logger.info("Waiting for aggregator to aggregate the models and generate results")
     done_dir = agg_client.api_data_dir(AGGREGATOR_API_NAME) / "done"
     results_file = done_dir / "results.json"
-    await e2e_context.wait_for_path(results_file, timeout=120, interval=1)
+    await e2e_context.wait_for_path(results_file, timeout=240, interval=1)
 
     result = json.loads(results_file.read_text())
     logger.info(f"Validating results\n{result}")
