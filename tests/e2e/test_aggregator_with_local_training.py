@@ -1,5 +1,4 @@
-# Example test using the framework
-
+import asyncio
 import json
 import secrets
 import shutil
@@ -16,7 +15,7 @@ AGGREGATOR_CONFIG = {
 
 AGGREGATOR_API_NAME = "model_aggregator"
 LOCAL_TRAINING_API_NAME = "model_local_training"
-MAX_COPY_DATA_PARTS = 1
+MAX_COPY_DATA_PARTS = 2
 
 
 def deployment_config():
@@ -83,16 +82,14 @@ async def copy_train_data_to_private(e2e_context: E2EContext, clients: list[Clie
 
 
 async def wait_for_public_trained_models(
-    e2e_context: E2EContext, clients: list[Client], client_data_map: dict[str, list[str]]
+    e2e_context: E2EContext, client: Client, mnist_samples: list[str]
 ):
-    for client in clients:
-        await e2e_context.wait_for_api(LOCAL_TRAINING_API_NAME, client)
-        mnist_samples = client_data_map[client.email]
-        public_dir = client.public_dir
-        for mnist_sample in mnist_samples:
-            model_file = public_dir / f"trained_{mnist_sample}"
-            await e2e_context.wait_for_path(model_file, timeout=240, interval=1)
-            assert model_file.exists()
+    await e2e_context.wait_for_api(LOCAL_TRAINING_API_NAME, client)
+    public_dir = client.public_dir
+    for mnist_sample in mnist_samples:
+        model_file = public_dir / f"trained_{mnist_sample}"
+        await e2e_context.wait_for_path(model_file, timeout=240, interval=1)
+        assert model_file.exists()
 
 
 @pytest.mark.asyncio
@@ -123,12 +120,21 @@ async def test_e2e_aggregator_with_local_training(e2e_context: E2EContext):
     client_data_map = await copy_train_data_to_private(e2e_context, clients)
 
     logger.info("Waiting for local clients to train their models")
-    await wait_for_public_trained_models(e2e_context, clients, client_data_map)
+    await asyncio.gather(
+        *[
+            wait_for_public_trained_models(
+                e2e_context, 
+                client, 
+                client_data_map[client.email]
+            ) 
+            for client in e2e_context.clients[1:]
+        ]
+    )
 
     logger.info("Waiting for aggregator to aggregate the models and generate results")
     done_dir = agg_client.api_data_dir(AGGREGATOR_API_NAME) / "done"
     results_file = done_dir / "results.json"
-    await e2e_context.wait_for_path(results_file, timeout=240, interval=1)
+    await e2e_context.wait_for_path(results_file, timeout=90, interval=1)
 
     result = json.loads(results_file.read_text())
     logger.info(f"Validating results\n{result}")
