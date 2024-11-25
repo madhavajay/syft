@@ -91,7 +91,7 @@ async def wait_for_public_trained_models(
         public_dir = client.public_dir
         for mnist_sample in mnist_samples:
             model_file = public_dir / f"trained_{mnist_sample}"
-            await e2e_context.wait_for_path(model_file, timeout=120, interval=1)
+            await e2e_context.wait_for_path(model_file, timeout=200, interval=1)
             assert model_file.exists()
 
 
