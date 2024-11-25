@@ -122,6 +122,12 @@ async def check_for_training_complete(e2e_client: E2EContext, client: Client):
     assert len(list(agg_weights_dir.glob("*.pt"))) == AGGREGATOR_CONFIG["rounds"] + 1
 
 
+def validate_participant_data(participants: dict, key: str, expected_value: str):
+    for participant in participants:
+        assert key in participant
+        assert participant[key] == expected_value
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("e2e_context", [deployment_config()], indirect=True, ids=["fl_model_aggregation"])
 async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
@@ -190,13 +196,25 @@ async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
 
     # Validate results
     logger.info("Validating results")
-    accuracy_file = agg_public_dir / "accuracy_metrics.json"
-    rounds_accuracy = json.loads(accuracy_file.read_text())
-    assert len(rounds_accuracy) == AGGREGATOR_CONFIG["rounds"] + 1
 
     participant_file = agg_public_dir / "participants.json"
     participants = json.loads(participant_file.read_text())
     assert len(participants) == len(AGGREGATOR_CONFIG["participants"])
 
+    logger.info("Validating participants metrics")
+    participant_emails = [participant["Email"] for participant in participants]
+    assert participant_emails == AGGREGATOR_CONFIG["participants"]
+
+    # Validate participant metrics
+    validate_participant_data(participants, "Fl Client Installed", True)
+    validate_participant_data(participants, "Project Approved", True)
+    validate_participant_data(participants, "Added Private Data", True)
+    validate_participant_data(participants, "Round (current/total)", "3/3")
+
+    accuracy_file = agg_public_dir / "accuracy_metrics.json"
+    rounds_accuracy = json.loads(accuracy_file.read_text())
+
+    logger.info("Validating accuracy metrics")
+    assert len(rounds_accuracy) == AGGREGATOR_CONFIG["rounds"] + 1
     # Last round accuracy should be greater than 0.3
     assert rounds_accuracy[-1]["accuracy"] > 0.3
