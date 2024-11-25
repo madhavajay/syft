@@ -208,7 +208,7 @@ async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
     # Validate participant metrics
     validate_participant_data(participants, "Fl Client Installed", True)
     validate_participant_data(participants, "Project Approved", True)
-    validate_participant_data(participants, "Added Private Data", True)
+    validate_participant_data(participants, "Added Private Data", "True")
     validate_participant_data(participants, "Round (current/total)", "3/3")
 
     accuracy_file = agg_public_dir / "accuracy_metrics.json"
