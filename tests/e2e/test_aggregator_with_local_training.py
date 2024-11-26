@@ -81,9 +81,7 @@ async def copy_train_data_to_private(e2e_context: E2EContext, clients: list[Clie
     return client_data_map
 
 
-async def wait_for_public_trained_models(
-    e2e_context: E2EContext, client: Client, mnist_samples: list[str]
-):
+async def wait_for_public_trained_models(e2e_context: E2EContext, client: Client, mnist_samples: list[str]):
     await e2e_context.wait_for_api(LOCAL_TRAINING_API_NAME, client)
     public_dir = client.public_dir
     for mnist_sample in mnist_samples:
@@ -116,17 +114,13 @@ async def test_e2e_aggregator_with_local_training(e2e_context: E2EContext):
     shutil.copy(test_dataset_path, agg_private_dir)
 
     clients: list[Client] = e2e_context.clients[1:]
-    logger.info("participants moving the MNIST data parts into private/model_local_training to train")
+    logger.info("Participants moving the MNIST data parts into private/model_local_training to train")
     client_data_map = await copy_train_data_to_private(e2e_context, clients)
 
     logger.info("Waiting for local clients to train their models")
     await asyncio.gather(
         *[
-            wait_for_public_trained_models(
-                e2e_context, 
-                client, 
-                client_data_map[client.email]
-            ) 
+            wait_for_public_trained_models(e2e_context, client, client_data_map[client.email])
             for client in e2e_context.clients[1:]
         ]
     )
@@ -141,3 +135,8 @@ async def test_e2e_aggregator_with_local_training(e2e_context: E2EContext):
     assert result["accuracy"] >= 10.0
     assert set(result["participants"]) == set(AGGREGATOR_CONFIG["participants"])
     assert len(result["missing_peers"]) == 0
+
+    logger.info("Check that the launch and running dir are empty")
+    assert len(list(launch_dir.iterdir())) == 0
+    agg_running_dir = agg_client.api_data_dir(AGGREGATOR_API_NAME) / "running"
+    assert len(list(agg_running_dir.iterdir())) == 0
