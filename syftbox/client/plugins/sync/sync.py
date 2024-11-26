@@ -112,8 +112,8 @@ class DatasiteState:
         return self.remote_state
 
     def is_in_sync(self) -> bool:
-        permission_changes, file_changes = self.get_out_of_sync_files()
-        return len(permission_changes) == 0 and len(file_changes) == 0
+        changes = self.get_out_of_sync_files()
+        return len(changes.files) == 0 and len(changes.permissions) == 0
 
     def get_out_of_sync_files(
         self,

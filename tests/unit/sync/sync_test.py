@@ -12,7 +12,8 @@ from loguru import logger
 from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
 from syftbox.client.plugins.sync.exceptions import FatalSyncError
-from syftbox.client.plugins.sync.manager import DatasiteState, SyncManager, SyncQueueItem
+from syftbox.client.plugins.sync.manager import SyncManager, SyncQueueItem
+from syftbox.client.plugins.sync.sync import DatasiteState
 from syftbox.client.utils.dir_tree import DirTree, create_dir_tree
 from syftbox.lib.lib import SyftPermission
 from syftbox.server.settings import ServerSettings
@@ -67,16 +68,16 @@ def test_get_datasites(datasite_1: SyftClientInterface, datasite_2: SyftClientIn
     sync_service.run_single_thread()
     sync_service2.run_single_thread()
 
-    datasites = sync_service.get_datasite_states()
+    datasites = sync_service.producer.get_datasite_states()
     assert {datasites[0].email, datasites[1].email} == emails
 
 
 def test_enqueue_changes(datasite_1: SyftClientInterface):
     sync_service = SyncManager(datasite_1)
-    datasites = sync_service.get_datasite_states()
+    datasites = sync_service.producer.get_datasite_states()
 
-    out_of_sync_permissions, out_of_sync_files = datasites[0].get_out_of_sync_files()
-    num_files_after_setup = len(out_of_sync_files) + len(out_of_sync_permissions)
+    out_of_sync_res = datasites[0].get_out_of_sync_files()
+    num_files_after_setup = len(out_of_sync_res.files) + len(out_of_sync_res.permissions)
 
     # Create two files in datasite_1
     tree = {
@@ -87,21 +88,21 @@ def test_enqueue_changes(datasite_1: SyftClientInterface):
         },
     }
     create_dir_tree(Path(datasite_1.datasite), tree)
-    out_of_sync_permissions, out_of_sync_files = datasites[0].get_out_of_sync_files()
-    num_out_of_sync_files = len(out_of_sync_files) + len(out_of_sync_permissions)
+    out_of_sync_res = datasites[0].get_out_of_sync_files()
+    num_out_of_sync_files = len(out_of_sync_res.files) + len(out_of_sync_res.permissions)
     # 3 new files
     assert num_out_of_sync_files - num_files_after_setup == 3
 
     # Enqueue the changes + verify order
-    for change in out_of_sync_permissions + out_of_sync_files:
+    for change in out_of_sync_res.permissions + out_of_sync_res.files:
         sync_service.enqueue(change)
 
     items_from_queue: list[SyncQueueItem] = []
     while not sync_service.queue.empty():
         items_from_queue.append(sync_service.queue.get())
 
-    should_be_permissions = items_from_queue[: len(out_of_sync_permissions)]
-    should_be_files = items_from_queue[len(out_of_sync_permissions) :]
+    should_be_permissions = items_from_queue[: len(out_of_sync_res.permissions)]
+    should_be_files = items_from_queue[len(out_of_sync_res.permissions) :]
 
     assert all(SyftPermission.is_permission_file(item.data.path) for item in should_be_permissions)
     assert all(not SyftPermission.is_permission_file(item.data.path) for item in should_be_files)
@@ -127,10 +128,10 @@ def test_create_file(server_client: TestClient, datasite_1: SyftClientInterface,
     sync_service.run_single_thread()
 
     # check if no changes are left
-    for datasite in sync_service.get_datasite_states():
-        out_of_sync_permissions, out_of_sync_files = datasite.get_out_of_sync_files()
-        assert not out_of_sync_files
-        assert not out_of_sync_permissions
+    for datasite in sync_service.producer.get_datasite_states():
+        out_of_sync_result = datasite.get_out_of_sync_files()
+        assert not out_of_sync_result.files
+        assert not out_of_sync_result.permissions
 
     # check if file exists on server
     print(datasite_2.workspace.datasites)
@@ -140,13 +141,11 @@ def test_create_file(server_client: TestClient, datasite_1: SyftClientInterface,
     # check if file exists on datasite_2
     sync_client_2 = SyncManager(datasite_2)
     sync_client_2.run_single_thread()
-    datasite_states = sync_client_2.get_datasite_states()
+    datasite_states = sync_client_2.producer.get_datasite_states()
     ds1_state = datasite_states[0]
     assert ds1_state.email == datasite_1.email
 
-    print(ds1_state.get_out_of_sync_files())
-
-    print(f"datasites {[d.email for d in sync_client_2.get_datasite_states()]}")
+    print(f"datasites {[d.email for d in sync_client_2.producer.get_datasite_states()]}")
     sync_client_2.run_single_thread()
 
     assert_files_on_datasite(datasite_2, [Path(datasite_1.email) / "folder1" / "file.txt"])
@@ -295,7 +294,7 @@ def test_delete_file(server_client: TestClient, datasite_1: SyftClientInterface,
     assert (datasite_2.datasite / datasite_1.email / "folder1" / "file.txt").exists() is False
 
     # Check if the metadata is gone
-    remote_state_1 = sync_service_1.get_datasite_states()[0].get_remote_state()
+    remote_state_1 = sync_service_1.producer.get_datasite_states()[0].get_remote_state()
     remote_paths = {metadata.path for metadata in remote_state_1}
     assert Path(datasite_1.email) / "folder1" / "file.txt" not in remote_paths
 
@@ -322,7 +321,7 @@ def test_invalid_sync_to_remote(server_client: TestClient, datasite_1: SyftClien
     }
 
     create_dir_tree(Path(datasite_1.datasite), tree)
-    sync_service_1.enqueue_datasite_changes(datasite=DatasiteState(datasite_1, email=datasite_1.email))
+    sync_service_1.producer.enqueue_datasite_changes(datasite=DatasiteState(datasite_1, email=datasite_1.email))
 
     queue = sync_service_1.queue
     consumer = sync_service_1.consumer
@@ -350,7 +349,7 @@ def test_invalid_sync_to_remote(server_client: TestClient, datasite_1: SyftClien
     permission_path = datasite_1.datasite / "invalid_on_modify" / "_.syftperm"
     permission_path.write_text("invalid permission")
 
-    sync_service_1.enqueue_datasite_changes(datasite=DatasiteState(datasite_1, email=datasite_1.email))
+    sync_service_1.producer.enqueue_datasite_changes(datasite=DatasiteState(datasite_1, email=datasite_1.email))
     items_to_sync = []
     while not queue.empty():
         items_to_sync.append(queue.get())
@@ -414,7 +413,7 @@ def test_skip_symlink(server_client: TestClient, datasite_1: SyftClientInterface
     file_to_symlink.write_text("content")
 
     # Nothing to sync, no writes to datasites
-    states = sync_service.get_datasite_states()
+    states = sync_service.producer.get_datasite_states()
     assert len(states) == 1
     assert states[0].is_in_sync()
 
@@ -425,7 +424,7 @@ def test_skip_symlink(server_client: TestClient, datasite_1: SyftClientInterface
     symlink_folder.symlink_to(folder_to_symlink)
     symlink_file.symlink_to(file_to_symlink)
 
-    states = sync_service.get_datasite_states()
+    states = sync_service.producer.get_datasite_states()
     assert len(states) == 1
     assert states[0].is_in_sync()
 
@@ -448,7 +447,7 @@ def test_skip_hidden_paths(server_client: TestClient, datasite_1: SyftClientInte
     hidden_nested_file.parent.mkdir(parents=True)
     hidden_file.write_text("content")
 
-    states = sync_service.get_datasite_states()
+    states = sync_service.producer.get_datasite_states()
     assert len(states) == 1
     assert states[0].is_in_sync()
 

@@ -30,6 +30,8 @@ class SyncManager:
         self.last_health_check = 0
         self.health_check_interval = health_check_interval
 
+        self.setup()
+
     def setup(self):
         try:
             self.local_state.load()
