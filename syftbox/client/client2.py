@@ -53,10 +53,11 @@ class SyftClient:
 
         self.workspace = SyftWorkspace(self.config.data_dir)
         self.pid = PidFile(pidname="syftbox.pid", piddir=self.workspace.data_dir)
+
         self.server_client = httpx.Client(
             base_url=str(self.config.server_url),
             follow_redirects=True,
-            headers={"email": self.config.email, "Authorization": f"Bearer {self.config.access_token}"},
+            headers=self._server_headers,
         )
 
         # kwargs for making customization/unit testing easier
@@ -64,6 +65,14 @@ class SyftClient:
         self.__sync_manager: SyncManager = kwargs.get("sync_manager", None)
         self.__app_runner: AppRunner = kwargs.get("app_runner", None)
         self.__local_server: uvicorn.Server = None
+
+    @property
+    def _server_headers(self):
+        # TODO make access token required for initializing the client
+        headers = {"email": self.config.email}
+        if self.config.access_token is not None:
+            headers["Authorization"] = f"Bearer {self.config.access_token}"
+        return headers
 
     @property
     def sync_manager(self):
@@ -253,7 +262,7 @@ class SyftClientContext(SyftClientInterface):
             **kwargs,
         }
 
-        response = self.server_client.post("/log_event", headers={"email": self.email}, json=event_data)
+        response = self.server_client.post("/log_event", json=event_data)
         if response.status_code != 200:
             raise SyftServerError(f"Failed to log event: {response.text}")
 
