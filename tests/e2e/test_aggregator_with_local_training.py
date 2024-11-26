@@ -15,7 +15,7 @@ AGGREGATOR_CONFIG = {
 
 AGGREGATOR_API_NAME = "model_aggregator"
 LOCAL_TRAINING_API_NAME = "model_local_training"
-MAX_COPY_DATA_PARTS = 2
+MAX_COPY_DATA_PARTS = 1
 
 
 def deployment_config():
