@@ -114,7 +114,8 @@ async def approve_data_request(e2e_client: E2EContext, client: Client):
 
     # Approve request
     # Approve action is moving project dir to running dir
-    shutil.move(project_dir, running_dir)
+    shutil.copytree(project_dir, running_dir / PROJECT_NAME, dirs_exist_ok=True)
+    shutil.rmtree(project_dir)
 
     # Wait for fl_config.json to be copied
     await e2e_client.wait_for_path(
