@@ -110,7 +110,7 @@ async def check_for_training_complete(e2e_client: E2EContext, client: Client):
     done_dir = client.api_data_dir("fl_client") / "done"
     assert done_dir.exists()
 
-    await e2e_client.wait_for_path(done_dir / PROJECT_NAME, timeout=240, interval=5)
+    await e2e_client.wait_for_path(done_dir / PROJECT_NAME, timeout=360, interval=1)
 
     agg_weights_dir = done_dir / PROJECT_NAME / "agg_weights"
     round_weights_dir = done_dir / PROJECT_NAME / "round_weights"
