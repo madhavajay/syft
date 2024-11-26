@@ -8,14 +8,6 @@ from syftbox.client.routers.common import APIContext
 
 router = APIRouter()
 
-# jinja_env = Environment(loader=FileSystemLoader("syftbox/assets/templates"))
-
-
-# @router.get("/")
-# def sync_dashboard():
-#     template = jinja_env.get_template("sync_dashboard.jinja2")
-#     return HTMLResponse(template.render())
-
 
 @router.get("/data")
 def get_sync_data(
