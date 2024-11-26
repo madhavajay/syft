@@ -45,8 +45,6 @@ jobs:
       - name: Free Disk Space (macOS)
         if: runner.os == 'macOS'
         run: |
-          sudo rm -rf /Applications/Xcode.app
-          sudo rm -rf /usr/local/lib/node_modules
           sudo rm -rfv /Users/runner/Library/Android/sdk
 
       - name: Install uv
