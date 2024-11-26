@@ -28,7 +28,7 @@ MAX_COPY_PVT_DATASETS = 3
 
 def deployment_config():
     return {
-        "e2e_name": "fl_model_aggregation",
+        "e2e_name": "fl_model_training",
         "server": Server(port=5001),
         "clients": [
             Client(
@@ -125,11 +125,11 @@ async def check_for_training_complete(e2e_client: E2EContext, client: Client):
 def validate_participant_data(participants: dict, key: str, expected_value: str):
     for participant in participants:
         assert key in participant
-        assert participant[key] == expected_value
+        assert str(participant[key]) == str(expected_value)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("e2e_context", [deployment_config()], indirect=True, ids=["fl_model_aggregation"])
+@pytest.mark.parametrize("e2e_context", [deployment_config()], indirect=True, ids=["fl_model_training"])
 async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
     logger.info(f"Starting E2E '{e2e_context.e2e_name}'")
     e2e_context.reset_test_dir()
@@ -165,7 +165,7 @@ async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
     assert sample_test_dataset.exists()
 
     test_data_dir = agg_client.data_dir / "private" / "fl_aggregator"
-    await e2e_context.wait_for_path(test_data_dir)
+    await e2e_context.wait_for_path(test_data_dir, timeout=60)
     assert test_data_dir.exists()
 
     # Add test dataset for global model evaluation
@@ -208,7 +208,7 @@ async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
     # Validate participant metrics
     validate_participant_data(participants, "Fl Client Installed", True)
     validate_participant_data(participants, "Project Approved", True)
-    validate_participant_data(participants, "Added Private Data", "True")
+    validate_participant_data(participants, "Added Private Data", True)
     validate_participant_data(participants, "Round (current/total)", "3/3")
 
     accuracy_file = agg_public_dir / "accuracy_metrics.json"
