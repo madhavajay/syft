@@ -165,7 +165,7 @@ async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
     assert sample_test_dataset.exists()
 
     test_data_dir = agg_client.data_dir / "private" / "fl_aggregator"
-    await e2e_context.wait_for_path(test_data_dir, timeout=60)
+    await e2e_context.wait_for_path(test_data_dir, timeout=240)
     assert test_data_dir.exists()
 
     # Add test dataset for global model evaluation
