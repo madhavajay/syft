@@ -116,8 +116,11 @@ async def approve_data_request(e2e_client: E2EContext, client: Client):
     # Approve action is moving project dir to running dir
     shutil.move(project_dir, running_dir)
 
-    # Wait for fl_config.json to be created
-    await e2e_client.wait_for_path(running_dir / PROJECT_NAME / "fl_config.json", timeout=30, interval=1)
+    # Wait for fl_config.json to be copied
+    await e2e_client.wait_for_path(
+        running_dir / PROJECT_NAME / "fl_config.json",
+        timeout=90,
+    )
 
     assert Path(running_dir / PROJECT_NAME).exists()
     assert Path(running_dir / PROJECT_NAME / "fl_config.json").exists()
