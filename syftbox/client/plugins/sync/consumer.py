@@ -459,11 +459,10 @@ class SyncConsumer:
                 state=decisions.result_local_state,
                 action=action,
             )
+        elif decisions.is_noop():
+            return
         else:
-            if decisions.is_noop():
-                return
-
-            # TODO add more specific error status for rejected files (e.g. permission error)
+            # Not executed and not NOOP means there was an error. Log error to local state
             message = decisions.local_decision.message or decisions.remote_decision.message
             self.local_state.insert_status_info(
                 path=item.data.path,
