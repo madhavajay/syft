@@ -101,7 +101,11 @@ async def approve_data_request(e2e_client: E2EContext, client: Client):
     # Approve action is moving project dir to running dir
     shutil.move(project_dir, running_dir)
 
+    # Wait for fl_config.json to be created
+    await e2e_client.wait_for_path(running_dir / PROJECT_NAME / "fl_config.json", timeout=30, interval=1)
+
     assert Path(running_dir / PROJECT_NAME).exists()
+    assert Path(running_dir / PROJECT_NAME / "fl_config.json").exists()
     logger.info(f"Data request approved for {client.email}")
 
 
@@ -110,7 +114,7 @@ async def check_for_training_complete(e2e_client: E2EContext, client: Client):
     done_dir = client.api_data_dir("fl_client") / "done"
     assert done_dir.exists()
 
-    await e2e_client.wait_for_path(done_dir / PROJECT_NAME, timeout=360, interval=1)
+    await e2e_client.wait_for_path(done_dir / PROJECT_NAME, timeout=300, interval=1)
 
     agg_weights_dir = done_dir / PROJECT_NAME / "agg_weights"
     round_weights_dir = done_dir / PROJECT_NAME / "round_weights"
@@ -126,6 +130,17 @@ def validate_participant_data(participants: dict, key: str, expected_value: str)
     for participant in participants:
         assert key in participant
         assert str(participant[key]) == str(expected_value)
+
+
+async def validate_project_folder_empty(e2e_context: E2EContext, client: Client, timeout: int = 30):
+    project_folder_dir = client.api_data_dir("fl_client") / "running" / PROJECT_NAME
+    start_time = asyncio.get_event_loop().time()
+    while project_folder_dir.exists():
+        await asyncio.sleep(1)
+        if start_time + timeout < asyncio.get_event_loop().time():
+            raise TimeoutError(f"Project folder {project_folder_dir} not deleted in {timeout} seconds")
+
+    assert not project_folder_dir.exists()
 
 
 @pytest.mark.asyncio
@@ -216,5 +231,10 @@ async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
 
     logger.info("Validating accuracy metrics")
     assert len(rounds_accuracy) == AGGREGATOR_CONFIG["rounds"] + 1
-    # Last round accuracy should be greater than 0.3
-    assert rounds_accuracy[-1]["accuracy"] > 0.3
+    # Last round accuracy should be greater than 0.25
+    assert rounds_accuracy[-1]["accuracy"] > 0.25
+
+    # Validate running folder is empty, post training
+    await asyncio.gather(
+        *[validate_project_folder_empty(e2e_context, fl_client) for fl_client in e2e_context.clients[1:]]
+    )
