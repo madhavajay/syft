@@ -10,7 +10,7 @@ from loguru import logger
 from tests.e2e.conftest import Client, E2EContext, Server
 
 AGGREGATOR_CONFIG = {
-    "participants": ["user1@openmined.org", "user2@openmined.org"],
+    "participants": ["user1@openmined.org", "user2@openmined.org", "user3@openmined.org"],
 }
 
 AGGREGATOR_API_NAME = "model_aggregator"
@@ -39,6 +39,14 @@ def deployment_config():
             Client(
                 name="user2",
                 port=8082,
+                server_port=5001,
+                apps=[
+                    "https://github.com/OpenMined/model_local_training",
+                ],
+            ),
+            Client(
+                name="user3",
+                port=8083,
                 server_port=5001,
                 apps=[
                     "https://github.com/OpenMined/model_local_training",

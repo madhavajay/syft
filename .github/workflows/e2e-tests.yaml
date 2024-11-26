@@ -40,6 +40,13 @@ jobs:
         with:
           version: "0.4.25"
 
+      - name: Free Disk Space (Ubuntu)
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          large-packages: false
+
       - name: Install Just
         uses: extractions/setup-just@v2
         with:
