@@ -84,13 +84,24 @@ async def copy_private_data(e2e_client: E2EContext, client: Client):
     logger.info(f"Private data successfully added for FL client: {client.email}")
 
 
+async def check_fl_client_installed(e2e_client: E2EContext, client: Client):
+    """Check if FL client is installed and running"""
+    logger.info(f"Checking if FL client is installed for {client.email}")
+    fl_client_dir = client.api_data_dir("fl_client")
+
+    # App is installed in api_data_dir
+    await e2e_client.wait_for_path(fl_client_dir, timeout=30)
+
+    # Check if request, running and done folders are created
+    await e2e_client.wait_for_path(fl_client_dir / "request", timeout=30)
+    await e2e_client.wait_for_path(fl_client_dir / "running", timeout=30)
+    await e2e_client.wait_for_path(fl_client_dir / "done", timeout=30)
+
+    logger.info(f"FL client installed for {client.email}")
+
+
 async def approve_data_request(e2e_client: E2EContext, client: Client):
     """Approve data request for FL client"""
-
-    # Wait for fl_client running dir, API will create this dir once installed.
-    running_dir = client.api_data_dir("fl_client") / "running"
-    await e2e_client.wait_for_path(running_dir)
-    assert running_dir.exists()
 
     logger.info(f"Approving data request for {client.email}")
     request_dir = client.api_data_dir("fl_client") / "request"
@@ -98,6 +109,8 @@ async def approve_data_request(e2e_client: E2EContext, client: Client):
 
     await e2e_client.wait_for_path(project_dir, timeout=30, interval=1)
     assert project_dir.exists()
+
+    running_dir = client.api_data_dir("fl_client") / "running"
 
     # Approve request
     # Approve action is moving project dir to running dir
@@ -192,6 +205,9 @@ async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
     # Add private tests for fl clients
     logger.info("Copying private data to all FL clients")
     await asyncio.gather(*[copy_private_data(e2e_context, fl_client) for fl_client in e2e_context.clients[1:]])
+
+    # Check FL client installed
+    await asyncio.gather(*[check_fl_client_installed(e2e_context, fl_client) for fl_client in e2e_context.clients[1:]])
 
     # Approve data request for all FL Clients
     await asyncio.gather(*[approve_data_request(e2e_context, fl_client) for fl_client in e2e_context.clients[1:]])
