@@ -1,10 +1,13 @@
 from pathlib import Path
 
 import httpx
-from typing_extensions import Protocol
+from typing_extensions import TYPE_CHECKING, Protocol
 
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.workspace import SyftWorkspace
+
+if TYPE_CHECKING:
+    from syftbox.client.plugins.plugin_manager import PluginManager
 
 
 class SyftClientInterface(Protocol):
@@ -29,6 +32,9 @@ class SyftClientInterface(Protocol):
 
     workspace: SyftWorkspace
     """Workspace instance managing data and computation."""
+
+    plugins: "PluginManager"
+    """Manager instance containing all initialized plugins."""
 
     server_client: httpx.Client
 

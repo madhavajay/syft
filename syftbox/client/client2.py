@@ -17,6 +17,7 @@ from syftbox.client.env import syftbox_env
 from syftbox.client.exceptions import SyftBoxAlreadyRunning, SyftInitializationError, SyftServerError
 from syftbox.client.logger import setup_logger
 from syftbox.client.plugins.apps import AppRunner
+from syftbox.client.plugins.plugin_manager import PluginManager
 from syftbox.client.plugins.sync.manager import SyncManager
 from syftbox.client.utils import error_reporting, file_manager, macos
 from syftbox.lib.client_config import SyftClientConfig
@@ -181,7 +182,15 @@ class SyftClient:
     @lru_cache(1)
     def as_context(self) -> "SyftClientContext":
         """Return a implementation of SyftClientInterface to be injected into sub-systems"""
-        return SyftClientContext(self.config, self.workspace, self.server_client)
+        return SyftClientContext(
+            self.config,
+            self.workspace,
+            self.server_client,
+            plugins=PluginManager(
+                app_runner=self.__app_runner,
+                sync_manager=self.__sync_manager,
+            ),
+        )
 
     def __run_local_server(self):
         logger.info(f"Starting local server on {self.config.client_url}")
@@ -234,10 +243,12 @@ class SyftClientContext(SyftClientInterface):
         config: SyftClientConfig,
         workspace: SyftWorkspace,
         server_client: httpx.Client,
+        plugins: PluginManager,
     ):
         self.config = config
         self.workspace = workspace
         self.server_client = server_client
+        self.plugins = plugins
 
     @property
     def email(self) -> str:
