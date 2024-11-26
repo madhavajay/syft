@@ -28,7 +28,7 @@ class SyncStatusInfo(BaseModel):
 
 
 class LocalState(BaseModel):
-    file_path: Path = Field(description="Path to the LocalState file", exclude=True)
+    file_path: Path = Field(description="Path to the LocalState file")
     # The state of files on last successful sync
     states: dict[Path, FileMetadata] = {}
     # The status of files on last sync
@@ -63,8 +63,8 @@ class LocalState(BaseModel):
         try:
             with threading.Lock():
                 self.file_path.write_text(self.model_dump_json())
-        except Exception:
-            logger.exception(f"Failed to save {self.file_path}")
+        except Exception as e:
+            logger.exception(f"Failed to save {self.file_path}: {e}")
 
     def load(self):
         with threading.Lock():
