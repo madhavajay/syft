@@ -464,19 +464,17 @@ class SyncConsumer:
         if decision.remote_decision.is_valid(abs_path=abs_path, show_warnings=True):
             decision.remote_decision.execute(self.client)
 
-        # if decision.is_executed:
-        #     self.local_state.insert_synced_file(path=item.data.path, state=decision.result_local_state)
-
         return decision
 
-    def write_to_local_state(self, item: SyncQueueItem, decision: SyncDecisionTuple) -> None:
-        if decision.is_executed:
-            self.local_state.insert_synced_file(path=item.data.path, state=decision.result_local_state)
+    def write_to_local_state(self, item: SyncQueueItem, decisions: SyncDecisionTuple) -> None:
+        if decisions.is_executed:
+            self.local_state.insert_synced_file(path=item.data.path, state=decisions.result_local_state)
         else:
-            if decision.is_noop():
+            if decisions.is_noop():
                 return
 
-            message = decision.local_decision.message or decision.remote_decision.message
+            # TODO add more specific error status for rejected files (e.g. permission error)
+            message = decisions.local_decision.message or decisions.remote_decision.message
             self.local_state.insert_status_info(
                 path=item.data.path,
                 status=SyncStatus.ERROR,

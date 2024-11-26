@@ -31,7 +31,7 @@ class LocalState(BaseModel):
     file_path: Path = Field(description="Path to the LocalState file")
     # The state of files on last successful sync
     states: dict[Path, FileMetadata] = {}
-    # The status of files on last sync
+    # The last sync status of each file
     status_info: dict[Path, SyncStatusInfo] = {}
 
     def insert_synced_file(self, path: Path, state: FileMetadata):
