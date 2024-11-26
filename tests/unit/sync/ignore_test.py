@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from syftbox.client.base import SyftClientInterface
-from syftbox.client.plugins.sync.sync import DatasiteState
+from syftbox.client.plugins.sync.datasite_state import DatasiteState
 from syftbox.client.utils.dir_tree import create_dir_tree
 from syftbox.client.utils.display import display_file_tree
 from syftbox.lib.ignore import IGNORE_FILENAME, filter_ignored_paths

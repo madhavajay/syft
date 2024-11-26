@@ -1,7 +1,5 @@
-import enum
 import hashlib
 import zipfile
-from enum import Enum
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -13,6 +11,7 @@ from pydantic import BaseModel
 from syftbox.client.base import SyftClientInterface
 from syftbox.client.exceptions import SyftServerError
 from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
+from syftbox.client.plugins.sync.datasite_state import DatasiteState
 from syftbox.client.plugins.sync.endpoints import (
     apply_diff,
     create,
@@ -23,20 +22,13 @@ from syftbox.client.plugins.sync.endpoints import (
     get_metadata,
 )
 from syftbox.client.plugins.sync.exceptions import FatalSyncError, SyncEnvironmentError
+from syftbox.client.plugins.sync.local_state import LocalState
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
-from syftbox.client.plugins.sync.state import LocalState, SyncStatus
-from syftbox.client.plugins.sync.sync import DatasiteState, SyncSide
+from syftbox.client.plugins.sync.types import SyncActionType, SyncDecisionType, SyncSide, SyncStatus
 from syftbox.lib.ignore import filter_ignored_paths
 from syftbox.lib.lib import SyftPermission
 from syftbox.server.sync.hash import hash_file
 from syftbox.server.sync.models import FileMetadata
-
-
-class SyncDecisionType(Enum):
-    NOOP = 0
-    CREATE = 1
-    MODIFY = 2
-    DELETE = 3
 
 
 def update_local(client: SyftClientInterface, local_syncstate: FileMetadata, remote_syncstate: FileMetadata):
@@ -96,16 +88,6 @@ def create_remote(client: SyftClientInterface, local_syncstate: FileMetadata):
     abs_path = client.workspace.datasites / local_syncstate.path
     data = abs_path.read_bytes()
     create(client.server_client, local_syncstate.path, data)
-
-
-class SyncActionType(Enum):
-    NOOP = enum.auto()
-    CREATE_REMOTE = enum.auto()
-    CREATE_LOCAL = enum.auto()
-    DELETE_REMOTE = enum.auto()
-    DELETE_LOCAL = enum.auto()
-    MODIFY_REMOTE = enum.auto()
-    MODIFY_LOCAL = enum.auto()
 
 
 class SyncDecision(BaseModel):
@@ -436,6 +418,7 @@ class SyncConsumer:
                 self.local_state.insert_synced_file(
                     path=path,
                     state=state,
+                    action=SyncActionType.CREATE_LOCAL,
                 )
         except FatalSyncError as e:
             raise e
@@ -468,7 +451,14 @@ class SyncConsumer:
 
     def write_to_local_state(self, item: SyncQueueItem, decisions: SyncDecisionTuple) -> None:
         if decisions.is_executed:
-            self.local_state.insert_synced_file(path=item.data.path, state=decisions.result_local_state)
+            local_action = decisions.local_decision.action_type
+            remote_action = decisions.remote_decision.action_type
+            action = local_action if local_action != SyncActionType.NOOP else remote_action
+            self.local_state.insert_synced_file(
+                path=item.data.path,
+                state=decisions.result_local_state,
+                action=action,
+            )
         else:
             if decisions.is_noop():
                 return

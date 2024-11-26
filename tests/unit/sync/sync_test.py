@@ -11,9 +11,10 @@ from loguru import logger
 
 from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
+from syftbox.client.plugins.sync.datasite_state import DatasiteState
 from syftbox.client.plugins.sync.exceptions import FatalSyncError
-from syftbox.client.plugins.sync.manager import SyncManager, SyncQueueItem
-from syftbox.client.plugins.sync.sync import DatasiteState
+from syftbox.client.plugins.sync.manager import SyncManager
+from syftbox.client.plugins.sync.queue import SyncQueueItem
 from syftbox.client.utils.dir_tree import DirTree, create_dir_tree
 from syftbox.lib.lib import SyftPermission
 from syftbox.server.settings import ServerSettings

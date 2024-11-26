@@ -1,30 +1,26 @@
 import threading
 from datetime import datetime, timezone
-from enum import Enum, auto
 from pathlib import Path
 from typing import Optional
 
 from loguru import logger
 from pydantic import BaseModel, Field
+from typing_extensions import Self, Type
 
+from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.exceptions import SyncEnvironmentError
+from syftbox.client.plugins.sync.types import SyncActionType, SyncStatus
 from syftbox.server.sync.models import FileMetadata
 
-
-class SyncStatus(Enum):
-    QUEUED = auto()
-    IN_PROGRESS = auto()
-    SYNCED = auto()
-    ERROR = auto()
-    REJECTED = auto()
-    IGNORED = auto()
+LOCAL_STATE_FILENAME = "local_syncstate.json"
 
 
 class SyncStatusInfo(BaseModel):
     path: Path
-    time: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
     status: SyncStatus
     message: Optional[str] = None
+    action: Optional[SyncActionType] = None
 
 
 class LocalState(BaseModel):
@@ -34,7 +30,11 @@ class LocalState(BaseModel):
     # The last sync status of each file
     status_info: dict[Path, SyncStatusInfo] = {}
 
-    def insert_synced_file(self, path: Path, state: FileMetadata):
+    @classmethod
+    def for_client(cls: Type[Self], client: SyftClientInterface) -> Self:
+        return cls(file_path=client.workspace.plugins / LOCAL_STATE_FILENAME)
+
+    def insert_synced_file(self, path: Path, state: FileMetadata, action: "SyncActionType") -> None:
         if not isinstance(path, Path):
             raise ValueError(f"path must be a Path object, got {path}")
         if not self.file_path.is_file():
@@ -50,14 +50,29 @@ class LocalState(BaseModel):
         else:
             self.states[path] = state
 
-        self.insert_status_info(path, SyncStatus.SYNCED)
+        self.insert_status_info(
+            path,
+            SyncStatus.SYNCED,
+            action=action,
+            save=False,
+        )
         self.save()
 
-    def insert_status_info(self, path: Path, status: SyncStatus, message: Optional[str] = None):
+    def insert_status_info(
+        self,
+        path: Path,
+        status: SyncStatus,
+        message: Optional[str] = None,
+        action: Optional["SyncActionType"] = None,
+        save: bool = True,
+    ):
         if not isinstance(path, Path):
             raise ValueError(f"path must be a Path object, got {path}")
-        self.status_info[path] = SyncStatusInfo(path=path, time=datetime.now(), status=status, message=message)
-        self.save()
+        self.status_info[path] = SyncStatusInfo(
+            path=path, timestamp=datetime.now(), status=status, message=message, action=action
+        )
+        if save:
+            self.save()
 
     def save(self):
         try:
@@ -72,6 +87,7 @@ class LocalState(BaseModel):
                 data = self.file_path.read_text()
                 loaded_state = self.model_validate_json(data)
                 self.states = loaded_state.states
+                self.status_info = loaded_state.status_info
             else:
                 # Ensure the file exists for the next save
                 self.save()

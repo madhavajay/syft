@@ -9,16 +9,16 @@ from syftbox.client.exceptions import SyftAuthenticationError
 from syftbox.client.plugins.sync.consumer import SyncConsumer
 from syftbox.client.plugins.sync.endpoints import whoami
 from syftbox.client.plugins.sync.exceptions import FatalSyncError, SyncEnvironmentError
+from syftbox.client.plugins.sync.local_state import LocalState
 from syftbox.client.plugins.sync.producer import SyncProducer
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
-from syftbox.client.plugins.sync.state import LocalState
-from syftbox.client.plugins.sync.sync import FileChangeInfo
+from syftbox.client.plugins.sync.types import FileChangeInfo
 
 
 class SyncManager:
     def __init__(self, client: SyftClientInterface, health_check_interval: int = 300):
         self.client = client
-        self.local_state = LocalState(file_path=client.workspace.plugins / "local_syncstate.json")
+        self.local_state = LocalState.for_client(client)
         self.queue = SyncQueue()
         self.producer = SyncProducer(client=self.client, queue=self.queue, local_state=self.local_state)
         self.consumer = SyncConsumer(client=self.client, queue=self.queue, local_state=self.local_state)

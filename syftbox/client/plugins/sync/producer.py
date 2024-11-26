@@ -3,10 +3,11 @@ from pathlib import Path
 from loguru import logger
 
 from syftbox.client.base import SyftClientInterface
+from syftbox.client.plugins.sync.datasite_state import DatasiteState
 from syftbox.client.plugins.sync.endpoints import get_datasite_states
+from syftbox.client.plugins.sync.local_state import LocalState
 from syftbox.client.plugins.sync.queue import SyncQueue, SyncQueueItem
-from syftbox.client.plugins.sync.state import LocalState, SyncStatus
-from syftbox.client.plugins.sync.sync import DatasiteState, FileChangeInfo
+from syftbox.client.plugins.sync.types import FileChangeInfo, SyncStatus
 
 
 class SyncProducer:
