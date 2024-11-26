@@ -72,7 +72,7 @@ def test_ignore_datasite(datasite_1: SyftClientInterface, datasite_2: SyftClient
 
     # ds1 gets their local state of ds2
     datasite_state = DatasiteState(client=datasite_1, email=datasite_2.email)
-    changes = datasite_state.get_out_of_sync_files()
+    changes = datasite_state.get_datasite_changes()
 
     assert len(changes.files) == num_visible_files
     assert changes.files[0].path == Path(datasite_2.email) / "visible_file.txt"
@@ -84,12 +84,12 @@ def test_ignore_datasite(datasite_1: SyftClientInterface, datasite_2: SyftClient
         f.write(f"\n/{datasite_2.email}\n")
 
     # ds1 gets their local state of ds2
-    changes = datasite_state.get_out_of_sync_files()
+    changes = datasite_state.get_datasite_changes()
     assert len(changes.files) == 0
 
     # remove ignore file
     ignore_path.unlink()
-    changes = datasite_state.get_out_of_sync_files()
+    changes = datasite_state.get_datasite_changes()
     assert len(changes.files) == num_files
 
 

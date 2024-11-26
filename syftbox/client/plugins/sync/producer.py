@@ -47,7 +47,7 @@ class SyncProducer:
         and track the ignored files in the local state.
         """
         try:
-            out_of_sync_files = datasite.get_out_of_sync_files()
+            out_of_sync_files = datasite.get_datasite_changes()
 
             if len(out_of_sync_files.permissions) or len(out_of_sync_files.files):
                 logger.debug(
@@ -60,7 +60,9 @@ class SyncProducer:
         for change in out_of_sync_files.permissions + out_of_sync_files.files:
             self.enqueue(change)
 
-        self.add_ignored_to_local_state(out_of_sync_files.ignored)
+        # Exclude symlinks from logged ignored files to avoid spamming the logs
+        ignored_files = datasite.get_ignored_local_files(include_symlinks=False)
+        self.add_ignored_to_local_state(ignored_files)
 
     def enqueue(self, change: FileChangeInfo) -> None:
         self.queue.put(SyncQueueItem(priority=change.get_priority(), data=change))

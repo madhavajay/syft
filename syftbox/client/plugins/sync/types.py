@@ -10,10 +10,9 @@ from syftbox.lib.lib import SyftPermission
 
 
 class SyncStatus(str, Enum):
-    QUEUED = "queued"
-    IN_PROGRESS = "in_progress"
     SYNCED = "synced"
     ERROR = "error"
+    IGNORED = "ignored"
 
 
 class SyncSide(str, Enum):

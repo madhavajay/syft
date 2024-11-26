@@ -9,7 +9,7 @@ from syftbox.client.plugins.sync.endpoints import get_remote_state
 from syftbox.client.plugins.sync.types import FileChangeInfo, SyncSide
 from syftbox.lib.ignore import filter_ignored_paths
 from syftbox.lib.lib import SyftPermission
-from syftbox.server.sync.hash import hash_dir
+from syftbox.server.sync.hash import collect_files, hash_dir
 from syftbox.server.sync.models import FileMetadata
 
 
@@ -37,10 +37,9 @@ def format_paths(path_list: list[Path]) -> str:
 
 
 @dataclass
-class OutOfSyncFiles:
+class DatasiteChanges:
     permissions: list[FileChangeInfo]
     files: list[FileChangeInfo]
-    ignored: list[Path]
 
 
 class DatasiteState:
@@ -84,12 +83,24 @@ class DatasiteState:
         return self.remote_state
 
     def is_in_sync(self) -> bool:
-        changes = self.get_out_of_sync_files()
+        changes = self.get_datasite_changes()
         return len(changes.files) == 0 and len(changes.permissions) == 0
 
-    def get_out_of_sync_files(
+    def get_ignored_local_files(self, include_hidden: bool = True, include_symlinks: bool = True) -> set[Path]:
+        all_paths = collect_files(self.path)
+        relative_paths = [file.relative_to(self.client.workspace.datasites) for file in all_paths]
+        filtered_paths = filter_ignored_paths(
+            datasites_dir=self.client.workspace.datasites,
+            relative_paths=relative_paths,
+            ignore_hidden_files=include_hidden,
+            ignore_symlinks=include_symlinks,
+        )
+
+        return set(relative_paths) - set(filtered_paths)
+
+    def get_datasite_changes(
         self,
-    ) -> OutOfSyncFiles:
+    ) -> DatasiteChanges:
         """
         calculate the files that are out of sync
 
@@ -118,7 +129,6 @@ class DatasiteState:
             ignore_hidden_files=True,
             ignore_symlinks=True,
         )
-        ignored_files = all_files - set(all_files_filtered)
 
         all_changes = []
         for afile in all_files_filtered:
@@ -137,10 +147,9 @@ class DatasiteState:
                 all_changes.append(change_info)
 
         permission_changes, file_changes = split_permissions(all_changes)
-        return OutOfSyncFiles(
+        return DatasiteChanges(
             permissions=permission_changes,
             files=file_changes,
-            ignored=list(ignored_files),
         )
 
 

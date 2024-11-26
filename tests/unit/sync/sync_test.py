@@ -7,7 +7,6 @@ from pathlib import Path
 import faker
 import pytest
 from fastapi.testclient import TestClient
-from loguru import logger
 
 from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.constants import MAX_FILE_SIZE_MB
@@ -18,7 +17,6 @@ from syftbox.client.plugins.sync.queue import SyncQueueItem
 from syftbox.client.utils.dir_tree import DirTree, create_dir_tree
 from syftbox.lib.lib import SyftPermission
 from syftbox.server.settings import ServerSettings
-from tests.unit.sync.conftest import setup_datasite
 
 fake = faker.Faker()
 
@@ -77,8 +75,8 @@ def test_enqueue_changes(datasite_1: SyftClientInterface):
     sync_service = SyncManager(datasite_1)
     datasites = sync_service.producer.get_datasite_states()
 
-    out_of_sync_res = datasites[0].get_out_of_sync_files()
-    num_files_after_setup = len(out_of_sync_res.files) + len(out_of_sync_res.permissions)
+    datasite_changes = datasites[0].get_datasite_changes()
+    num_files_after_setup = len(datasite_changes.files) + len(datasite_changes.permissions)
 
     # Create two files in datasite_1
     tree = {
@@ -89,21 +87,21 @@ def test_enqueue_changes(datasite_1: SyftClientInterface):
         },
     }
     create_dir_tree(Path(datasite_1.datasite), tree)
-    out_of_sync_res = datasites[0].get_out_of_sync_files()
-    num_out_of_sync_files = len(out_of_sync_res.files) + len(out_of_sync_res.permissions)
+    datasite_changes = datasites[0].get_datasite_changes()
+    num_out_of_sync_files = len(datasite_changes.files) + len(datasite_changes.permissions)
     # 3 new files
     assert num_out_of_sync_files - num_files_after_setup == 3
 
     # Enqueue the changes + verify order
-    for change in out_of_sync_res.permissions + out_of_sync_res.files:
+    for change in datasite_changes.permissions + datasite_changes.files:
         sync_service.enqueue(change)
 
     items_from_queue: list[SyncQueueItem] = []
     while not sync_service.queue.empty():
         items_from_queue.append(sync_service.queue.get())
 
-    should_be_permissions = items_from_queue[: len(out_of_sync_res.permissions)]
-    should_be_files = items_from_queue[len(out_of_sync_res.permissions) :]
+    should_be_permissions = items_from_queue[: len(datasite_changes.permissions)]
+    should_be_files = items_from_queue[len(datasite_changes.permissions) :]
 
     assert all(SyftPermission.is_permission_file(item.data.path) for item in should_be_permissions)
     assert all(not SyftPermission.is_permission_file(item.data.path) for item in should_be_files)
@@ -130,9 +128,9 @@ def test_create_file(server_client: TestClient, datasite_1: SyftClientInterface,
 
     # check if no changes are left
     for datasite in sync_service.producer.get_datasite_states():
-        out_of_sync_result = datasite.get_out_of_sync_files()
-        assert not out_of_sync_result.files
-        assert not out_of_sync_result.permissions
+        datasite_changes = datasite.get_datasite_changes()
+        assert not datasite_changes.files
+        assert not datasite_changes.permissions
 
     # check if file exists on server
     print(datasite_2.workspace.datasites)
@@ -456,55 +454,6 @@ def test_skip_hidden_paths(server_client: TestClient, datasite_1: SyftClientInte
     snapshot_folder = server_client.app_state["server_settings"].snapshot_folder
     assert not (snapshot_folder / datasite_1.email / ".hidden_folder").exists()
     assert not (snapshot_folder / datasite_1.email / ".hidden_file.txt").exists()
-
-
-@pytest.mark.skip("This is for manual testing")
-def test_n_datasites(tmp_path: Path, server_client: TestClient, datasite_1: SyftClientInterface):
-    server_settings: ServerSettings = server_client.app_state["server_settings"]
-    print(server_settings.snapshot_folder)
-
-    n = 2
-    files_per_datasite = 8
-
-    logger.debug(f"Creating {n} datasites")
-
-    emails = [f"datasite{i}@openmined.org" for i in range(n)]
-    other_datasites: list[SyftClientInterface] = [setup_datasite(tmp_path, server_client, email) for email in emails]
-
-    other_datasite_trees = [
-        {
-            "folder": {
-                "_.syftperm": SyftPermission.mine_with_public_read(email),
-            }
-        }
-        for email in emails
-    ]
-
-    for tree in other_datasite_trees:
-        tree["folder"].update({f"file_{i}.txt": fake.text(max_nb_chars=10_000) for i in range(files_per_datasite - 1)})
-
-    for datasite, tree in zip(other_datasites, other_datasite_trees):
-        create_dir_tree(Path(datasite.datasite), tree)
-
-    logger.debug("Syncing datasites")
-    for datasite in other_datasites:
-        sync_service = SyncManager(datasite)
-        sync_service.run_single_thread()
-
-    time.sleep(1)
-
-    logger.debug("syncing main datasite")
-    sync_service_1 = SyncManager(datasite_1)
-    states = sync_service_1.get_datasite_states()
-    assert len(states) == n + 1
-    for state in states:
-        out_of_sync_permissions, out_of_sync_files = state.get_out_of_sync_files()
-        # assert out_of_sync_permissions
-        # assert out_of_sync_files
-
-    sync_service_1.run_single_thread()
-
-    print(server_client.app_state["server_settings"].snapshot_folder)
 
 
 def test_sync_health_check(datasite_1: SyftClientInterface):
