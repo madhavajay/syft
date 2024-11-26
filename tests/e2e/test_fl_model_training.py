@@ -87,15 +87,17 @@ async def copy_private_data(e2e_client: E2EContext, client: Client):
 async def approve_data_request(e2e_client: E2EContext, client: Client):
     """Approve data request for FL client"""
 
+    # Wait for fl_client running dir, API will create this dir once installed.
+    running_dir = client.api_data_dir("fl_client") / "running"
+    await e2e_client.wait_for_path(running_dir)
+    assert running_dir.exists()
+
     logger.info(f"Approving data request for {client.email}")
     request_dir = client.api_data_dir("fl_client") / "request"
     project_dir = request_dir / PROJECT_NAME
 
     await e2e_client.wait_for_path(project_dir, timeout=30, interval=1)
     assert project_dir.exists()
-
-    running_dir = client.api_data_dir("fl_client") / "running"
-    assert running_dir.exists()
 
     # Approve request
     # Approve action is moving project dir to running dir
