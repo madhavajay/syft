@@ -36,18 +36,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Free Disk Space (Ubuntu)
-        if: runner.os == 'Linux'
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: true
-          large-packages: false
-
-      - name: Free Disk Space (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          sudo rm -rfv /Users/runner/Library/Android/sdk
-
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
