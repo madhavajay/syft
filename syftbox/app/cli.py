@@ -131,7 +131,8 @@ def env(with_syftbox: bool = False):
 def get_client(config_path: Path) -> SyftClientInterface:
     try:
         conf = SyftClientConfig.load(config_path)
-        return SyftClient(conf).as_context()
+        client = SyftClient(conf)
+        return client.context
     except ClientConfigException:
         msg = (
             f"[bold red]Error:[/bold red] Couldn't load config at: [yellow]'{config_path}'[/yellow]\n"
