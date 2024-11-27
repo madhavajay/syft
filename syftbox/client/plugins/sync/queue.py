@@ -4,7 +4,7 @@ from pathlib import Path
 from queue import PriorityQueue
 from typing import Dict, Optional
 
-from syftbox.client.plugins.sync.sync import FileChangeInfo
+from syftbox.client.plugins.sync.types import FileChangeInfo
 
 
 @dataclass(order=True)

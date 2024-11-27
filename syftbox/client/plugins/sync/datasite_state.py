@@ -1,43 +1,16 @@
-from datetime import datetime
-from enum import Enum
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from loguru import logger
-from pydantic import BaseModel
 
 from syftbox.client.base import SyftClientInterface
 from syftbox.client.plugins.sync.endpoints import get_remote_state
+from syftbox.client.plugins.sync.types import FileChangeInfo, SyncSide
 from syftbox.lib.ignore import filter_ignored_paths
 from syftbox.lib.lib import SyftPermission
-from syftbox.server.sync.hash import hash_dir
+from syftbox.server.sync.hash import collect_files, hash_dir
 from syftbox.server.sync.models import FileMetadata
-
-
-class SyncSide(str, Enum):
-    LOCAL = "local"
-    REMOTE = "remote"
-
-
-class FileChangeInfo(BaseModel, frozen=True):
-    local_sync_folder: Path
-    path: Path
-    side_last_modified: SyncSide
-    date_last_modified: datetime
-    file_size: int = 1
-
-    @property
-    def local_abs_path(self) -> Path:
-        return self.local_sync_folder / self.path
-
-    def get_priority(self) -> int:
-        if SyftPermission.is_permission_file(self.path):
-            return 0
-        else:
-            return max(1, self.file_size)
-
-    def __lt__(self, other: "FileChangeInfo") -> bool:
-        return self.path < other.path
 
 
 def format_paths(path_list: list[Path]) -> str:
@@ -61,6 +34,12 @@ def format_paths(path_list: list[Path]) -> str:
                 folders_seen.add(current_path)
 
     return tree
+
+
+@dataclass
+class DatasiteChanges:
+    permissions: list[FileChangeInfo]
+    files: list[FileChangeInfo]
 
 
 class DatasiteState:
@@ -104,12 +83,24 @@ class DatasiteState:
         return self.remote_state
 
     def is_in_sync(self) -> bool:
-        permission_changes, file_changes = self.get_out_of_sync_files()
-        return len(permission_changes) == 0 and len(file_changes) == 0
+        changes = self.get_datasite_changes()
+        return len(changes.files) == 0 and len(changes.permissions) == 0
 
-    def get_out_of_sync_files(
+    def get_ignored_local_files(self, include_hidden: bool = True, include_symlinks: bool = True) -> set[Path]:
+        all_paths = collect_files(self.path)
+        relative_paths = [file.relative_to(self.client.workspace.datasites) for file in all_paths]
+        filtered_paths = filter_ignored_paths(
+            datasites_dir=self.client.workspace.datasites,
+            relative_paths=relative_paths,
+            ignore_hidden_files=include_hidden,
+            ignore_symlinks=include_symlinks,
+        )
+
+        return set(relative_paths) - set(filtered_paths)
+
+    def get_datasite_changes(
         self,
-    ) -> tuple[list[FileChangeInfo], list[FileChangeInfo]]:
+    ) -> DatasiteChanges:
         """
         calculate the files that are out of sync
 
@@ -140,7 +131,6 @@ class DatasiteState:
         )
 
         all_changes = []
-
         for afile in all_files_filtered:
             local_info = local_state_dict.get(afile)
             remote_info = remote_state_dict.get(afile)
@@ -156,15 +146,11 @@ class DatasiteState:
             if change_info is not None:
                 all_changes.append(change_info)
 
-        # TODO implement ignore rules
-        # ignore_rules = get_ignore_rules(local_state)
-        # filtered_changes = filter_ignored_changes(all_changes, ignore_rules)
-
         permission_changes, file_changes = split_permissions(all_changes)
-        # TODO debounce changes
-        # filtered_changes = filter_recent_local_changes(filtered_changes)
-
-        return permission_changes, file_changes
+        return DatasiteChanges(
+            permissions=permission_changes,
+            files=file_changes,
+        )
 
 
 def split_permissions(
