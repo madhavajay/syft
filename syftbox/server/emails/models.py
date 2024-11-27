@@ -2,7 +2,7 @@ from typing import Union
 
 from pydantic import BaseModel, EmailStr, NameEmail
 
-from .constants import FROM_EMAIL
+FROM_EMAIL = "SyftBox <notifications@syftbox.openmined.org>"
 
 
 class SendEmailRequest(BaseModel):
