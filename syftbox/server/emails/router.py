@@ -17,21 +17,20 @@ async def send_email(
     email_request: SendEmailRequest,
     server_settings: ServerSettings = Depends(get_server_settings),
 ) -> bool:
-    if not server_settings.email_service_api_key:
+    if not server_settings.sendgrid_secret:
         raise httpx.HTTPStatusError("Email service API key is not set", request=None, response=None)
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
             EMAIL_SERVICE_API_URL,
             headers={
-                "Authorization": f"Bearer {server_settings.email_service_api_key}",
+                "Authorization": f"Bearer {server_settings.sendgrid_secret.get_secret_value()}",
                 "Content-Type": "application/json",
             },
             json=email_request.json_for_request(),
         )
-        if response.status_code == 200:
-            sent_to = email_request.to if isinstance(email_request.to, str) else ", ".join(email_request.to)
-            logger.info(f"Email sent successfully to {sent_to}")
+        if response.is_success:
+            logger.info(f"Email sent successfully to '{email_request.to}'")
             return True
         else:
             logger.error(f"Failed to send email: {response.text}")

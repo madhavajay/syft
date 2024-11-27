@@ -12,8 +12,8 @@ class SendEmailRequest(BaseModel):
 
     def json_for_request(self):
         return {
-            "from": FROM_EMAIl,
-            "to": [self.to],
+            "personalizations": [{"to": [{"email": self.to}]}],
+            "from": {"email": FROM_EMAIl},
             "subject": self.subject,
-            "html": self.html,
+            "content": [{"type": "text/html", "value": self.html}],
         }

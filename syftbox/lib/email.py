@@ -4,9 +4,8 @@ from loguru import logger
 
 from syftbox.server.settings import ServerSettings
 
-SENDER_EMAIL = "SyftBox <auth@openmined.org>"
+SENDER_EMAIL = "SyftBox <auth@syftbox.openmined.org>"
 SENDGRID_SERVER = "https://api.sendgrid.com/v3/mail/send"
-SMTP_PORT = 465
 
 token_email_template = """
 <!doctype html>
