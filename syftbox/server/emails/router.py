@@ -1,5 +1,5 @@
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
 
 from syftbox.server.emails.models import SendEmailRequest
@@ -18,7 +18,10 @@ async def send_email(
     server_settings: ServerSettings = Depends(get_server_settings),
 ) -> bool:
     if not server_settings.sendgrid_secret:
-        raise httpx.HTTPStatusError("Email service API key is not set", request=None, response=None)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Email service API key is not set",
+        )
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
