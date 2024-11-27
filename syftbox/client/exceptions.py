@@ -3,6 +3,10 @@ from typing import Optional
 from syftbox.lib.exceptions import SyftBoxException
 
 
+class SyftPluginException(SyftBoxException):
+    pass
+
+
 class SyftInitializationError(SyftBoxException):
     pass
 
