@@ -6,6 +6,8 @@ import json
 import shutil
 from pathlib import Path
 
+import httpx
+import typer
 from rich import print as rprint
 from rich.prompt import Confirm, Prompt
 
@@ -70,7 +72,13 @@ def get_migration_decision(data_dir: Path):
 
 
 def setup_config_interactive(
-    config_path: Path, email: str, data_dir: Path, server: str, port: int, skip_auth: bool = False
+    config_path: Path,
+    email: str,
+    data_dir: Path,
+    server: str,
+    port: int,
+    skip_auth: bool = False,
+    skip_verify_install: bool = False,
 ) -> SyftClientConfig:
     """Setup the client configuration interactively. Called from CLI"""
 
@@ -107,8 +115,13 @@ def setup_config_interactive(
         if port != conf.client_url.port:
             conf.set_port(port)
 
+    # Short-lived client for all pre-authentication requests
+    login_client = httpx.Client(base_url=str(conf.client_url))
+    if not skip_verify_install:
+        verify_installation(conf, login_client)
+
     if not skip_auth:
-        conf.access_token = authenticate_user(conf)
+        conf.access_token = authenticate_user(conf, login_client)
 
     # DO NOT SAVE THE CONFIG HERE.
     # We don't know if the client will accept the config yet
@@ -144,3 +157,21 @@ def prompt_email() -> str:
             rprint(f"[bold red]Invalid email[/bold red]: '{email}'")
             continue
         return email
+
+
+def verify_installation(conf: SyftClientConfig, client: httpx.Client) -> None:
+    server_info = client.get("/info")
+    if server_info.status_code != 200:
+        rprint("[bold red]Server not reachable, could not validate SyftBox installation[/bold red]")
+        raise typer.Exit(1)
+
+    server_version = server_info.json()["version"]
+    if server_version == __version__:
+        return
+
+    should_continue = Confirm.ask(
+        f"[yellow]Server version ({server_version}) does not match client version ({__version__}).[/yellow]\n"
+        f"[bold]Continue anyway?[/bold]"
+    )
+    if not should_continue:
+        raise typer.Exit(1)

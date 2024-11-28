@@ -186,6 +186,18 @@ class SyftClient:
         if platform.system() == "Darwin":
             macos.copy_icon_file(ICON_FOLDER, self.workspace.data_dir)
 
+    def log_system_info(self):
+        self.server_client.post(
+            "/log_event",
+            json={
+                "event_name": "system_info",
+                "os_name": "macOS" if platform.system() == "Darwin" else platform.system(),
+                "os_version": platform.release(),
+                "syftbox_version": __version__,
+                "python_version": platform.python_version(),
+            },
+        )
+
     def __enter__(self):
         return self
 
@@ -318,6 +330,7 @@ def run_client(
         bool(client.check_pidfile()) and run_migration(client_config, migrate_datasite=migrate_datasite)
         (not syftbox_env.DISABLE_ICONS) and client.copy_icons()
         open_dir and client.open_datasites_dir()
+        client.log_system_info()
         client.start()
     except SyftBoxAlreadyRunning as e:
         logger.error(e)
