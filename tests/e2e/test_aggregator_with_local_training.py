@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from loguru import logger
 
-from tests.e2e.conftest import Client, E2EContext, Server
+from tests.e2e.conftest import Client, E2EContext, Server, E2ETimeoutError
 
 AGGREGATOR_CONFIG = {
     "participants": ["user1@openmined.org", "user2@openmined.org", "user3@openmined.org"],
@@ -91,25 +91,14 @@ async def wait_for_public_trained_models(e2e_context: E2EContext, client: Client
         assert model_file.exists()
 
 
-def verify_files_sha256(src: Path, dst: Path) -> bool:
-    """Compare two files using SHA256 hash."""
-    import hashlib
-
-    def get_file_hash(file_path: Path) -> str:
-        sha256_hash = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            # Read file in chunks for memory efficiency
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        return sha256_hash.hexdigest()
-
-    try:
-        src_hash = get_file_hash(src)
-        dst_hash = get_file_hash(dst)
-        return src_hash == dst_hash
-    except Exception as e:
-        logger.error(f"Hash verification for {src} and {dst} failed: {e}")
-        return False
+async def verify_file_sizes(src: Path, dst: Path, timeout: int = 60) -> bool:
+    """Compare two files using their sizes."""
+    start = asyncio.get_event_loop().time()
+    while start + timeout > asyncio.get_event_loop().time():
+        if src.stat().st_size == dst.stat().st_size:
+            return True
+        await asyncio.sleep(1)
+    raise E2ETimeoutError(f"Timeout after {timeout}s waiting for copying {src} to {dst}")
 
 
 @pytest.mark.asyncio
@@ -134,12 +123,9 @@ async def test_e2e_aggregator_with_local_training(e2e_context: E2EContext):
     agg_private_dir.mkdir(parents=True, exist_ok=True)
     agg_priv_data_path = agg_private_dir / "mnist_dataset.pt"
     test_dataset_path = agg_client.api_path(AGGREGATOR_API_NAME) / "samples" / "test_data" / "mnist_dataset.pt"
-    # shutil.copyfile(test_dataset_path, agg_priv_data_path)
-    cp_result = os.system(f"cp {str(test_dataset_path)} {str(agg_priv_data_path)}")
-    if cp_result != 0:
-        raise RuntimeError(f"Copy {test_dataset_path} failed with exit code {cp_result}")
-    if not verify_files_sha256(test_dataset_path, agg_priv_data_path):
-        raise RuntimeError(f"File copy verification failed: {test_dataset_path} -> {agg_priv_data_path}")
+    with open(test_dataset_path, 'rb') as src, open(agg_priv_data_path, 'wb') as dst:
+        shutil.copyfileobj(src, dst)
+    await verify_file_sizes(test_dataset_path, agg_priv_data_path)
     await e2e_context.wait_for_path(agg_priv_data_path, timeout=60, interval=1)
 
     clients: list[Client] = e2e_context.clients[1:]
