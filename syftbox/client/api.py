@@ -35,6 +35,7 @@ def create_api(client: SyftClientInterface) -> FastAPI:
     ]
     port = client.config.client_url.port
     if port:
+        # Allow origins for client localhost client API
         allow_origins.extend(
             [
                 f"http://localhost:{port}",
@@ -43,8 +44,6 @@ def create_api(client: SyftClientInterface) -> FastAPI:
                 f"http://127.0.0.1:{port}/",
             ]
         )
-
-    print(f"Allowing origins: {allow_origins}")
 
     app.add_middleware(
         CORSMiddleware,
