@@ -116,7 +116,7 @@ def setup_config_interactive(
             conf.set_port(port)
 
     # Short-lived client for all pre-authentication requests
-    login_client = httpx.Client(base_url=str(conf.client_url))
+    login_client = httpx.Client(base_url=str(conf.server_url))
     if not skip_verify_install:
         verify_installation(conf, login_client)
 
@@ -160,18 +160,27 @@ def prompt_email() -> str:
 
 
 def verify_installation(conf: SyftClientConfig, client: httpx.Client) -> None:
-    server_info = client.get("/info")
-    if server_info.status_code != 200:
-        rprint("[bold red]Server not reachable, could not validate SyftBox installation[/bold red]")
-        raise typer.Exit(1)
+    try:
+        response = client.get("/info")
+        response.raise_for_status()
+        server_info = response.json()
+        local_version = "0.0.1"
 
-    server_version = server_info.json()["version"]
-    if server_version == __version__:
-        return
+        if server_info["version"] == local_version:
+            return
 
-    should_continue = Confirm.ask(
-        f"[yellow]Server version ({server_version}) does not match client version ({__version__}).[/yellow]\n"
-        f"[bold]Continue anyway?[/bold]"
-    )
-    if not should_continue:
-        raise typer.Exit(1)
+        should_continue = Confirm.ask(
+            f"\n[yellow]Server version ({server_info['version']}) does not match your client version ({local_version}).\n"
+            f"[bold](recommended)[/bold] To update, run:\n\n"
+            f"[bold]curl -LsSf https://syftbox.openmined.org/install.sh | sh[/bold][/yellow]\n\n"
+            f"Continue without updating?"
+        )
+        if not should_continue:
+            raise typer.Exit()
+
+    except (httpx.HTTPError, KeyError):
+        should_continue = Confirm.ask(
+            "\n[bold red]Could not connect to the SyftBox server, continue anyway?[/bold red]"
+        )
+        if not should_continue:
+            raise typer.Exit()
