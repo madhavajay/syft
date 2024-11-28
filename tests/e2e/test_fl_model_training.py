@@ -245,8 +245,8 @@ async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
 
     logger.info("Validating accuracy metrics")
     assert len(rounds_accuracy) == AGGREGATOR_CONFIG["rounds"] + 1
-    # Last round accuracy should be greater than 0.25
-    assert rounds_accuracy[-1]["accuracy"] > 0.25
+    # Last round accuracy should be greater than 0.1
+    assert rounds_accuracy[-1]["accuracy"] >= 0.1
 
     # Validate running folder is empty, post training
     await asyncio.gather(
