@@ -17,6 +17,7 @@ from syftbox.client.exceptions import SyftBoxAlreadyRunning, SyftServerError
 from syftbox.client.logger import setup_logger
 from syftbox.client.plugin_manager import PluginManager
 from syftbox.client.utils import error_reporting, file_manager, macos
+from syftbox.client.utils.file_manager import _is_wsl
 from syftbox.lib.client_config import SyftClientConfig
 from syftbox.lib.datasite import create_datasite
 from syftbox.lib.exceptions import SyftBoxException
@@ -187,11 +188,17 @@ class SyftClient:
             macos.copy_icon_file(ICON_FOLDER, self.workspace.data_dir)
 
     def log_system_info(self):
+        if _is_wsl():
+            os_name = "WSL"
+        else:
+            os_name = platform.system()
+            os_name = "macOS" if os_name == "Darwin" else os_name
+
         self.server_client.post(
             "/log_event",
             json={
                 "event_name": "system_info",
-                "os_name": "macOS" if platform.system() == "Darwin" else platform.system(),
+                "os_name": os_name,
                 "os_version": platform.release(),
                 "syftbox_version": __version__,
                 "python_version": platform.python_version(),
