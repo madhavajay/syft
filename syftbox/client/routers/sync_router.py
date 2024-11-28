@@ -1,14 +1,9 @@
-from enum import Enum
-from pathlib import Path
-from typing import Any, List, Optional
+from typing import List, Optional
 
-import wcmatch
-import wcmatch.fnmatch
 import wcmatch.glob
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader
-from pydantic import BaseModel
 
 from syftbox.client.exceptions import SyftPluginException
 from syftbox.client.plugins.sync.local_state import SyncStatusInfo
@@ -44,7 +39,7 @@ def _get_items_from_localstate(sync_manager: SyncManager) -> List[SyncStatusInfo
     return list(sync_manager.local_state.status_info.values())
 
 
-def _get_all_status_info(sync_manager: SyncManager) -> List[SyncStatusInfo]:
+def get_all_status_info(sync_manager: SyncManager) -> List[SyncStatusInfo]:
     """
     Return all status info from both the queue and local state.
     NOTE: the result might contain duplicates if the same path is present in both.
@@ -54,7 +49,7 @@ def _get_all_status_info(sync_manager: SyncManager) -> List[SyncStatusInfo]:
     return queued_items + localstate_items
 
 
-def _deduplicate_status_info(status_info_list: List[SyncStatusInfo]) -> List[SyncStatusInfo]:
+def deduplicate_status_info(status_info_list: List[SyncStatusInfo]) -> List[SyncStatusInfo]:
     """Deduplicate status info by path, keeping the entry with latest timestamp"""
     path_to_info = {}
     for info in status_info_list:
@@ -64,7 +59,7 @@ def _deduplicate_status_info(status_info_list: List[SyncStatusInfo]) -> List[Syn
     return list(path_to_info.values())
 
 
-def _sort_status_info(status_info_list: List[SyncStatusInfo], order_by: str, order: str) -> List[SyncStatusInfo]:
+def sort_status_info(status_info_list: List[SyncStatusInfo], order_by: str, order: str) -> List[SyncStatusInfo]:
     if order_by.lower() not in SyncStatusInfo.model_fields:
         raise HTTPException(
             status_code=400,
@@ -82,90 +77,28 @@ def _sort_status_info(status_info_list: List[SyncStatusInfo], order_by: str, ord
     )
 
 
-class FilterOperator(str, Enum):
-    eq = "eq"
-    ne = "ne"
-    lt = "lt"
-    gt = "gt"
-    le = "le"
-    ge = "ge"
-    glob = "glob"
-
-
-def _evaluate_glob(value: Any, pattern: str) -> bool:
-    # NOTE using fnmatch instead of glob to support basic patterns like "*.txt"
-    if not isinstance(value, (Path, str)):
-        return False
-    return wcmatch.fnmatch.fnmatch(
-        value.as_posix(),
-        pattern,
-    )
-
-
-class FilterCondition(BaseModel):
-    field: str
-    op: FilterOperator
-    value: Any
-
-    def evaluate(self, item: Any) -> bool:
-        """Return True if the item's field value satisfies the condition, False otherwise"""
-        try:
-            value = getattr(item, self.field)
-            if self.op == FilterOperator.eq:
-                return value == self.value
-            elif self.op == FilterOperator.ne:
-                return value != self.value
-            elif self.op == FilterOperator.lt:
-                return value < self.value
-            elif self.op == FilterOperator.gt:
-                return value > self.value
-            elif self.op == FilterOperator.le:
-                return value <= self.value
-            elif self.op == FilterOperator.ge:
-                return value >= self.value
-            elif self.op == FilterOperator.glob:
-                return _evaluate_glob(value, self.value)
-            else:
-                return False
-        except Exception:
-            # Failing comparisons always return False
-            return False
-
-
-def _apply_filter(status_info_list: List[SyncStatusInfo], condition: FilterCondition) -> List[SyncStatusInfo]:
-    if condition.field not in SyncStatusInfo.model_fields:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid filter field: {condition.field}. Available fields: {list(SyncStatusInfo.model_fields.keys())}",
-        )
-    return [item for item in status_info_list if condition.evaluate(item)]
-
-
-def _filter_status_info(items: List[SyncStatusInfo], filters: Optional[List[FilterCondition]]) -> List[SyncStatusInfo]:
-    if not filters:
+def filter_by_path_glob(items: List[SyncStatusInfo], pattern: Optional[str]) -> List[SyncStatusInfo]:
+    if not pattern:
         return items
 
-    result = items
-    for condition in filters:
-        result = _apply_filter(result, condition)
+    result = []
+    for item in items:
+        if wcmatch.glob.globmatch(item.path.as_posix(), pattern, flags=wcmatch.glob.GLOBSTAR):
+            result.append(item)
     return result
 
 
-class ListStatusInfoRequest(BaseModel):
-    order_by: str = "timestamp"
-    order: str = "desc"
-    filters: Optional[List[FilterCondition]] = None
-
-
-@router.post("/list_status_info")
+@router.get("/state")
 def get_status_info(
-    request: ListStatusInfoRequest,
+    order_by: str = "timestamp",
+    order: str = "desc",
+    path_glob: Optional[str] = None,
     sync_manager: SyncManager = Depends(get_sync_manager),
 ) -> List[SyncStatusInfo]:
-    all_items = _get_all_status_info(sync_manager)
-    items_deduplicated = _deduplicate_status_info(all_items)
-    items_filtered = _filter_status_info(items_deduplicated, request.filters)
-    items_sorted = _sort_status_info(items_filtered, request.order_by, request.order)
+    all_items = get_all_status_info(sync_manager)
+    items_deduplicated = deduplicate_status_info(all_items)
+    items_filtered = filter_by_path_glob(items_deduplicated, path_glob)
+    items_sorted = sort_status_info(items_filtered, order_by, order)
     return items_sorted
 
 

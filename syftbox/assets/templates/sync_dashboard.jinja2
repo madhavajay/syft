@@ -156,12 +156,16 @@
         }
 
         .dev-banner {
-            background-color: #f2d9de;
-            color: #9b2737;
-            padding: 12px 20px;
+            background-color: #ef5350;
+            color: rgba(255, 255, 255, 0.95);
+            padding: 8px 20px;
             margin: -20px -20px 20px -20px;
             text-align: center;
-            font-weight: 500;
+            font-weight: 400;
+            font-size: 14px;
+            letter-spacing: 0.3px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
     </style>
 </head>
@@ -290,26 +294,17 @@
 
             try {
                 const searchTerm = document.getElementById('search').value;
+                const params = new URLSearchParams({
+                    order_by: "timestamp",
+                    order: "desc"
+                });
 
-                let filters = [];
                 if (searchTerm) {
-                    filters.push({
-                        field: "path",
-                        op: "glob",
-                        value: searchTerm
-                    });
+                    params.append('path_glob', searchTerm);
                 }
 
-                const response = await fetch(`${BASE_URL}/sync/list_status_info`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        order_by: "timestamp",
-                        order: "desc",
-                        filters: filters
-                    })
+                const response = await fetch(`${BASE_URL}/sync/state?${params}`, {
+                    method: 'GET',
                 });
 
                 if (response.ok) {
