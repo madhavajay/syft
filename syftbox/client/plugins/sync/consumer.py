@@ -385,7 +385,7 @@ class SyncConsumer:
     def validate_sync_environment(self):
         if not Path(self.client.workspace.datasites).is_dir():
             raise SyncEnvironmentError("Your sync folder has been deleted by a different process.")
-        if not self.local_state.file_path.is_file():
+        if not self.local_state.path.is_file():
             raise SyncEnvironmentError("Your previous sync state has been deleted by a different process.")
 
     def consume_all(self):
