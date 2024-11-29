@@ -24,7 +24,7 @@ class SyncStatusInfo(BaseModel):
 
 
 class LocalState(BaseModel):
-    file_path: Path = Field(description="Path to the LocalState file", alias="path")
+    path: Path = Field(description="Path to the LocalState file")
     # The state of files on last successful sync
     states: dict[Path, FileMetadata] = {}
     # The last sync status of each file
@@ -37,7 +37,7 @@ class LocalState(BaseModel):
     def insert_synced_file(self, path: Path, state: FileMetadata, action: "SyncActionType") -> None:
         if not isinstance(path, Path):
             raise ValueError(f"path must be a Path object, got {path}")
-        if not self.file_path.is_file():
+        if not self.path.is_file():
             # If the LocalState file does not exist, the sync environment is corrupted and syncing should be aborted
 
             # NOTE: this can occur when the user deletes the sync folder, but a different plugin re-creates it.
@@ -75,14 +75,14 @@ class LocalState(BaseModel):
     def save(self):
         try:
             with threading.Lock():
-                self.file_path.write_text(self.model_dump_json())
+                self.path.write_text(self.model_dump_json())
         except Exception as e:
-            logger.exception(f"Failed to save {self.file_path}: {e}")
+            logger.exception(f"Failed to save {self.path}: {e}")
 
     def load(self):
         with threading.Lock():
-            if self.file_path.exists():
-                data = self.file_path.read_text()
+            if self.path.exists():
+                data = self.path.read_text()
                 loaded_state = self.model_validate_json(data)
                 self.states = loaded_state.states
                 self.status_info = loaded_state.status_info
