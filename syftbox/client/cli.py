@@ -112,7 +112,10 @@ def client(
 
     log_level = "DEBUG" if verbose else "INFO"
     code = run_client(
-        client_config=client_config, open_dir=open_dir, log_level=log_level, migrate_datasite=migrate_datasite
+        client_config=client_config,
+        open_dir=open_dir,
+        log_level=log_level,
+        migrate_datasite=migrate_datasite,
     )
     raise Exit(code)
 
