@@ -463,11 +463,14 @@ class SyncConsumer:
             return
         else:
             # Not executed and not NOOP means there was an error. Log error to local state
-            message = decisions.local_decision.message or decisions.remote_decision.message
+            decision = decisions.local_decision if not decisions.local_decision.is_noop() else decisions.remote_decision
+            action = decision.action_type
+            message = decision.message
             self.local_state.insert_status_info(
                 path=item.data.path,
                 status=SyncStatus.ERROR,
                 message=message,
+                action=action,
             )
 
     def process_filechange(self, item: SyncQueueItem) -> None:
