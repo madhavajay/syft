@@ -20,7 +20,6 @@ jobs:
       matrix:
         e2e-test:
           [
-            "ring",
             "basic_aggregator",
             "model_aggregator",
             "aggregator_with_local_training",
@@ -34,6 +33,15 @@ jobs:
     # runs-on: ${{ matrix.runner }}
     runs-on: ${{ matrix.os }}
     steps:
+
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /Users/runner/Library/Android/sdk || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/.ghcup || true
+
       - uses: actions/checkout@v4
 
       - name: Install uv

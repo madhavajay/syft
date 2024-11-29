@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import secrets
 import shutil
 from pathlib import Path
@@ -7,7 +8,7 @@ from pathlib import Path
 import pytest
 from loguru import logger
 
-from tests.e2e.conftest import Client, E2EContext, Server
+from tests.e2e.conftest import Client, E2EContext, Server, E2ETimeoutError
 
 AGGREGATOR_CONFIG = {
     "participants": ["user1@openmined.org", "user2@openmined.org", "user3@openmined.org"],
@@ -90,6 +91,16 @@ async def wait_for_public_trained_models(e2e_context: E2EContext, client: Client
         assert model_file.exists()
 
 
+async def verify_file_sizes(src: Path, dst: Path, timeout: int = 60) -> bool:
+    """Compare two files using their sizes."""
+    start = asyncio.get_event_loop().time()
+    while start + timeout > asyncio.get_event_loop().time():
+        if src.stat().st_size == dst.stat().st_size:
+            return True
+        await asyncio.sleep(1)
+    raise E2ETimeoutError(f"Timeout after {timeout}s waiting for copying {src} to {dst}")
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("e2e_context", [deployment_config()], indirect=True, ids=["aggregator_with_local_training"])
 async def test_e2e_aggregator_with_local_training(e2e_context: E2EContext):
@@ -110,8 +121,12 @@ async def test_e2e_aggregator_with_local_training(e2e_context: E2EContext):
     logger.info("Aggregator copies test data to the private folder")
     agg_private_dir = agg_client.private_dir / AGGREGATOR_API_NAME
     agg_private_dir.mkdir(parents=True, exist_ok=True)
+    agg_priv_data_path = agg_private_dir / "mnist_dataset.pt"
     test_dataset_path = agg_client.api_path(AGGREGATOR_API_NAME) / "samples" / "test_data" / "mnist_dataset.pt"
-    shutil.copy(test_dataset_path, agg_private_dir)
+    with open(test_dataset_path, 'rb') as src, open(agg_priv_data_path, 'wb') as dst:
+        shutil.copyfileobj(src, dst)
+    await verify_file_sizes(test_dataset_path, agg_priv_data_path)
+    await e2e_context.wait_for_path(agg_priv_data_path, timeout=60, interval=1)
 
     clients: list[Client] = e2e_context.clients[1:]
     logger.info("Participants moving the MNIST data parts into private/model_local_training to train")
