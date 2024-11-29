@@ -24,7 +24,7 @@ class SyncStatusInfo(BaseModel):
 
 
 class LocalState(BaseModel):
-    file_path: Path = Field(description="Path to the LocalState file")
+    file_path: Path = Field(description="Path to the LocalState file", alias="path")
     # The state of files on last successful sync
     states: dict[Path, FileMetadata] = {}
     # The last sync status of each file
@@ -32,7 +32,7 @@ class LocalState(BaseModel):
 
     @classmethod
     def for_client(cls: Type[Self], client: SyftClientInterface) -> Self:
-        return cls(file_path=client.workspace.plugins / LOCAL_STATE_FILENAME)
+        return cls(path=client.workspace.plugins / LOCAL_STATE_FILENAME)
 
     def insert_synced_file(self, path: Path, state: FileMetadata, action: "SyncActionType") -> None:
         if not isinstance(path, Path):
