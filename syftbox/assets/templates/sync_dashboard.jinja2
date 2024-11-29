@@ -135,13 +135,14 @@
             background-color: #ecebef;
             color: #353243;
         }
-        .label-remote {
-            background-color: #e0f2ff;
-            color: #0969da;
+        .label-blue {
+            background-color: #d5e7ff;
+            color: #1a365d;
         }
-        .label-local {
-            background-color: #ddf4ff;
-            color: #0550ae;
+        .label-lightblue {
+            background-color: #e8f3ff;
+            color: #486b9e;
+        }
         }
         .error-message {
             display: none;
@@ -233,7 +234,7 @@
 
         function getActionClass(action) {
             if (!action) return '';
-            return action.includes('_REMOTE') ? 'label-remote' : 'label-local';
+            return action.includes('_REMOTE') ? 'label-blue' : 'label-lightblue';
         }
 
         function formatDate(dateStr) {
