@@ -384,4 +384,4 @@ class AppRunner:
 
         EVENT.set()
         self.__event.set()
-        blocking and self.__run_thread.join(timeout=1)
+        blocking and self.__run_thread.join()
