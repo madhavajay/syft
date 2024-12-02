@@ -27,5 +27,5 @@ class SyftAuthenticationError(SyftServerError):
         super().__init__(message)
 
 
-class SyftNotFound(SyftServerError):
+class SyftNotFoundError(SyftServerError):
     pass
