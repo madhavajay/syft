@@ -494,6 +494,6 @@ class SyncConsumer:
 
     def get_current_server_state(self, path: Path) -> Optional[FileMetadata]:
         try:
-            return self.sync_client.get_metadata(path)
+            return self.client.get_metadata(path)
         except SyftServerError:
             return None

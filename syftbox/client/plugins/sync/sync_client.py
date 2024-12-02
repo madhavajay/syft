@@ -34,7 +34,7 @@ class SyncClient:
             workspace=client.workspace,
         )
 
-    def raise_for_sync_error(self, response: httpx.Response) -> None:
+    def raise_for_status(self, response: httpx.Response) -> None:
         """Implements response error handling for all sync operations."""
         # TODO handle different status codes
         endpoint_path = response.url.path
@@ -43,7 +43,7 @@ class SyncClient:
 
     def get_datasite_states(self) -> dict[str, list[FileMetadata]]:
         response = self.client.post("/sync/datasite_states")
-        self.raise_for_sync_error(response)
+        self.raise_for_status(response)
         data = response.json()
 
         result = {}
@@ -57,7 +57,7 @@ class SyncClient:
             "/sync/dir_state",
             params={"dir": relative_path.as_posix()},
         )
-        self.raise_for_sync_error(response)
+        self.raise_for_status(response)
         data = response.json()
         return [FileMetadata(**item) for item in data]
 
@@ -66,10 +66,10 @@ class SyncClient:
             "/sync/get_metadata",
             json={"path_like": path.as_posix()},
         )
-        self.raise_for_sync_error(response)
+        self.raise_for_status(response)
         return FileMetadata(**response.json())
 
-    def get_diff(self, relative_path: Path, signature: str) -> DiffResponse:
+    def get_diff(self, relative_path: Path, signature: str | bytes) -> DiffResponse:
         """Get rsync-style diff between local and remote file.
 
         Args:
@@ -79,6 +79,9 @@ class SyncClient:
         Returns:
             DiffResponse containing the diff and expected hash
         """
+        if not isinstance(signature, str):
+            signature = base64.b85encode(signature).decode("utf-8")
+
         response = self.client.post(
             "/sync/get_diff",
             json={
@@ -87,10 +90,10 @@ class SyncClient:
             },
         )
 
-        self.raise_for_sync_error(response)
+        self.raise_for_status(response)
         return DiffResponse(**response.json())
 
-    def apply_diff(self, relative_path: Path, diff: bytes, expected_hash: str) -> ApplyDiffResponse:
+    def apply_diff(self, relative_path: Path, diff: str | bytes, expected_hash: str) -> ApplyDiffResponse:
         """Apply an rsync-style diff to update a remote file.
 
         Args:
@@ -101,16 +104,19 @@ class SyncClient:
         Returns:
             ApplyDiffResponse containing the result of applying the diff
         """
+        if not isinstance(diff, str):
+            diff = base64.b85encode(diff).decode("utf-8")
+
         response = self.client.post(
             "/sync/apply_diff",
             json={
                 "path": relative_path.as_posix(),
-                "diff": base64.b85encode(diff).decode("utf-8"),
+                "diff": diff,
                 "expected_hash": expected_hash,
             },
         )
 
-        self.raise_for_sync_error(response)
+        self.raise_for_status(response)
         return ApplyDiffResponse(**response.json())
 
     def delete(self, relative_path: Path) -> None:
@@ -118,21 +124,21 @@ class SyncClient:
             "/sync/delete",
             json={"path": relative_path.as_posix()},
         )
-        self.raise_for_sync_error(response)
+        self.raise_for_status(response)
 
     def create(self, relative_path: Path, data: bytes) -> None:
         response = self.client.post(
             "/sync/create",
             files={"file": (relative_path.as_posix(), data, "text/plain")},
         )
-        self.raise_for_sync_error(response)
+        self.raise_for_status(response)
 
     def download(self, relative_path: Path) -> bytes:
         response = self.client.post(
             "/sync/download",
             json={"path": relative_path.as_posix()},
         )
-        self.raise_for_sync_error(response)
+        self.raise_for_status(response)
         return response.content
 
     def download_bulk(self, relative_paths: list[Path]) -> bytes:
@@ -141,5 +147,5 @@ class SyncClient:
             "/sync/download_bulk",
             json={"paths": relative_paths},
         )
-        self.raise_for_sync_error(response)
+        self.raise_for_status(response)
         return response.content
