@@ -4,7 +4,7 @@ from pathlib import Path
 from locust import FastHttpUser, between, task
 
 import syftbox.client.exceptions
-from syftbox.client.plugins.sync import consumer, endpoints
+from syftbox.client.plugins.sync import consumer
 from syftbox.client.plugins.sync.sync_client import SyncClient
 from syftbox.lib.workspace import SyftWorkspace
 from syftbox.server.sync.hash import hash_file
@@ -21,7 +21,7 @@ class SyftBoxUser(FastHttpUser):
     def on_start(self):
         self.datasites = []
         self.email = "aziz@openmined.org"
-        self.remote_state: dict[str, list[endpoints.FileMetadata]] = {}
+        self.remote_state: dict[str, list[FileMetadata]] = {}
 
         self.sync_client = SyncClient(
             email=self.email,
@@ -39,7 +39,7 @@ class SyftBoxUser(FastHttpUser):
         filepath.write_text(uuid.uuid4().hex)
         local_syncstate = hash_file(filepath.absolute(), root_dir=filepath.parent.absolute())
         try:
-            endpoints.create(self.client, local_syncstate.path, filepath.read_bytes())
+            self.sync_client.create(local_syncstate.path, filepath.read_bytes())
         except syftbox.client.exceptions.SyftServerError:
             pass
         return filepath
