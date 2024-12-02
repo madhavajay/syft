@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from syftbox.client.exceptions import SyftNotFoundError, SyftServerError
+from syftbox.client.exceptions import SyftNotFound, SyftServerError
 from syftbox.server.sync.models import ApplyDiffResponse, DiffResponse, FileMetadata
 
 
@@ -111,7 +111,7 @@ def download(client: httpx.Client, path: Path) -> bytes:
     )
 
     if response.status_code != 200:
-        raise SyftNotFoundError(f"[/sync/download] not found on server: {path}, {response.text}")
+        raise SyftNotFound(f"[/sync/download] not found on server: {path}, {response.text}")
 
     return response.content
 
