@@ -360,7 +360,7 @@ class AppRunner:
         self.client = client
         self.__event = threading.Event()
         self.interval = interval
-        self.__run_thread: threading.Thread
+        self.__run_thread: threading.Thread = None
 
     def start(self):
         def run():
@@ -371,7 +371,7 @@ class AppRunner:
                         apps_path=self.client.workspace.apps,
                         client_config=self.client.config.path,
                     )
-                    time.sleep(self.interval)
+                    self.__event.wait(self.interval)
                 except Exception as e:
                     logger.error(f"Error running apps: {str(e)}")
 
