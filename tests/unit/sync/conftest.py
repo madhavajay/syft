@@ -16,30 +16,8 @@ from syftbox.server.server import lifespan as server_lifespan
 from syftbox.server.settings import ServerSettings
 from tests.unit.server.conftest import get_access_token
 
-# class MockClient(SyftClientInterface):
-#     def __init__(self, config, workspace, server_client):
-#         self.config = config
-#         self.workspace = workspace
-#         self.server_client = server_client
 
-#         access_token = get_access_token(self.server_client, self.email)
-#         self.server_client.headers["Authorization"] = f"Bearer {access_token}"
-
-#     @property
-#     def email(self):
-#         return self.config.email
-
-#     @property
-#     def datasite(self):
-#         return Path(self.workspace.datasites, self.config.email)
-
-#     @property
-#     def all_datasites(self) -> list[str]:
-#         """List all datasites in the workspace"""
-#         return [d.name for d in self.workspace.datasites.iterdir() if (d.is_dir() and "@" in d.name)]
-
-
-def authenticate_client(client: TestClient, email: str) -> None:
+def authenticate_testclient(client: TestClient, email: str) -> None:
     access_token = get_access_token(client, email)
     client.headers["email"] = email
     client.headers["Authorization"] = f"Bearer {access_token}"
@@ -62,7 +40,7 @@ def setup_datasite(tmp_path: Path, server_client: TestClient, email: str) -> Syf
     ws = SyftWorkspace(config.data_dir)
     ws.mkdirs()
     create_datasite(ws.datasites, email)
-    authenticate_client(server_client, email)
+    authenticate_testclient(server_client, email)
     return SyftClientContext(
         config,
         ws,
