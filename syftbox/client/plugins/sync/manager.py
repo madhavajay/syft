@@ -17,7 +17,6 @@ from syftbox.client.plugins.sync.types import FileChangeInfo
 
 class SyncManager:
     def __init__(self, client: SyftClientInterface, health_check_interval: int = 300):
-        # TODO nest inside SyncClient
         self.sync_client = SyncClient(client)
         self.local_state = LocalState.for_client(client)
         self.queue = SyncQueue()
@@ -81,9 +80,6 @@ class SyncManager:
         Raises:
             FatalSyncError: If the server is not available.
         """
-        # import pdb
-
-        # pdb.set_trace()
         try:
             _ = self.sync_client.whoami()
             logger.debug("Health check succeeded, server is available.")
