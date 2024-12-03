@@ -1,5 +1,6 @@
 import base64
 from pathlib import Path
+from typing import Union
 
 import httpx
 
@@ -67,7 +68,7 @@ class SyncClient:
         self.raise_for_status(response)
         return FileMetadata(**response.json())
 
-    def get_diff(self, relative_path: Path, signature: str | bytes) -> DiffResponse:
+    def get_diff(self, relative_path: Path, signature: Union[str, bytes]) -> DiffResponse:
         """Get rsync-style diff between local and remote file.
 
         Args:
@@ -91,7 +92,7 @@ class SyncClient:
         self.raise_for_status(response)
         return DiffResponse(**response.json())
 
-    def apply_diff(self, relative_path: Path, diff: str | bytes, expected_hash: str) -> ApplyDiffResponse:
+    def apply_diff(self, relative_path: Path, diff: Union[str, bytes], expected_hash: str) -> ApplyDiffResponse:
         """Apply an rsync-style diff to update a remote file.
 
         Args:
