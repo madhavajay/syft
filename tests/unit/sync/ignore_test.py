@@ -60,7 +60,7 @@ def test_ignore_file(tmp_path):
 
 
 def test_ignore_datasite(datasite_1: SyftClientInterface, datasite_2: SyftClientInterface) -> None:
-    sync_client_1 = SyncClient.for_client(datasite_1)
+    sync_client_1 = SyncClient(datasite_1)
 
     datasite_2_files = {
         datasite_2.email: {

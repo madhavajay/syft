@@ -11,7 +11,7 @@ from pid import PidFile, PidFileAlreadyLockedError, PidFileAlreadyRunningError
 
 from syftbox.__version__ import __version__
 from syftbox.client.api import create_api
-from syftbox.client.base import SyftClientInterface
+from syftbox.client.base import Plugins, SyftClientInterface
 from syftbox.client.env import syftbox_env
 from syftbox.client.exceptions import SyftAuthenticationError, SyftBoxAlreadyRunning, SyftServerError
 from syftbox.client.logger import setup_logger
@@ -228,7 +228,7 @@ class SyftClientContext(SyftClientInterface):
         config: SyftClientConfig,
         workspace: SyftWorkspace,
         server_client: httpx.Client,
-        plugins: PluginManager,
+        plugins: Plugins,
     ):
         self.config = config
         self.workspace = workspace

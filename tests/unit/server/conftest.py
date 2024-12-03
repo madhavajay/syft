@@ -65,14 +65,16 @@ def client(monkeypatch, tmp_path):
         yield client
 
 
+class MockClientContext:
+    def __init__(self, server_client: TestClient, path: Path):
+        self.email = TEST_DATASITE_NAME
+        self.workspace = SyftWorkspace(Path(path))
+        self.server_client = server_client
+
+
 @pytest.fixture(scope="function")
 def sync_client(client: TestClient, tmp_path: Path):
-    client_dir = tmp_path / "client"
-    return SyncClient(
-        client=client,
-        email=TEST_DATASITE_NAME,
-        workspace=SyftWorkspace(client_dir),
-    )
+    return SyncClient(client=MockClientContext(client, tmp_path))
 
 
 @pytest.fixture(scope="function")

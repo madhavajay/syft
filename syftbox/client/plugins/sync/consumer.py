@@ -54,7 +54,7 @@ def update_remote(
     sync_client.apply_diff(
         relative_path=local_syncstate.path,
         diff=diff,
-        expected_hash=remote_syncstate.hash,
+        expected_hash=local_syncstate.hash,
     )
 
 

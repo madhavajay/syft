@@ -111,7 +111,7 @@ def test_apply_diff(sync_client: SyncClient):
     assert response.current_hash == expected_hash
 
     # check file was written correctly
-    snapshot_folder = sync_client.client.app_state["server_settings"].snapshot_folder
+    snapshot_folder = sync_client.server_client.app_state["server_settings"].snapshot_folder
     snapshot_file_path = snapshot_folder / Path(TEST_DATASITE_NAME) / TEST_FILE
     remote_data = snapshot_file_path.read_bytes()
     assert local_data == remote_data
@@ -148,7 +148,7 @@ def test_get_diff(sync_client: SyncClient):
 def test_delete_file(sync_client: SyncClient):
     sync_client.delete(Path(TEST_DATASITE_NAME) / TEST_FILE)
 
-    snapshot_folder = sync_client.client.app_state["server_settings"].snapshot_folder
+    snapshot_folder = sync_client.server_client.app_state["server_settings"].snapshot_folder
     path = Path(f"{snapshot_folder}/{TEST_DATASITE_NAME}/{TEST_FILE}")
     assert not path.exists()
 
@@ -157,7 +157,7 @@ def test_delete_file(sync_client: SyncClient):
 
 
 def test_create_file(sync_client: SyncClient):
-    snapshot_folder = sync_client.client.app_state["server_settings"].snapshot_folder
+    snapshot_folder = sync_client.server_client.app_state["server_settings"].snapshot_folder
     new_fname = "new.txt"
     contents = b"Some content"
     path = Path(f"{snapshot_folder}/{TEST_DATASITE_NAME}/{new_fname}")
