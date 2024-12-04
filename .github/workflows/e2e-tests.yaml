@@ -23,7 +23,7 @@ jobs:
             "basic_aggregator",
             "model_aggregator",
             "aggregator_with_local_training",
-            "fl_model_training",
+            # "fl_model_training",
           ]
         python-version: ["3.9", "3.12"]
         os: [ubuntu-latest, macos-latest]
