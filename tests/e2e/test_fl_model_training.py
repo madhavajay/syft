@@ -15,7 +15,7 @@ AGGREGATOR_CONFIG = {
     "project_name": PROJECT_NAME,
     "aggregator": "agg@openmined.org",
     "participants": ["user1@openmined.org", "user2@openmined.org"],
-    "model_arch": "model_arch.py",
+    "model_arch": "model.py",
     "model_class_name": "FLModel",
     "model_weight": "global_model_weight.pt",
     "test_dataset": "mnist_test_dataset.pt",
@@ -178,8 +178,8 @@ async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
     launch_dir.mkdir(parents=True, exist_ok=True)
 
     # copy model_arch.py and global_model_weight.pt
-    shutil.copy(sample_launch_config / "model_arch.py", launch_dir)
-    shutil.copy(sample_launch_config / "global_model_weight.pt", launch_dir)
+    shutil.copy(sample_launch_config / AGGREGATOR_CONFIG["model_arch"], launch_dir)
+    shutil.copy(sample_launch_config / AGGREGATOR_CONFIG["model_weight"], launch_dir)
 
     # Copy Config
     fl_config = launch_dir / "fl_config.json"
@@ -187,7 +187,7 @@ async def test_e2e_fl_model_aggregator(e2e_context: E2EContext):
 
     # Copy test dataset
     logger.info("Copying private test dataset for global model evaluation")
-    sample_test_dataset = sample_dir / "test_data" / "mnist_test_dataset.pt"
+    sample_test_dataset = sample_dir / "test_data" / AGGREGATOR_CONFIG["test_dataset"]
     assert sample_test_dataset.exists()
 
     test_data_dir = agg_client.data_dir / "private" / "fl_aggregator"
