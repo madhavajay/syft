@@ -8,6 +8,7 @@ from pathlib import Path
 DEFAULT_APPS = [
     "https://github.com/OpenMined/logged_in",
     "https://github.com/OpenMined/inbox",
+    "https://github.com/OpenMined/cpu_tracker_member",
 ]
 
 
