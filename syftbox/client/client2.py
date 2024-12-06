@@ -341,7 +341,9 @@ def run_client(
     setup_logger(log_level, log_dir=client_config.data_dir / "logs")
 
     error_config = error_reporting.make_error_report(client_config)
-    logger.info(f"Client metadata\n{error_config.model_dump_json(indent=2)}")
+    logger.info(
+        f"Client metadata\n{error_config.model_dump_json(indent=2, exclude={'client_config': {'access_token'}})}"
+    )
 
     # a flag to disable icons
     # GitHub CI needs to zip sync dir in tests and fails when it encounters Icon\r files
